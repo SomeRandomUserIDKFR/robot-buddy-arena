@@ -4,7 +4,7 @@ import {
 } from "./config.js";
 import { updateAI } from "./ai.js";
 import {
-  shieldBlocksAttack, shieldSpeedMultiplier
+  modularAttackLocked, shieldBlocksAttack, shieldSpeedMultiplier, tickModularWeapon
 } from "./equipment.js";
 import {
   damageProp, platformsOf, projectileBlockers, solidProps
@@ -281,6 +281,7 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy) {
 export function attack(fighter, game, random = Math.random) {
   if (fighter.attackCd > 0 || fighter.dead) return;
   if (fighter.shieldRaised && !fighter.shieldBroken) return;
+  if (modularAttackLocked(fighter)) return;
   const spread = weaponAccuracySpread(fighter);
   const shotAngle = fighter.aim + (random() - .5) * spread * 2;
   const ox = fighter.x + SIZE / 2 + Math.cos(shotAngle) * 31;
@@ -396,6 +397,15 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   fighter.hitFace -= dt;
   fighter.spotted -= dt;
   fighter.shieldFlash -= dt;
+  tickModularWeapon(fighter, dt);
+  if (
+    fighter.modularWeapon
+    && fighter.modularMode === "shield"
+    && !fighter.modularMorphing
+  ) {
+    fighter.modularPlateDurability = fighter.shieldDurability;
+    fighter.modularPlateBroken = !!fighter.shieldBroken;
+  }
   const intent = fighter.human
     ? getHumanIntent(fighter)
     : updateAI(fighter, dt, game, profile);

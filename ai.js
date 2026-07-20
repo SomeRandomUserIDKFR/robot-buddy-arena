@@ -3,6 +3,7 @@ import {
 } from "./config.js";
 import { platformsOf } from "./maps.js";
 import { directiveStrength } from "./coaching.js";
+import { beginModularMorph, isModularWeapon } from "./equipment.js";
 import {
   ensureLearningProfile, evidenceReliability, evidenceState, mimicBlendFactor,
   precisionAimErrorScale
@@ -1171,6 +1172,32 @@ export function updateAI(fighter, dt, game, profile) {
       }
     }
   }
+  // Mechanical Modularity: rifle at range, sword close, shield under fire.
+  if (isModularWeapon(fighter) && !fighter.modularMorphing) {
+    const threatFoe = visibleThreat || (target && visible.includes(target) ? target : null);
+    const threatInfo = evaluateShieldThreat(fighter, threatFoe, game, visible);
+    const underFire = dodgeInfo.severity >= 2
+      || threatInfo.severity >= 2
+      || (threatInfo.severity >= 1 && fighter.hp < 180);
+    let wantMode = fighter.modularMode || "sword";
+    if (underFire) {
+      wantMode = "shield";
+    } else if (target && visible.includes(target)) {
+      const d = dist(fighter, target);
+      if (d > 340) wantMode = "rifle";
+      else if (d < 160) wantMode = "sword";
+      else wantMode = fighter.modularMode === "shield" ? "rifle" : (fighter.modularMode || "rifle");
+    } else if (fighter.modularMode === "shield") {
+      wantMode = "rifle";
+    }
+    if (wantMode !== fighter.modularMode) {
+      beginModularMorph(fighter, wantMode);
+    }
+  }
+  if (fighter.modularMorphing || fighter.modularMode === "shield") {
+    state.attack = false;
+  }
+
   // Enemy trainers stay on the baseline tactical shield policy (bias 0).
   // Buddies blend toward player shieldUse; Mimic scales by intensity blend.
   let shieldBias = 0;

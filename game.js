@@ -4,7 +4,7 @@ import { Fighter, hit, stepBullets, stepFighter, triggerDodge } from "./combat.j
 import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
-  acceptSuggestion, applyLoadout, awardConquest, equipOwned, purchaseGear,
+  acceptSuggestion, applyLoadout, awardConquest, cycleModularMode, equipOwned, purchaseGear,
   setBuddyMode, toggleShieldRaise, trainerLoadout, weaponKind
 } from "./equipment.js";
 import {
@@ -322,6 +322,9 @@ function handleKeyDown(event) {
   if (event.code === "KeyQ" && !event.repeat) {
     toggleShieldRaise(game.fighters[0]);
   }
+  if (event.code === "KeyE" && !event.repeat) {
+    cycleModularMode(game.fighters[0]);
+  }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
   if (event.code === "KeyG") {
     const point = screenToWorld(mouse.x, mouse.y);
@@ -336,7 +339,7 @@ function handleKeyDown(event) {
     game.paused = !game.paused;
     showPause(game.paused);
   }
-  if (["Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ"].includes(event.code)) {
+  if (["Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE"].includes(event.code)) {
     event.preventDefault();
   }
 }

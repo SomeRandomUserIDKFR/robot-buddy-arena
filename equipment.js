@@ -142,6 +142,31 @@ export const GEAR = [
     baseDamage: 24, rpm: 300, range: 64, movementMultiplier: 1.25,
     iframeMultiplier: 1.25
   }, 135),
+  // Hybrid morph weapon: default catalog/loadout stats match Arc Saber (sword mode).
+  // Active mode (sword / shield / rifle) drives combat + learning via fighter.weapon.
+  item(
+    "mechanical-modularity",
+    "weapon",
+    "Mechanical Modularity",
+    "E morphs Sword ↔ Shield ↔ Pulse Rifle. Sword matches Arc Saber; rifle & modular plate are slightly weaker. Learning uses the active mode's gun/saber key.",
+    {
+      damage: 55 / 40,
+      fireRate: 150 / 150,
+      range: 120 / 120
+    },
+    {
+      baseKind: "saber",
+      dps: 55 * 150 / 60,
+      modular: true,
+      price: 210,
+      weaponStats: {
+        kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+        sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+        movementMultiplier: 1.1, iframeMultiplier: 1,
+        baseDamage: 55, rpm: 150, range: 120
+      }
+    }
+  ),
 
   item("vector-pack", "jetpack", "Vector Pack", "Balanced fuel, thrust, and recharge.", {}),
   item("sprinter-pack", "jetpack", "Sprinter Pack", "Hard thrust, smaller tank.",
@@ -200,6 +225,224 @@ export function rankingLossAmount(ranking) {
 export function weaponKind(gearOrId) {
   const gear = typeof gearOrId === "string" ? GEAR_BY_ID[gearOrId] : gearOrId;
   return gear?.baseKind || gear?.weaponType || "gun";
+}
+
+/** Morph order for Mechanical Modularity (E cycles). */
+export const MODULAR_MODE_ORDER = Object.freeze(["sword", "shield", "rifle"]);
+export const MODULAR_MORPH_DURATION = 0.32;
+export const MODULAR_MODE_COOLDOWN = 0.42;
+export const MODULAR_WEAPON_ID = "mechanical-modularity";
+
+/**
+ * Per-mode combat + visual targets.
+ * Sword ≈ Arc Saber. Rifle ≈ 92% Pulse Rifle. Shield plate < Light Buckler.
+ */
+export const MODULAR_MODE_DEFS = Object.freeze({
+  sword: Object.freeze({
+    baseKind: "saber",
+    modifiers: { damage: 55 / 40, fireRate: 1, range: 1 },
+    weaponStats: Object.freeze({
+      kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+      sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+      movementMultiplier: 1.1, iframeMultiplier: 1,
+      baseDamage: 55, rpm: 150, range: 120
+    }),
+    visual: Object.freeze({
+      length: 48, width: 5, gripOffset: 17,
+      ally: "#70f3ff", enemy: "#ff8279", buddy: "#4df2ff"
+    })
+  }),
+  shield: Object.freeze({
+    baseKind: "saber",
+    modifiers: { damage: 0, fireRate: 1, range: 1 },
+    weaponStats: Object.freeze({
+      kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+      sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+      movementMultiplier: 1, iframeMultiplier: 1,
+      baseDamage: 0, rpm: 60, range: 40
+    }),
+    // Slightly weaker than Light Buckler (175 / 1.4 / .95 / .9).
+    shield: Object.freeze({
+      durability: 150, blockHalfAngle: 1.28, raisedSpeed: .9, brokenSpeed: .85
+    }),
+    visual: Object.freeze({
+      length: 18, width: 28, gripOffset: 12,
+      ally: "#8aa4b0", enemy: "#b08878", buddy: "#7eb8c4"
+    })
+  }),
+  rifle: Object.freeze({
+    baseKind: "gun",
+    modifiers: {
+      damage: 11.5 / 12,
+      fireRate: 480 / 500,
+      range: 1250 / 1317.5,
+      projectileSpeed: 1480 / 1550
+    },
+    weaponStats: Object.freeze({
+      kind: "gun",
+      baseDamage: 11.5, rpm: 480, range: 1250, projectileSpeed: 1480,
+      dropoff: Object.freeze({ start: 300, end: 1200, minMultiplier: 10 / 12 }),
+      aimSettle: 0, unsettledSpread: 0.008, cameraLead: .08, sightExtension: 0,
+      movementMultiplier: 1, iframeMultiplier: 1
+    }),
+    visual: Object.freeze({
+      length: 32, width: 10, gripOffset: 18,
+      ally: "#6a8f9c", enemy: "#8a655c", buddy: "#5aa8b4"
+    })
+  })
+});
+
+export function isModularWeapon(fighterOrId) {
+  if (typeof fighterOrId === "string") return fighterOrId === MODULAR_WEAPON_ID;
+  return fighterOrId?.weaponId === MODULAR_WEAPON_ID || fighterOrId?.modularWeapon === true;
+}
+
+export function nextModularMode(mode) {
+  const idx = MODULAR_MODE_ORDER.indexOf(mode);
+  return MODULAR_MODE_ORDER[(idx + 1) % MODULAR_MODE_ORDER.length];
+}
+
+function snapshotDedicatedShield(fighter) {
+  return {
+    shieldId: fighter.shieldId,
+    shieldMaxDurability: fighter.shieldMaxDurability,
+    shieldDurability: fighter.shieldDurability,
+    shieldBlockHalfAngle: fighter.shieldBlockHalfAngle,
+    shieldRaisedSpeed: fighter.shieldRaisedSpeed,
+    shieldBrokenSpeed: fighter.shieldBrokenSpeed,
+    shieldRaised: fighter.shieldRaised,
+    shieldBroken: fighter.shieldBroken
+  };
+}
+
+function restoreDedicatedShield(fighter, snap) {
+  if (!snap) return;
+  fighter.shieldId = snap.shieldId;
+  fighter.shieldMaxDurability = snap.shieldMaxDurability;
+  fighter.shieldDurability = snap.shieldDurability;
+  fighter.shieldBlockHalfAngle = snap.shieldBlockHalfAngle;
+  fighter.shieldRaisedSpeed = snap.shieldRaisedSpeed;
+  fighter.shieldBrokenSpeed = snap.shieldBrokenSpeed;
+  fighter.shieldRaised = !!snap.shieldRaised && !snap.shieldBroken;
+  fighter.shieldBroken = !!snap.shieldBroken;
+}
+
+function applyModularPlateAsShield(fighter) {
+  const plate = MODULAR_MODE_DEFS.shield.shield;
+  fighter.shieldId = `${MODULAR_WEAPON_ID}-plate`;
+  fighter.shieldMaxDurability = fighter.modularPlateMax;
+  fighter.shieldDurability = fighter.modularPlateDurability;
+  fighter.shieldBlockHalfAngle = plate.blockHalfAngle;
+  fighter.shieldRaisedSpeed = plate.raisedSpeed * (fighter._modularShieldRaisedPerk || 1);
+  fighter.shieldBrokenSpeed = plate.brokenSpeed;
+  fighter.shieldBroken = !!fighter.modularPlateBroken
+    || fighter.modularPlateDurability <= 0;
+  fighter.shieldRaised = false;
+}
+
+/**
+ * Apply combat stats for the active modular mode (HP / dedicated plate pool preserved).
+ */
+export function applyModularCombatStats(fighter, mode = fighter.modularMode) {
+  const def = MODULAR_MODE_DEFS[mode] || MODULAR_MODE_DEFS.sword;
+  const perkCombat = fighter._modularPerkCombat || {
+    damage: 1, fireRate: 1, iframe: 1, shieldDurability: 1, shieldRaisedSpeed: 1
+  };
+  fighter.modularMode = mode;
+  fighter.weapon = def.baseKind;
+  fighter.weaponStats = { ...def.weaponStats };
+  if (def.weaponStats.dropoff) {
+    fighter.weaponStats.dropoff = { ...def.weaponStats.dropoff };
+  }
+  fighter.weaponDamage = (def.modifiers.damage || 0) * perkCombat.damage;
+  fighter.weaponFireRate = (def.modifiers.fireRate || 1) * perkCombat.fireRate;
+  fighter.weaponRange = def.modifiers.range || 1;
+  fighter.projectileSpeed = def.modifiers.projectileSpeed || 1;
+  fighter.weaponBaseDamage = def.weaponStats.baseDamage * perkCombat.damage;
+  fighter.weaponRpm = Math.max(1, def.weaponStats.rpm * perkCombat.fireRate);
+  fighter.weaponReach = def.weaponStats.range;
+  fighter.weaponDropoff = def.weaponStats.dropoff
+    ? { ...def.weaponStats.dropoff }
+    : null;
+  fighter.aimSettleRequired = def.weaponStats.aimSettle || 0;
+  fighter.unsettledSpread = def.weaponStats.unsettledSpread || 0;
+  fighter.cameraLead = def.weaponStats.cameraLead || 0;
+  fighter.iframeMultiplier = (def.weaponStats.iframeMultiplier || 1) * perkCombat.iframe;
+  fighter.directionalSightRange = Math.min(
+    2400,
+    def.weaponStats.range,
+    fighter.sight + (def.weaponStats.sightExtension || 0)
+  );
+  fighter.sightHalfAngle = def.weaponStats.sightHalfAngle || 0;
+  const baseSpeed = fighter._modularBaseMoveSpeed || 520;
+  const moveMult = def.weaponStats.movementMultiplier || 1;
+  fighter.moveSpeed = Math.min(520 * 1.4, Math.round(baseSpeed * moveMult));
+  fighter.acceleration = 1800 * (fighter.moveSpeed / 520);
+  return fighter;
+}
+
+function finishModularMorph(fighter) {
+  const from = fighter.modularMorphFrom || fighter.modularMode;
+  const to = fighter.modularMorphTo || fighter.modularMode;
+  // Persist plate durability when leaving shield mode.
+  if (from === "shield" && to !== "shield") {
+    fighter.modularPlateDurability = fighter.shieldDurability;
+    fighter.modularPlateBroken = !!fighter.shieldBroken
+      || fighter.modularPlateDurability <= 0;
+    restoreDedicatedShield(fighter, fighter._dedicatedShieldSnap);
+    fighter._dedicatedShieldSnap = null;
+  }
+  if (to === "shield" && from !== "shield") {
+    fighter._dedicatedShieldSnap = snapshotDedicatedShield(fighter);
+    applyModularPlateAsShield(fighter);
+  }
+  applyModularCombatStats(fighter, to);
+  fighter.modularMorphing = false;
+  fighter.modularMorphT = 1;
+  fighter.modularModeCd = MODULAR_MODE_COOLDOWN;
+  fighter.shieldRaised = false;
+}
+
+/**
+ * Begin a morph to `targetMode` (or the next mode in the cycle). Returns false if locked.
+ */
+export function beginModularMorph(fighter, targetMode = null) {
+  if (!isModularWeapon(fighter) || fighter.dead) return false;
+  if (fighter.modularMorphing) return false;
+  if ((fighter.modularModeCd || 0) > 0) return false;
+  const next = targetMode && MODULAR_MODE_DEFS[targetMode]
+    ? targetMode
+    : nextModularMode(fighter.modularMode || "sword");
+  if (next === fighter.modularMode) return false;
+  fighter.modularMorphFrom = fighter.modularMode || "sword";
+  fighter.modularMorphTo = next;
+  fighter.modularMorphT = 0;
+  fighter.modularMorphing = true;
+  fighter.shieldRaised = false;
+  fighter.attackCd = Math.max(fighter.attackCd || 0, MODULAR_MORPH_DURATION);
+  return true;
+}
+
+export function cycleModularMode(fighter) {
+  return beginModularMorph(fighter, null);
+}
+
+/** Advance morph animation / cooldowns. Call from stepFighter. */
+export function tickModularWeapon(fighter, dt) {
+  if (!isModularWeapon(fighter)) return;
+  if ((fighter.modularModeCd || 0) > 0) {
+    fighter.modularModeCd = Math.max(0, fighter.modularModeCd - dt);
+  }
+  if (!fighter.modularMorphing) return;
+  const duration = MODULAR_MORPH_DURATION;
+  fighter.modularMorphT = Math.min(1, (fighter.modularMorphT || 0) + dt / duration);
+  if (fighter.modularMorphT >= 1) finishModularMorph(fighter);
+}
+
+/** True while transforming — no attacks. */
+export function modularAttackLocked(fighter) {
+  return isModularWeapon(fighter)
+    && (!!fighter.modularMorphing || fighter.modularMode === "shield");
 }
 
 /** Marksman / sniper IDs that can earn and use the tiny precision-aim gimmick. */
@@ -445,7 +688,7 @@ export function suggestBuddyLoadout(profile) {
       weapon: [
         "laser", "quick-fire-sniper", "classic-sniper", "strong-sniper",
         "marksman-rifle", "pulse-rifle", "gattler", "burst-carbine",
-        "arc-saber", "duelist-blade"
+        "mechanical-modularity", "arc-saber", "duelist-blade"
       ],
       jetpack: ["endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack"],
       shield: ["light-buckler", "kinetic-targe", "no-shield", "bastion-bulwark"]
@@ -456,6 +699,7 @@ export function suggestBuddyLoadout(profile) {
         helmet: ["survey-visor", "wideband-array", "guard-helm"],
         weapon: [
           "daggers", "heavy-saber", "arc-saber", "duelist-blade",
+          "mechanical-modularity",
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
         jetpack: ["sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack"],
@@ -465,7 +709,8 @@ export function suggestBuddyLoadout(profile) {
         body: ["field-frame", "scout-frame", "bulwark-frame"],
         helmet: ["survey-visor", "wideband-array", "guard-helm"],
         weapon: [
-          "pulse-rifle", "arc-saber", "burst-carbine", "duelist-blade",
+          "pulse-rifle", "arc-saber", "mechanical-modularity", "burst-carbine",
+          "duelist-blade",
           "gattler", "laser", "marksman-rifle", "heavy-saber",
           "quick-fire-sniper", "classic-sniper", "strong-sniper", "daggers"
         ],
@@ -581,6 +826,33 @@ export function applyLoadout(fighter, loadout) {
   fighter.shieldRaised = false;
   fighter.shieldBroken = false;
   fighter.shieldFlash = 0;
+
+  // Mechanical Modularity: start in sword mode; plate pool is separate from slot shield.
+  if (weapon.id === MODULAR_WEAPON_ID) {
+    const moveMult = weapon.weaponStats?.movementMultiplier || 1;
+    fighter.modularWeapon = true;
+    fighter.modularMode = "sword";
+    fighter.modularMorphing = false;
+    fighter.modularMorphT = 1;
+    fighter.modularMorphFrom = "sword";
+    fighter.modularMorphTo = "sword";
+    fighter.modularModeCd = 0;
+    fighter._modularBaseMoveSpeed = stats.speed / moveMult;
+    fighter._modularPerkCombat = perkCombat;
+    fighter._modularShieldRaisedPerk = perkCombat.shieldRaisedSpeed;
+    const plate = MODULAR_MODE_DEFS.shield.shield;
+    fighter.modularPlateMax = plate.durability * perkCombat.shieldDurability;
+    fighter.modularPlateDurability = fighter.modularPlateMax;
+    fighter.modularPlateBroken = false;
+    fighter._dedicatedShieldSnap = null;
+    applyModularCombatStats(fighter, "sword");
+  } else {
+    fighter.modularWeapon = false;
+    fighter.modularMode = null;
+    fighter.modularMorphing = false;
+    fighter.modularModeCd = 0;
+    fighter._dedicatedShieldSnap = null;
+  }
   return fighter;
 }
 

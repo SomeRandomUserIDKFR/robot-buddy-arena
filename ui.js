@@ -290,9 +290,22 @@ export function updateHud(game) {
     ui.shield.style.width = `${(player.shieldDurability / player.shieldMaxDurability) * 100}%`;
     ui.shieldMeter.classList.toggle("broken", !!player.shieldBroken);
     ui.shieldMeter.classList.toggle("raised", !!player.shieldRaised && !player.shieldBroken);
-    ui.shieldLabel.textContent = player.shieldBroken
+    let shieldText = player.shieldBroken
       ? "BROKEN"
       : player.shieldRaised ? "SHIELD UP" : "SHIELD";
+    if (player.modularWeapon && player.modularMode === "shield") {
+      shieldText = player.shieldBroken
+        ? "PLATE BROKEN"
+        : player.shieldRaised ? "PLATE UP" : "MOD PLATE";
+    }
+    ui.shieldLabel.textContent = shieldText;
+  }
+  if (ui.modeLabel && player.modularWeapon) {
+    const modeTag = player.modularMorphing
+      ? "MORPH…"
+      : ({ sword: "SWORD", shield: "SHIELD", rifle: "RIFLE" }[player.modularMode] || "MOD");
+    const base = ui.modeLabel.textContent.replace(/\s*·\s*(SWORD|SHIELD|RIFLE|MORPH…)\s*$/, "");
+    ui.modeLabel.textContent = `${base} · ${modeTag}`;
   }
   const dodgeBase = 1.2 * (player.dodgeCooldownMult || 1);
   ui.dodge.style.width = `${(1 - Math.max(0, Math.min(1, player.dodgeCd / dodgeBase))) * 100}%`;
@@ -608,6 +621,14 @@ export function renderEquipment(profile) {
 
 function modifierMarkup(gear) {
   if (gear.slot === "weapon") {
+    if (gear.id === "mechanical-modularity") {
+      return [
+        "<span>Morph weapon (E)</span>",
+        "<span>Sword ≈ Arc Saber</span>",
+        "<span class=\"stat-down\">Rifle ~92% Pulse</span>",
+        "<span class=\"stat-down\">Plate &lt; Light Buckler</span>"
+      ].join("");
+    }
     const stats = weaponStats(gear);
     const changes = [
       `<span>${stats.kind === "gun" ? "Ranged" : "Melee"} mechanics</span>`,

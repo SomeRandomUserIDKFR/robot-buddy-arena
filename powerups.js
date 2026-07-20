@@ -154,6 +154,9 @@ export function themeForMap(mapId, theme) {
 }
 
 export function isMeleeFighter(fighter) {
+  if (fighter?.weaponId === "mechanical-modularity") {
+    return fighter.modularMode === "sword" && !fighter.modularMorphing;
+  }
   return fighter?.weapon === "saber"
     || fighter?.weaponStats?.kind === "melee";
 }

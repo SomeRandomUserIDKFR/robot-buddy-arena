@@ -82,6 +82,8 @@ const faqCases = [
   ["How does the laser work?", "weapons-next-gen"],
   ["How do shields work?", "equipment-shields"],
   ["What does Q do?", "controls-shield"],
+  ["What does E do?", "controls-modular"],
+  ["how does mechanical modularity work", "weapons-mechanical-modularity"],
   ["How do I win a match?", "match-win"],
   ["Is the language analyzer offline?", "analyzer-offline"]
 ];

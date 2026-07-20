@@ -65,7 +65,8 @@ npm run smoke:analyzer
 - **W or Space** — jump; hold while airborne to use the jetpack
 - **Shift** — jetpack
 - **C** — dodge/dash with brief invulnerability
-- **Q** — raise/lower equipped shield (blocks frontal attacks; cannot fire while raised)
+- **Q** — raise/lower equipped shield (blocks frontal attacks; cannot fire while raised). With **Mechanical Modularity** in shield mode, Q raises the modular plate the same way.
+- **E** — cycle **Mechanical Modularity** modes (Sword → Shield → Pulse Rifle) with a short morph animation; cannot attack mid-morph
 - **Mouse** — aim
 - **Left mouse button** — fire gun / swing saber
 - **G** — ping the cursor location for your buddy
@@ -75,7 +76,7 @@ npm run smoke:analyzer
 
 The pre-match Equipment tab equips both robots across five slots: main body armor, helmet, weapon, jetpack, and shield. Ten starter items (two per slot, including **No Shield** and **Light Buckler**) are owned for free, and every choice is a tradeoff rather than a straight level upgrade. The adjacent Shop tab has at least four choices per slot, displays effective modifier percentages, and permanently unlocks purchases for either teammate.
 
-Body armor changes integrity, movement speed, and incoming damage. Helmets trade integrity against sensor range. Rifle and saber variants use explicit `gun` or `saber` base mechanics while changing damage, fire/swing rate, reach, and projectile speed; learning therefore continues to use the original gun/saber memory keys. Jetpacks change tank capacity, thrust, and recharge while preserving the same exhaustion lockout and restart-reserve rules.
+Body armor changes integrity, movement speed, and incoming damage. Helmets trade integrity against sensor range. Rifle and saber variants use explicit `gun` or `saber` base mechanics while changing damage, fire/swing rate, reach, and projectile speed; learning therefore continues to use the original gun/saber memory keys. **Mechanical Modularity** is a shop morph weapon: **E** shifts between Sword (Arc Saber stats), a slightly weaker modular shield plate, and a slightly weaker Pulse Rifle; combat and learning ticks use the **active mode’s** gun/saber kind so saves stay compatible. Jetpacks change tank capacity, thrust, and recharge while preserving the same exhaustion lockout and restart-reserve rules.
 
 Shields are a separate slot. Durability is a **per-match block HP pool** that does not recharge mid-match. Press **Q** to raise the shield toward your aim; only attacks arriving inside a forward cone (about ±70–80°) are blocked, and blocking spends durability equal to the damage that would have been dealt. While raised you cannot fire or swing. A depleted shield stays equipped as dead weight: it no longer blocks and applies a stronger ongoing speed penalty until the next match resets the pool.
 

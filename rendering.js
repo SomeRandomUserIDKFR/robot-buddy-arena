@@ -1,4 +1,5 @@
 import { CEILING, SIGHT, SIZE, WORLD } from "./config.js";
+import { MODULAR_MODE_DEFS } from "./equipment.js";
 import { platformsOf } from "./maps.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
 import { clamp, dist } from "./utils.js";
@@ -24,6 +25,7 @@ const WEAPON_VISUALS = {
   "heavy-saber": { length: 52, width: 8, gripOffset: 16, ally: "#50d0e0", enemy: "#ff7060", buddy: "#39e8f8" },
   "duelist-blade": { length: 38, width: 5, gripOffset: 17, ally: "#90f8ff", enemy: "#ff9a88", buddy: "#78f4ff" },
   daggers: { length: 16, width: 4, gripOffset: 18, ally: "#a8e0e8", enemy: "#ffb0a0", buddy: "#9cf0f8" },
+  "mechanical-modularity": { length: 48, width: 5, gripOffset: 17, ally: "#70f3ff", enemy: "#ff8279", buddy: "#4df2ff" },
   // Legacy baseKind fallbacks
   gun: { length: 32, width: 10, gripOffset: 18, ally: "#6a8f9c", enemy: "#8a655c", buddy: "#5aa8b4" },
   saber: { length: 48, width: 5, gripOffset: 17, ally: "#70f3ff", enemy: "#ff8279", buddy: "#4df2ff" }
@@ -56,11 +58,42 @@ function mixHexColors(a, b, t) {
 
 /**
  * @param {string} [weaponId]
- * @param {{ team?: number, buddy?: boolean, color?: string }} [holder]
+ * @param {{ team?: number, buddy?: boolean, color?: string, modularMode?: string,
+ *   modularMorphing?: boolean, modularMorphFrom?: string, modularMorphTo?: string,
+ *   modularMorphT?: number }} [holder]
  */
 export function weaponVisual(weaponId, holder = {}) {
-  const base = WEAPON_VISUALS[weaponId] || WEAPON_VISUALS.gun;
   const faction = holder.buddy ? "buddy" : holder.team ? "enemy" : "ally";
+  let base = WEAPON_VISUALS[weaponId] || WEAPON_VISUALS.gun;
+
+  if (weaponId === "mechanical-modularity") {
+    const mode = holder.modularMode || "sword";
+    const fromId = holder.modularMorphing
+      ? (holder.modularMorphFrom || mode)
+      : mode;
+    const toId = holder.modularMorphing
+      ? (holder.modularMorphTo || mode)
+      : mode;
+    const from = MODULAR_MODE_DEFS[fromId]?.visual || MODULAR_MODE_DEFS.sword.visual;
+    const to = MODULAR_MODE_DEFS[toId]?.visual || from;
+    const t = holder.modularMorphing
+      ? Math.max(0, Math.min(1, holder.modularMorphT ?? 0))
+      : 1;
+    // Ease-out so the last morph snap reads as a settle.
+    const u = 1 - (1 - t) * (1 - t);
+    let color = mixHexColors(from[faction], to[faction], u);
+    if (holder.color && faction === "enemy") {
+      color = mixHexColors(color, holder.color, 0.62);
+    }
+    return {
+      length: from.length + (to.length - from.length) * u,
+      width: from.width + (to.width - from.width) * u,
+      gripOffset: from.gripOffset + (to.gripOffset - from.gripOffset) * u,
+      color,
+      morphing: !!holder.modularMorphing
+    };
+  }
+
   let color = base[faction];
   // Conquest (and other) per-fighter body colors: tint enemy weapons toward body.
   if (holder.color && faction === "enemy") {
@@ -475,6 +508,16 @@ export function createRenderer(canvas) {
     context.globalAlpha = bodyAlpha * (shieldUp ? .38 : 1);
     context.fillStyle = visual.color;
     context.fillRect(visual.gripOffset, -visual.width / 2, visual.length, visual.width);
+    // Morphing: second segment hint for the transforming silhouette.
+    if (visual.morphing) {
+      context.globalAlpha = bodyAlpha * 0.45;
+      context.fillRect(
+        visual.gripOffset + visual.length * 0.15,
+        -visual.width * 0.35,
+        visual.length * 0.55,
+        visual.width * 0.7
+      );
+    }
     context.globalAlpha = bodyAlpha;
     if ((fighter.shieldMaxDurability || 0) > 0 && (fighter.shieldRaised || fighter.shieldBroken)) {
       const half = fighter.shieldBlockHalfAngle || 1.2;
