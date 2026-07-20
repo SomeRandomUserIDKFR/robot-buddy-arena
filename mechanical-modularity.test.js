@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { attack, Fighter } from "./combat.js";
 import {
   applyLoadout, beginModularMorph, cycleModularMode, DEFAULT_LOADOUT,
-  GEAR_BY_ID, MODULAR_MODE_COOLDOWN, MODULAR_MODE_DEFS, MODULAR_MORPH_DURATION,
+  GEAR, GEAR_BY_ID, MODULAR_MODE_COOLDOWN, MODULAR_MODE_DEFS, MODULAR_MORPH_DURATION,
   modularAttackLocked, nextModularMode, shieldStats, theoreticalDps, tickModularWeapon,
   weaponStats
 } from "./equipment.js";
@@ -27,6 +27,9 @@ function finishMorph(fighter) {
   assert.equal(gear.modular, true);
   assert.ok(Number.isInteger(gear.price) && gear.price > 0);
   assert.match(gear.tradeoff, /E morph|morph/i);
+  // Keep near the front of the weapon shop row (2 cards visible at a time).
+  const weapons = GEAR.filter((item) => item.slot === "weapon");
+  assert.ok(weapons.findIndex((item) => item.id === "mechanical-modularity") <= 3);
 }
 
 // Sword mode matches Arc Saber combat stats / DPS / reach / RPM.

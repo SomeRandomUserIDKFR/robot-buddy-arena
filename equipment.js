@@ -90,6 +90,32 @@ export const GEAR = [
   melee("arc-saber", "Arc Saber", "55 damage at 150 RPM (137.5 DPS); +10% base speed.", {
     baseDamage: 55, rpm: 150, range: 120
   }),
+  // Featured early in the shop weapon row (2 cards visible); was buried at the end.
+  // Hybrid morph weapon: default catalog/loadout stats match Arc Saber (sword mode).
+  // Active mode (sword / shield / rifle) drives combat + learning via fighter.weapon.
+  item(
+    "mechanical-modularity",
+    "weapon",
+    "Mechanical Modularity",
+    "E morphs Sword ↔ Shield ↔ Pulse Rifle. Sword matches Arc Saber; rifle & modular plate are slightly weaker. Learning uses the active mode's gun/saber key.",
+    {
+      damage: 55 / 40,
+      fireRate: 150 / 150,
+      range: 120 / 120
+    },
+    {
+      baseKind: "saber",
+      dps: 55 * 150 / 60,
+      modular: true,
+      price: 210,
+      weaponStats: {
+        kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+        sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+        movementMultiplier: 1.1, iframeMultiplier: 1,
+        baseDamage: 55, rpm: 150, range: 120
+      }
+    }
+  ),
   gun("burst-carbine", "Burst Carbine", "Fast 108 DPS fire; shorter reach and lighter hits.", {
     baseDamage: 9.36, rpm: 690, range: 1118, projectileSpeed: 1426,
     dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
@@ -142,31 +168,6 @@ export const GEAR = [
     baseDamage: 24, rpm: 300, range: 64, movementMultiplier: 1.25,
     iframeMultiplier: 1.25
   }, 135),
-  // Hybrid morph weapon: default catalog/loadout stats match Arc Saber (sword mode).
-  // Active mode (sword / shield / rifle) drives combat + learning via fighter.weapon.
-  item(
-    "mechanical-modularity",
-    "weapon",
-    "Mechanical Modularity",
-    "E morphs Sword ↔ Shield ↔ Pulse Rifle. Sword matches Arc Saber; rifle & modular plate are slightly weaker. Learning uses the active mode's gun/saber key.",
-    {
-      damage: 55 / 40,
-      fireRate: 150 / 150,
-      range: 120 / 120
-    },
-    {
-      baseKind: "saber",
-      dps: 55 * 150 / 60,
-      modular: true,
-      price: 210,
-      weaponStats: {
-        kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
-        sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
-        movementMultiplier: 1.1, iframeMultiplier: 1,
-        baseDamage: 55, rpm: 150, range: 120
-      }
-    }
-  ),
 
   item("vector-pack", "jetpack", "Vector Pack", "Balanced fuel, thrust, and recharge.", {}),
   item("sprinter-pack", "jetpack", "Sprinter Pack", "Hard thrust, smaller tank.",

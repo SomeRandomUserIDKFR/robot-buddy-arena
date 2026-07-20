@@ -17,6 +17,25 @@
         if (!doc.body.textContent.includes("¢")) throw new Error("cent sign missing");
         if (row.scrollWidth <= row.clientWidth) throw new Error("shop row does not overflow");
         if (style.scrollbarWidth !== "none") throw new Error("scrollbar is not hidden");
+        const weaponRow = [...doc.querySelectorAll(".shop-row")]
+          .find((el) => el.getAttribute("aria-label")?.includes("Weapon"));
+        if (!weaponRow) throw new Error("weapon shop row missing");
+        const modularCard = weaponRow.querySelector('[data-shop-id="mechanical-modularity"]');
+        const modularBuy = weaponRow.querySelector('[data-buy="mechanical-modularity"]');
+        if (!modularCard || !modularBuy) throw new Error("Mechanical Modularity shop card missing");
+        if (modularBuy.disabled) throw new Error("Mechanical Modularity should begin locked and purchasable");
+        if (!modularCard.textContent.includes("Mechanical Modularity")) {
+          throw new Error("Mechanical Modularity label missing");
+        }
+        // One › click should bring the featured morph weapon into the visible window.
+        const weaponNext = weaponRow.parentElement.querySelector(".scroll-arrow.next");
+        if (!weaponNext || weaponNext.disabled) throw new Error("weapon shop next arrow unavailable");
+        weaponNext.click();
+        await new Promise((resolve) => setTimeout(resolve, 420));
+        const cardLeft = modularCard.offsetLeft;
+        const visible = cardLeft < weaponRow.scrollLeft + weaponRow.clientWidth
+          && cardLeft + modularCard.offsetWidth > weaponRow.scrollLeft;
+        if (!visible) throw new Error("Mechanical Modularity not visible after one scroll");
         for (const id of ["quick-fire-sniper", "classic-sniper", "strong-sniper", "daggers"]) {
           const card = doc.querySelector(`[data-buy="${id}"]`);
           if (!card) throw new Error(`${id} shop card missing`);

@@ -486,7 +486,17 @@ button span { opacity: .6; font-size: 11px; }
   background: transparent;
   font-size: 20px;
 }
-.scroll-arrow:hover { transform: none; color: var(--cyan); border-color: rgba(72, 232, 255, .35); }
+.scroll-arrow:hover:not(:disabled) { transform: none; color: var(--cyan); border-color: rgba(72, 232, 255, .35); }
+.scroll-arrow.is-dim,
+.scroll-arrow:disabled {
+  opacity: .28;
+  cursor: default;
+  color: #4a6670;
+}
+.scroll-arrow.has-more:not(:disabled) {
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(72, 232, 255, .45);
+}
 .gear-options .gear-card {
   flex: 0 0 calc((100% - 7px) / 2);
   scroll-snap-align: start;

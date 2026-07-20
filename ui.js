@@ -557,6 +557,10 @@ export function renderEquipment(profile) {
   ui.buddySlots.innerHTML = slotsMarkup(profile, "buddy");
   if (ui.playerPerkSlot) ui.playerPerkSlot.innerHTML = perkSlotMarkup(profile, "player");
   if (ui.buddyPerkSlot) ui.buddyPerkSlot.innerHTML = perkSlotMarkup(profile, "buddy");
+  requestAnimationFrame(() => {
+    syncScrollRows(ui.playerSlots);
+    syncScrollRows(ui.buddySlots);
+  });
   ui.playerStats.innerHTML = statMarkup(equipment.player, powers.playerDetail);
   ui.buddyStats.innerHTML = statMarkup(equipment.buddy, powers.buddyDetail);
   for (const button of ui.buddyMode.querySelectorAll("[data-mode]")) {
@@ -689,7 +693,7 @@ export function renderShop(profile) {
             const owned = profile.equipment.owned.includes(gear.id);
             const equipped = profile.equipment.player[slot] === gear.id
               || profile.equipment.buddy[slot] === gear.id;
-            return `<article class="shop-card ${owned ? "owned" : ""}">
+            return `<article class="shop-card ${owned ? "owned" : ""}" data-shop-id="${gear.id}">
               <div class="shop-card-top"><strong>${escapeHtml(gear.name)}</strong>
                 <span>${owned ? (equipped ? "EQUIPPED" : "OWNED") : `${gear.price}¢`}</span></div>
               <p>${escapeHtml(gear.tradeoff)}</p>
@@ -703,10 +707,42 @@ export function renderShop(profile) {
         <button type="button" class="scroll-arrow next" data-scroll-dir="1" aria-label="Next shop items">›</button>
       </div>
     </section>`).join("");
+  requestAnimationFrame(() => syncScrollRows(ui.shopCategories));
+}
+
+function syncScrollArrows(row) {
+  const shell = row.closest(".scroll-row-shell");
+  if (!shell) return;
+  const prev = shell.querySelector(".scroll-arrow.prev");
+  const next = shell.querySelector(".scroll-arrow.next");
+  const max = Math.max(0, row.scrollWidth - row.clientWidth);
+  const overflow = max > 2;
+  const atStart = row.scrollLeft <= 2;
+  const atEnd = row.scrollLeft >= max - 2;
+  if (prev) {
+    prev.disabled = !overflow || atStart;
+    prev.classList.toggle("is-dim", prev.disabled);
+  }
+  if (next) {
+    next.disabled = !overflow || atEnd;
+    next.classList.toggle("is-dim", next.disabled);
+    next.classList.toggle("has-more", overflow && !atEnd);
+  }
+}
+
+function syncScrollRows(root = document) {
+  for (const row of root.querySelectorAll(".hidden-scroll-row")) {
+    if (!row.dataset.scrollSynced) {
+      row.dataset.scrollSynced = "1";
+      row.addEventListener("scroll", () => syncScrollArrows(row), { passive: true });
+    }
+    syncScrollArrows(row);
+  }
 }
 
 function scrollRow(row, direction) {
   row.scrollBy({ left: direction * row.clientWidth * .75, behavior: "smooth" });
+  requestAnimationFrame(() => syncScrollArrows(row));
 }
 
 function fighterCardMarkup(fighter, fighterPower = null) {
