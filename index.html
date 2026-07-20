@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'">
+  <title>Robot Buddy Arena</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app">
+    <canvas id="game" width="1280" height="720" aria-label="Robot Buddy Arena game"></canvas>
+
+    <section id="menu" class="panel equipment-screen">
+      <header class="equipment-header">
+        <div>
+          <div class="eyebrow">ROBOT BUDDY PROGRAM // EQUIPMENT BAY</div>
+          <h1>Ready the duo</h1>
+          <p class="lede">Build complementary kits, then train or enter Conquest.</p>
+          <div class="progress-strip" aria-label="Progression">
+            <div class="level-chip"><span>LVL</span> <strong id="menuLevel">1</strong></div>
+            <div class="exp-meter" title="Experience">
+              <div class="exp-meter-track"><i id="menuExpFill"></i></div>
+              <small id="menuExpLabel">0 / 100 EXP</small>
+            </div>
+            <div class="level-chip rank-chip" aria-label="Conquest ranking"><span>RANK</span> <strong id="menuRanking">100</strong></div>
+            <div class="cyber-balance" aria-label="Cyber balance"><span>CYBER</span> <strong id="menuCyber">120¢</strong></div>
+          </div>
+        </div>
+        <div class="match-settings">
+          <label>Buddy name
+            <input id="botName" maxlength="16" value="Pixel" autocomplete="off">
+            <small id="nameError"></small>
+          </label>
+          <label>Buddy mind
+            <select id="aiMode">
+              <option value="flash">Flash — fast, impulsive</option>
+              <option value="balanced" selected>Balanced — adaptable</option>
+              <option value="thinker">Thinker — slow, deliberate</option>
+              <option value="mimic">Mimic — copy your style</option>
+            </select>
+            <div id="mimicControls" class="mimic-controls hidden">
+              <strong>Mimic intensity</strong>
+              <div id="mimicIntensity" class="segmented" role="radiogroup" aria-label="Mimic intensity">
+                <button type="button" data-mimic-intensity="slight">Slight</button>
+                <button type="button" data-mimic-intensity="quite">Quite a bit</button>
+                <button type="button" data-mimic-intensity="full">Full</button>
+              </div>
+              <small id="mimicLockReason"></small>
+            </div>
+          </label>
+        </div>
+      </header>
+      <nav class="bay-tabs" aria-label="Equipment Bay sections">
+        <button type="button" class="active" data-bay-tab="equipment" aria-selected="true">Equipment</button>
+        <button type="button" data-bay-tab="shop" aria-selected="false">Shop</button>
+      </nav>
+      <div id="equipmentPanel">
+      <div class="loadout-grid">
+        <section class="loadout-column">
+          <div class="column-title"><span>01</span><div><h2>You</h2><small>Always user-picked · Your Power</small></div></div>
+          <div id="playerSlots" class="gear-slots"></div>
+          <div id="playerPerkSlot" class="perk-slot"></div>
+          <div id="playerStats" class="stat-summary"></div>
+        </section>
+        <section class="loadout-column buddy-column">
+          <div class="column-title"><span>02</span><div><h2 id="buddyColumnName">Pixel</h2><small>Teammate · Buddy Power</small></div></div>
+          <div class="autonomy-control">
+            <strong>Buddy gear autonomy</strong>
+            <div id="buddyMode" class="segmented" role="radiogroup" aria-label="Buddy gear autonomy">
+              <button type="button" data-mode="user">User Picked</button>
+              <button type="button" data-mode="suggested">AI Suggested</button>
+              <button type="button" data-mode="choice">AI's Choice</button>
+            </div>
+            <small id="autonomyHint"></small>
+            <strong class="perk-autonomy-label">Buddy perk autonomy</strong>
+            <div id="buddyPerkMode" class="segmented" role="radiogroup" aria-label="Buddy perk autonomy">
+              <button type="button" data-perk-mode="user">User Picked</button>
+              <button type="button" data-perk-mode="suggested">AI Suggested</button>
+              <button type="button" data-perk-mode="choice">AI's Choice</button>
+            </div>
+            <small id="perkAutonomyHint"></small>
+          </div>
+          <div id="suggestionPanel" class="suggestion-panel hidden"></div>
+          <div id="perkSuggestionPanel" class="suggestion-panel hidden"></div>
+          <div id="buddySlots" class="gear-slots"></div>
+          <div id="buddyPerkSlot" class="perk-slot"></div>
+          <div id="buddyStats" class="stat-summary"></div>
+        </section>
+      </div>
+      <div class="readiness-card">
+        <span>Buddy readiness</span>
+        <strong id="menuReadiness">I'm not ready yet.</strong>
+        <small id="habitSummary">No training observations yet.</small>
+      </div>
+      <div class="learning-lock-control" role="group" aria-labelledby="learningLockLabel">
+        <strong id="learningLockLabel">Training learning</strong>
+        <div id="learningLock" class="segmented learning-lock" role="radiogroup" aria-label="Training learning">
+          <button type="button" data-learning-lock="false" aria-checked="true" class="active">Learn</button>
+          <button type="button" data-learning-lock="true" aria-checked="false">Spar only</button>
+        </div>
+        <small id="learningLockHint">Spar locks habit, readiness, and practice evidence. Fight as usual.</small>
+      </div>
+      <div class="map-picker" aria-label="Training map">
+        <label for="mapSelect">Map</label>
+        <select id="mapSelect">
+          <option value="random">Random</option>
+        </select>
+      </div>
+      <div class="button-row">
+        <button id="trainingBtn" class="primary">Training <span>1v1</span></button>
+        <button id="conquestBtn">Conquest <span>2v2</span></button>
+      </div>
+      <p class="controls-hint">A/D move · W/Space jump · Shift jetpack · C dodge · Q shield · Mouse aim/fire · G ping · Esc pause</p>
+      </div>
+      <section id="shopPanel" class="shop-panel hidden" aria-labelledby="shopTitle">
+        <div class="shop-heading">
+          <div><h2 id="shopTitle">Equipment Shop</h2><p>Unlock sidegrades permanently. Every edge has a tradeoff.</p></div>
+          <div class="cyber-balance"><span>BALANCE</span> <strong id="shopCyber">120¢</strong></div>
+        </div>
+        <div id="shopFeedback" class="shop-feedback" aria-live="polite">Choose gear to inspect and purchase.</div>
+        <div id="shopCategories"></div>
+      </section>
+    </section>
+
+    <section id="conquestSelect" class="panel conquest-select-screen hidden" aria-labelledby="conquestSelectTitle">
+      <header class="conquest-select-header">
+        <div>
+          <div class="eyebrow">CONQUEST // OPPONENT SELECT</div>
+          <h1 id="conquestSelectTitle">Choose your fight</h1>
+          <p class="lede">League is set by Ranking. Inspect the duo, reroll within league, then fight.</p>
+        </div>
+        <div class="conquest-rank-block" aria-label="Ranking and league">
+          <div class="conquest-rank-line">Ranking: <strong id="conquestRanking">100</strong></div>
+          <div class="conquest-league-line">League: <strong id="conquestLeague">Rookie</strong></div>
+          <div class="cyber-balance" aria-label="Cyber balance"><span>CYBER</span> <strong id="conquestCyber">120¢</strong></div>
+        </div>
+      </header>
+      <div id="conquestOpponentPanel" class="conquest-opponent-panel" aria-live="polite"></div>
+      <p id="conquestSelectFeedback" class="conquest-select-feedback" aria-live="polite"></p>
+      <div class="button-row conquest-select-actions">
+        <button type="button" id="conquestBackBtn">Back</button>
+        <button type="button" id="conquestRerollBtn">Reroll opponent</button>
+        <button type="button" id="conquestFightBtn" class="primary">Fight</button>
+      </div>
+    </section>
+
+    <div id="perkModal" class="perk-modal hidden" role="dialog" aria-modal="true" aria-labelledby="perkModalTitle">
+      <div class="perk-modal-card">
+        <div class="eyebrow">LEVEL MILESTONE</div>
+        <h2 id="perkModalTitle">Choose a perk</h2>
+        <p class="lede">Unlock one permanent tradeoff. You and your buddy each equip one at a time.</p>
+        <div id="perkChoices" class="perk-choices"></div>
+      </div>
+    </div>
+
+    <section id="pause" class="panel compact hidden">
+      <div class="eyebrow">SIMULATION PAUSED</div>
+      <h2>Take a breath.</h2>
+      <button id="resumeBtn" class="primary">Resume</button>
+      <button id="quitBtn">Return to menu</button>
+    </section>
+
+    <section id="results" class="panel hidden">
+      <div class="eyebrow">MATCH COMPLETE</div>
+      <h1 id="resultTitle">Victory</h1>
+      <div id="resultCyber" class="result-cyber"></div>
+      <div id="resultExp" class="result-exp"></div>
+      <div id="resultRanking" class="result-ranking"></div>
+      <div id="feedback" class="feedback"></div>
+      <section id="coachingPanel" class="coaching-panel" aria-labelledby="coachingTitle">
+        <h3 id="coachingTitle">Post-match coaching</h3>
+        <div id="coachingMessages" class="coaching-messages" aria-live="polite"></div>
+        <form id="coachingForm" class="coaching-form">
+          <label for="coachingInput">Reply to your buddy</label>
+          <div class="coaching-input-row">
+            <input id="coachingInput" maxlength="240" autocomplete="off" aria-describedby="coachingHint analyzerStatus" placeholder="Tell me naturally what to practice…">
+            <button id="coachingSend" class="primary" type="submit">Send</button>
+          </div>
+          <small id="coachingHint" class="coaching-hint">Ask about the game or coach practice after Training — topic chips are optional.</small>
+          <div id="coachingTopicChips" class="topic-chips" aria-label="Game topic prompts"></div>
+          <small id="analyzerStatus" class="analyzer-status" aria-live="polite">Basic understanding active</small>
+        </form>
+        <div id="coachingQuickReplies" class="quick-replies" aria-label="Optional suggestions"></div>
+      </section>
+      <h3>Buddy thought log</h3>
+      <ul id="thoughtLog"></ul>
+      <div class="button-row">
+        <button id="againBtn" class="primary">Run it again</button>
+        <button id="menuBtn">Back to menu</button>
+      </div>
+    </section>
+
+    <div id="hud" class="hidden">
+      <div id="teamBars" class="team-bars"></div>
+      <div class="status-stack">
+        <div id="modeLabel"></div>
+        <div id="readinessLabel"></div>
+        <div id="hudRanking">RANK 100</div>
+        <div id="hudCyber">120¢</div>
+      </div>
+      <div class="player-status">
+        <div id="fuelMeter" class="meter"><span id="fuelLabel">FUEL</span><i id="fuelFill"></i></div>
+        <div id="shieldMeter" class="meter shield hidden"><span id="shieldLabel">SHIELD</span><i id="shieldFill"></i></div>
+        <div class="meter dodge"><span>DODGE</span><i id="dodgeFill"></i></div>
+        <div id="buffRow" class="buff-row"></div>
+      </div>
+      <div id="announcement"></div>
+    </div>
+  </main>
+  <script type="module" src="game.js"></script>
+</body>
+</html>

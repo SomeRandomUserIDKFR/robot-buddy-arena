@@ -1,0 +1,24 @@
+{
+  "vendoredAt": "2026-07-19T20:42:42.684Z",
+  "model": {
+    "id": "all-MiniLM-L6-v2",
+    "sourceRepo": "Xenova/all-MiniLM-L6-v2",
+    "baseModel": "sentence-transformers/all-MiniLM-L6-v2",
+    "license": "Apache-2.0",
+    "quantization": "onnx/model_quantized.onnx (dynamic quantized / q8)",
+    "embeddingDims": 384,
+    "diskBytes": 23917810,
+    "quantizedOnnxBytes": 22972370
+  },
+  "runtime": {
+    "package": "@huggingface/transformers@3.7.2",
+    "license": "Apache-2.0",
+    "analyzerRuntimeBytes": 2232501,
+    "ortWasmBytes": 32794766
+  },
+  "offlineContract": {
+    "allowRemoteModels": false,
+    "connectSrc": "self",
+    "runtimeDownload": false
+  }
+}

@@ -1,0 +1,622 @@
+import { angleDiff } from "./utils.js";
+import {
+  applyPerkModifiersToStats, CONQUEST_EXP, cyberWinMultiplier, ensureProgressionProfile,
+  grantExp, normalizeEquippedPerk, perkCombatExtras
+} from "./perks.js";
+
+const item = (id, slot, name, tradeoff, modifiers = {}, extra = {}) => ({
+  id, slot, name, tradeoff, modifiers, ...extra
+});
+
+const gun = (id, name, tradeoff, stats, price) => item(
+  id, "weapon", name, tradeoff,
+  {
+    damage: stats.baseDamage / 12,
+    fireRate: stats.rpm / 500,
+    range: stats.range / 1317.5,
+    projectileSpeed: stats.projectileSpeed / 1550
+  },
+  {
+    baseKind: "gun",
+    dps: stats.baseDamage * stats.rpm / 60,
+    weaponStats: { kind: "gun", ...stats },
+    ...(price ? { price } : {})
+  }
+);
+
+const melee = (id, name, tradeoff, stats, price) => item(
+  id, "weapon", name, tradeoff,
+  {
+    damage: stats.baseDamage / 40,
+    fireRate: stats.rpm / 150,
+    range: stats.range / 120
+  },
+  {
+    baseKind: "saber",
+    dps: stats.baseDamage * stats.rpm / 60,
+    weaponStats: {
+      kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+      sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+      movementMultiplier: 1.1, iframeMultiplier: 1,
+      ...stats
+    },
+    ...(price ? { price } : {})
+  }
+);
+
+const shield = (id, name, tradeoff, stats, price) => item(
+  id, "shield", name, tradeoff, {},
+  {
+    durability: stats.durability,
+    blockHalfAngle: stats.blockHalfAngle,
+    raisedSpeed: stats.raisedSpeed,
+    brokenSpeed: stats.brokenSpeed,
+    ...(price != null ? { price } : {})
+  }
+);
+
+export const SLOT_ORDER = ["body", "helmet", "weapon", "jetpack", "shield"];
+export const SLOT_LABELS = {
+  body: "Main Armor",
+  helmet: "Helmet",
+  weapon: "Weapon",
+  jetpack: "Jetpack",
+  shield: "Shield"
+};
+
+export const GEAR = [
+  item("field-frame", "body", "Field Frame", "Balanced protection and mobility.", {}),
+  item("scout-frame", "body", "Scout Frame", "Faster, but lighter and more exposed.",
+    { hp: .88, speed: 1.12, damageTaken: 1.08 }),
+  item("bulwark-frame", "body", "Bulwark Frame", "Tough and stable, but slower.",
+    { hp: 1.18, speed: .86, damageTaken: .92 }, { price: 110 }),
+  item("reactive-frame", "body", "Reactive Frame", "Deflects hits, but sacrifices integrity.",
+    { hp: .9, speed: 1.04, damageTaken: .84 }, { price: 145 }),
+
+  item("survey-visor", "helmet", "Survey Visor", "Balanced armor and sensor range.", {}),
+  item("wideband-array", "helmet", "Wideband Array", "More awareness, slightly less integrity.",
+    { hp: .95, sight: 1.15 }),
+  item("guard-helm", "helmet", "Guard Helm", "Extra integrity, narrower awareness.",
+    { hp: 1.08, sight: .88 }, { price: 85 }),
+  item("hunter-optics", "helmet", "Hunter Optics", "Long-range sensors with a fragile shell.",
+    { hp: .9, sight: 1.28 }, { price: 135 }),
+
+  gun("pulse-rifle", "Pulse Rifle", "Reliable 100 DPS ranged fire and reach.", {
+    baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
+    dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
+    aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
+    movementMultiplier: 1, iframeMultiplier: 1
+  }),
+  melee("arc-saber", "Arc Saber", "55 damage at 150 RPM (137.5 DPS); +10% base speed.", {
+    baseDamage: 55, rpm: 150, range: 120
+  }),
+  gun("burst-carbine", "Burst Carbine", "Fast 108 DPS fire; shorter reach and lighter hits.", {
+    baseDamage: 9.36, rpm: 690, range: 1118, projectileSpeed: 1426,
+    dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
+    aimSettle: 0, unsettledSpread: .025, cameraLead: .06, sightExtension: 0,
+    movementMultiplier: 1, iframeMultiplier: 1
+  }, 100),
+  melee("duelist-blade", "Duelist Blade", "36 damage at 217.5 RPM (130.5 DPS); short, quick, +10% speed.", {
+    baseDamage: 36, rpm: 217.5, range: 106
+  }, 100),
+  gun("marksman-rifle", "Marksman Rifle", "18.6 damage at 290 RPM (89.9 DPS); faster, longer shots.", {
+    baseDamage: 18.6, rpm: 290, range: 1909, projectileSpeed: 2092,
+    dropoff: { start: 435, end: 1740, minMultiplier: 10 / 12 },
+    aimSettle: .12, unsettledSpread: .045, cameraLead: .15, sightExtension: 0,
+    movementMultiplier: 1, iframeMultiplier: 1
+  }, 155),
+  melee("heavy-saber", "Heavy Saber", "85 damage at 93 RPM (131.8 DPS); long, slow, +10% speed.", {
+    baseDamage: 85, rpm: 93, range: 142
+  }, 155),
+  gun("quick-fire-sniper", "Quick-Fire Sniper", "100 damage at 60 RPM. Settle aim 0.35s; inaccurate from the hip.", {
+    baseDamage: 100, rpm: 60, range: 2300, projectileSpeed: 3000,
+    dropoff: null, aimSettle: .35, unsettledSpread: .35, cameraLead: .32,
+    sightExtension: 1480, sightHalfAngle: .18, movementMultiplier: 1,
+    iframeMultiplier: 1, tracer: true
+  }, 160),
+  gun("classic-sniper", "Classic Sniper", "180 damage at 30 RPM. Settle aim 0.45s; inaccurate from the hip.", {
+    baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
+    dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
+    sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
+    iframeMultiplier: 1, tracer: true
+  }, 190),
+  gun("strong-sniper", "Strong Sniper", "250 damage at 20 RPM. Settle aim 0.55s; heaviest hip-fire penalty.", {
+    baseDamage: 250, rpm: 20, range: 2600, projectileSpeed: 3400,
+    dropoff: null, aimSettle: .55, unsettledSpread: .5, cameraLead: .38,
+    sightExtension: 1680, sightHalfAngle: .16, movementMultiplier: 1,
+    iframeMultiplier: 1, tracer: true
+  }, 220),
+  // Next-gen sidegrades: volume hose vs perfect hitscan beam (gun family learning).
+  gun("gattler", "Gattler", "4 dmg hose at 1380 RPM (92 DPS); short spray, shreds shields 1.35×.", {
+    baseDamage: 4, rpm: 1380, range: 960, projectileSpeed: 1180,
+    dropoff: { start: 180, end: 780, minMultiplier: .72 },
+    aimSettle: 0, unsettledSpread: .055, cameraLead: .05, sightExtension: 0,
+    movementMultiplier: 1, iframeMultiplier: 1, tracer: true, shieldDamageMult: 1.35
+  }, 175),
+  gun("laser", "Laser", "2 dmg hitscan ticks at 3150 RPM (105 DPS); no spread/dropoff; beam reveals sight.", {
+    baseDamage: 2, rpm: 3150, range: 1720, projectileSpeed: 1550,
+    dropoff: null, aimSettle: 0, unsettledSpread: 0, cameraLead: .1, sightExtension: 0,
+    movementMultiplier: 1, iframeMultiplier: 1, hitscan: true, beamRevealRadius: 56
+  }, 185),
+  melee("daggers", "Daggers", "24 damage at 300 RPM (120 DPS); very short reach, +25% speed and dodge i-frames.", {
+    baseDamage: 24, rpm: 300, range: 64, movementMultiplier: 1.25,
+    iframeMultiplier: 1.25
+  }, 135),
+
+  item("vector-pack", "jetpack", "Vector Pack", "Balanced fuel, thrust, and recharge.", {}),
+  item("sprinter-pack", "jetpack", "Sprinter Pack", "Hard thrust, smaller tank.",
+    { fuel: .82, thrust: 1.2, recharge: 1.08 }),
+  item("endurance-pack", "jetpack", "Endurance Pack", "Long burn, gentler lift and recharge.",
+    { fuel: 1.3, thrust: .88, recharge: .84 }, { price: 95 }),
+  item("recycler-pack", "jetpack", "Recycler Pack", "Rapid recharge, but less fuel and lift.",
+    { fuel: .88, thrust: .92, recharge: 1.35 }, { price: 125 }),
+
+  // Shields: per-match block HP vs ~500 HP / ~100 DPS weapons. Heavier = more
+  // block pool, narrower cone, and harsher raised/broken speed penalties.
+  shield("no-shield", "No Shield", "Hands free — no blocking, no weight.", {
+    durability: 0, blockHalfAngle: 0, raisedSpeed: 1, brokenSpeed: 1
+  }),
+  shield("light-buckler", "Light Buckler", "175 block HP; wide arc; light raised/broken drag.", {
+    durability: 175, blockHalfAngle: 1.4, raisedSpeed: .95, brokenSpeed: .9
+  }),
+  shield("kinetic-targe", "Kinetic Targe", "320 block HP; solid midweight cover.", {
+    durability: 320, blockHalfAngle: 1.31, raisedSpeed: .9, brokenSpeed: .82
+  }, 95),
+  shield("bastion-bulwark", "Bastion Bulwark", "500 block HP; heavy; slows hard when raised or broken.", {
+    durability: 500, blockHalfAngle: 1.22, raisedSpeed: .82, brokenSpeed: .7
+  }, 155)
+];
+
+export const GEAR_BY_ID = Object.fromEntries(GEAR.map((gear) => [gear.id, gear]));
+export const STARTER_GEAR = [
+  "field-frame", "scout-frame", "survey-visor", "wideband-array",
+  "pulse-rifle", "arc-saber", "vector-pack", "sprinter-pack",
+  "no-shield", "light-buckler"
+];
+export const DEFAULT_LOADOUT = {
+  body: "field-frame",
+  helmet: "survey-visor",
+  weapon: "pulse-rifle",
+  jetpack: "vector-pack",
+  shield: "no-shield"
+};
+export const STARTING_CYBER = 120;
+export const STARTING_RANKING = 100;
+export const RANKING_FLOOR = 0;
+export const CONQUEST_REWARDS = { rookie: 35, veteran: 60, elite: 90 };
+export { CONQUEST_EXP };
+
+/** Conquest win ranking gain at the current rank (before applying the win). */
+export function rankingWinGain(ranking) {
+  const r = Number.isFinite(Number(ranking)) ? Number(ranking) : STARTING_RANKING;
+  return Math.ceil(100 + (r - 100) * 0.5);
+}
+
+/** Conquest loss: ceil(25% of the win gain you would have earned at this rank). */
+export function rankingLossAmount(ranking) {
+  return Math.ceil(rankingWinGain(ranking) * 0.25);
+}
+
+export function weaponKind(gearOrId) {
+  const gear = typeof gearOrId === "string" ? GEAR_BY_ID[gearOrId] : gearOrId;
+  return gear?.baseKind || gear?.weaponType || "gun";
+}
+
+/** Marksman / sniper IDs that can earn and use the tiny precision-aim gimmick. */
+export const PRECISION_AIM_WEAPONS = Object.freeze([
+  "marksman-rifle",
+  "quick-fire-sniper",
+  "classic-sniper",
+  "strong-sniper"
+]);
+
+export function isPrecisionAimWeapon(gearOrId) {
+  const id = typeof gearOrId === "string" ? gearOrId : gearOrId?.id;
+  return PRECISION_AIM_WEAPONS.includes(id);
+}
+
+export function weaponStats(gearOrId) {
+  const gear = typeof gearOrId === "string" ? GEAR_BY_ID[gearOrId] : gearOrId;
+  return gear?.weaponStats || GEAR_BY_ID["pulse-rifle"].weaponStats;
+}
+
+export function theoreticalDps(gearOrId) {
+  const stats = weaponStats(gearOrId);
+  return stats.baseDamage * stats.rpm / 60;
+}
+
+export function shieldStats(gearOrId) {
+  const gear = typeof gearOrId === "string" ? GEAR_BY_ID[gearOrId] : gearOrId;
+  const fallback = GEAR_BY_ID["no-shield"];
+  if (!gear || gear.slot !== "shield") {
+    return {
+      durability: fallback.durability,
+      blockHalfAngle: fallback.blockHalfAngle,
+      raisedSpeed: fallback.raisedSpeed,
+      brokenSpeed: fallback.brokenSpeed
+    };
+  }
+  return {
+    durability: gear.durability || 0,
+    blockHalfAngle: gear.blockHalfAngle || 0,
+    raisedSpeed: gear.raisedSpeed ?? 1,
+    brokenSpeed: gear.brokenSpeed ?? 1
+  };
+}
+
+export function hasUsableShield(fighter) {
+  return (fighter?.shieldMaxDurability || 0) > 0 && !fighter.shieldBroken;
+}
+
+export function shieldSpeedMultiplier(fighter) {
+  if (!(fighter?.shieldMaxDurability > 0)) return 1;
+  if (fighter.shieldBroken) return fighter.shieldBrokenSpeed ?? .85;
+  if (fighter.shieldRaised) return fighter.shieldRaisedSpeed ?? .92;
+  return 1;
+}
+
+/** True when a raised intact shield faces the incoming attack direction. */
+export function shieldBlocksAttack(fighter, attackAngle) {
+  if (!fighter?.shieldRaised || fighter.shieldBroken) return false;
+  if (!(fighter.shieldMaxDurability > 0) || !(fighter.shieldDurability > 0)) return false;
+  const half = fighter.shieldBlockHalfAngle || 0;
+  if (half <= 0) return false;
+  // Attack travel angle π opposite aim = frontal hit against the shield face.
+  return Math.abs(angleDiff(attackAngle, fighter.aim + Math.PI)) <= half;
+}
+
+export function toggleShieldRaise(fighter) {
+  if (!(fighter?.shieldMaxDurability > 0) || fighter.dead) return false;
+  if (fighter.shieldBroken) {
+    fighter.shieldRaised = false;
+    return false;
+  }
+  fighter.shieldRaised = !fighter.shieldRaised;
+  return true;
+}
+
+function legacyWeapon(value) {
+  if (value === "saber" || value === "arc-saber") return "arc-saber";
+  return "pulse-rifle";
+}
+
+export function normalizeLoadout(loadout, owned = STARTER_GEAR, legacy = null) {
+  const source = loadout || {};
+  const normalized = {};
+  for (const slot of SLOT_ORDER) {
+    let id = source[slot];
+    if (slot === "weapon" && (!id || id === "gun" || id === "saber")) {
+      id = legacyWeapon(id || legacy);
+    }
+    const gear = GEAR_BY_ID[id];
+    normalized[slot] = gear?.slot === slot && owned.includes(id)
+      ? id
+      : DEFAULT_LOADOUT[slot];
+  }
+  return normalized;
+}
+
+export function ensureEquipmentProfile(profile, saved = profile) {
+  const owned = Array.from(new Set([
+    ...STARTER_GEAR,
+    "no-shield",
+    ...(Array.isArray(saved?.equipment?.owned) ? saved.equipment.owned : [])
+  ])).filter((id) => !!GEAR_BY_ID[id]);
+  const oldPlayer = saved?.playerWeapon || saved?.equipment?.playerWeapon;
+  const oldBuddy = saved?.buddyWeapon || saved?.equipment?.buddyWeapon;
+  const player = normalizeLoadout(saved?.equipment?.player, owned, oldPlayer);
+  const buddy = normalizeLoadout(saved?.equipment?.buddy, owned, oldBuddy);
+  ensureProgressionProfile(profile, saved);
+  player.perk = normalizeEquippedPerk(
+    saved?.equipment?.player?.perk, profile.unlockedPerks
+  );
+  buddy.perk = normalizeEquippedPerk(
+    saved?.equipment?.buddy?.perk, profile.unlockedPerks
+  );
+  profile.equipment = {
+    owned,
+    player,
+    buddy,
+    buddyMode: ["user", "suggested", "choice"].includes(saved?.equipment?.buddyMode)
+      ? saved.equipment.buddyMode
+      : "user",
+    suggestion: null
+  };
+  return profile.equipment;
+}
+
+export function ensureEconomyProfile(profile, saved = profile) {
+  const rawBalance = saved?.cyber;
+  profile.cyber = Number.isInteger(rawBalance) && rawBalance >= 0
+    ? rawBalance
+    : STARTING_CYBER;
+  const rawRanking = saved?.ranking;
+  profile.ranking = Number.isInteger(rawRanking) && rawRanking >= RANKING_FLOOR
+    ? rawRanking
+    : STARTING_RANKING;
+  profile.rewardedConquests = Array.from(new Set(
+    Array.isArray(saved?.rewardedConquests) ? saved.rewardedConquests : []
+  )).filter((id) => typeof id === "string").slice(-100);
+  return profile;
+}
+
+export function purchaseGear(profile, gearId) {
+  const gear = GEAR_BY_ID[gearId];
+  if (!gear || !Number.isInteger(gear.price)) return { ok: false, reason: "not-for-sale" };
+  if (profile.equipment.owned.includes(gearId)) return { ok: false, reason: "owned" };
+  if (profile.cyber < gear.price) return {
+    ok: false, reason: "insufficient", shortfall: gear.price - profile.cyber
+  };
+  profile.cyber -= gear.price;
+  profile.equipment.owned.push(gearId);
+  return { ok: true, spent: gear.price, balance: profile.cyber, gear };
+}
+
+export function equipOwned(profile, owner, slot, gearId) {
+  const gear = GEAR_BY_ID[gearId];
+  if (!["player", "buddy"].includes(owner)
+    || gear?.slot !== slot
+    || !profile.equipment.owned.includes(gearId)
+    || (owner === "buddy" && profile.equipment.buddyMode === "choice")) return false;
+  profile.equipment[owner][slot] = gearId;
+  if (owner === "buddy" && profile.equipment.buddyMode === "suggested"
+    && profile.equipment.suggestion) {
+    profile.equipment.suggestion.loadout[slot] = gearId;
+  }
+  return true;
+}
+
+/**
+ * Award Conquest rewards once per result id.
+ * Wins: Cyber + EXP + ranking gain. Losses: ranking loss only (floor at 0).
+ * Training / Spar: no change. Returns { cyber, exp, levelsGained, pendingPicks, rankingDelta }.
+ */
+export function awardConquest(profile, result, random = Math.random) {
+  const empty = { cyber: 0, exp: 0, levelsGained: 0, pendingPicks: [], rankingDelta: 0 };
+  if (result?.mode !== "conquest") return empty;
+  const resultId = String(result.id || "");
+  if (!resultId || profile.rewardedConquests.includes(resultId)) return empty;
+  ensureEconomyProfile(profile, profile);
+  ensureProgressionProfile(profile, profile);
+  profile.rewardedConquests.push(resultId);
+  profile.rewardedConquests = profile.rewardedConquests.slice(-100);
+
+  if (!result.win) {
+    const loss = rankingLossAmount(profile.ranking);
+    const before = profile.ranking;
+    profile.ranking = Math.max(RANKING_FLOOR, before - loss);
+    return {
+      cyber: 0,
+      exp: 0,
+      levelsGained: 0,
+      pendingPicks: [],
+      rankingDelta: profile.ranking - before
+    };
+  }
+
+  const baseCyber = CONQUEST_REWARDS[result.difficulty] || CONQUEST_REWARDS.rookie;
+  const cyber = Math.round(baseCyber * cyberWinMultiplier(profile));
+  const exp = CONQUEST_EXP[result.difficulty] || CONQUEST_EXP.rookie;
+  const rankingDelta = rankingWinGain(profile.ranking);
+  profile.cyber += cyber;
+  profile.ranking += rankingDelta;
+  const progression = grantExp(profile, exp, random);
+  return {
+    cyber,
+    exp: progression.expGranted,
+    levelsGained: progression.levelsGained,
+    pendingPicks: progression.pendingPicks,
+    rankingDelta
+  };
+}
+
+export function ownedForSlot(equipment, slot) {
+  return GEAR.filter((gear) => gear.slot === slot && equipment.owned.includes(gear.id));
+}
+
+function evidenceStyle(profile, playerLoadout) {
+  const weapon = weaponKind(playerLoadout.weapon);
+  const learned = profile.weapons?.[weapon]?.habits || {};
+  const range = learned.engagementRange;
+  const rush = learned.rushPrediction;
+  const reliableRange = (range?.samples || 0) >= 3 ? range.estimate : null;
+  const reliableRush = (rush?.samples || 0) >= 3 ? rush.estimate : null;
+  if (reliableRange != null && reliableRange > .58) return "ranged";
+  if (reliableRush != null && reliableRush > .5) return "rusher";
+  if (weaponKind(playerLoadout.weapon) === "saber") return "rusher";
+  return "balanced";
+}
+
+function pickOwned(equipment, slot, preferences = []) {
+  return (preferences || []).find((id) => (
+    equipment.owned.includes(id) && GEAR_BY_ID[id]?.slot === slot
+  )) || ownedForSlot(equipment, slot)[0]?.id || (
+    equipment.owned.includes(DEFAULT_LOADOUT[slot]) ? DEFAULT_LOADOUT[slot] : null
+  ) || DEFAULT_LOADOUT[slot];
+}
+
+export function suggestBuddyLoadout(profile) {
+  const equipment = profile.equipment;
+  const style = evidenceStyle(profile, equipment.player);
+  const preferences = style === "ranged"
+    ? {
+      body: ["field-frame", "bulwark-frame", "scout-frame"],
+      helmet: ["wideband-array", "survey-visor", "guard-helm"],
+      weapon: [
+        "laser", "quick-fire-sniper", "classic-sniper", "strong-sniper",
+        "marksman-rifle", "pulse-rifle", "gattler", "burst-carbine",
+        "arc-saber", "duelist-blade"
+      ],
+      jetpack: ["endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack"],
+      shield: ["light-buckler", "kinetic-targe", "no-shield", "bastion-bulwark"]
+    }
+    : style === "rusher"
+      ? {
+        body: ["scout-frame", "field-frame", "bulwark-frame"],
+        helmet: ["survey-visor", "wideband-array", "guard-helm"],
+        weapon: [
+          "daggers", "heavy-saber", "arc-saber", "duelist-blade",
+          "gattler", "burst-carbine", "pulse-rifle", "laser"
+        ],
+        jetpack: ["sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack"],
+        shield: ["no-shield", "light-buckler", "kinetic-targe", "bastion-bulwark"]
+      }
+      : {
+        body: ["field-frame", "scout-frame", "bulwark-frame"],
+        helmet: ["survey-visor", "wideband-array", "guard-helm"],
+        weapon: [
+          "pulse-rifle", "arc-saber", "burst-carbine", "duelist-blade",
+          "gattler", "laser", "marksman-rifle", "heavy-saber",
+          "quick-fire-sniper", "classic-sniper", "strong-sniper", "daggers"
+        ],
+        jetpack: ["vector-pack", "sprinter-pack", "endurance-pack", "recycler-pack"],
+        shield: ["light-buckler", "no-shield", "kinetic-targe", "bastion-bulwark"]
+      };
+  const loadout = Object.fromEntries(
+    SLOT_ORDER.map((slot) => [slot, pickOwned(equipment, slot, preferences[slot])])
+  );
+  const reason = style === "ranged"
+    ? "You seem to fight at range, so I favor awareness and reliable reach. I may be wrong."
+    : style === "rusher"
+      ? "You tend to close distance, so I favor mobility and close support. I may be wrong."
+      : "I do not have strong evidence yet, so I suggest a balanced kit.";
+  return { loadout, reason, style };
+}
+
+export function setBuddyMode(profile, mode) {
+  const equipment = profile.equipment;
+  equipment.buddyMode = mode;
+  if (mode === "suggested") equipment.suggestion = suggestBuddyLoadout(profile);
+  if (mode === "choice") {
+    const choice = suggestBuddyLoadout(profile);
+    equipment.buddy = choice.loadout;
+    equipment.suggestion = choice;
+  }
+  if (mode === "user") equipment.suggestion = null;
+  return equipment;
+}
+
+export function acceptSuggestion(profile) {
+  const suggestion = profile.equipment.suggestion;
+  if (suggestion) profile.equipment.buddy = normalizeLoadout(
+    suggestion.loadout, profile.equipment.owned
+  );
+}
+
+export function effectiveStats(loadout) {
+  const result = {
+    hp: 500, speed: 520, fuel: 3, thrust: 4000, recharge: 5,
+    sight: 820, damageTaken: 100, dps: 100
+  };
+  for (const slot of SLOT_ORDER) {
+    const id = loadout?.[slot];
+    const gear = GEAR_BY_ID[id];
+    const mods = gear?.modifiers || {};
+    if (mods.hp) result.hp *= mods.hp;
+    if (mods.speed) result.speed *= mods.speed;
+    if (mods.fuel) result.fuel *= mods.fuel;
+    if (mods.thrust) result.thrust *= mods.thrust;
+    if (mods.recharge) result.recharge /= mods.recharge;
+    if (mods.sight) result.sight *= mods.sight;
+    if (mods.damageTaken) result.damageTaken *= mods.damageTaken;
+    if (gear?.slot === "weapon") result.dps = theoreticalDps(gear);
+  }
+  applyPerkModifiersToStats(result, loadout?.perk);
+  const weapon = weaponStats(loadout.weapon);
+  result.speed = Math.min(520 * 1.4, result.speed * (weapon.movementMultiplier || 1));
+  return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, Math.round(value)]));
+}
+
+export function applyLoadout(fighter, loadout) {
+  const stats = effectiveStats(loadout);
+  const perkCombat = perkCombatExtras(loadout?.perk);
+  const weapon = GEAR_BY_ID[loadout.weapon] || GEAR_BY_ID["pulse-rifle"];
+  const shieldGear = GEAR_BY_ID[loadout.shield]?.slot === "shield"
+    ? GEAR_BY_ID[loadout.shield]
+    : GEAR_BY_ID["no-shield"];
+  const shield = shieldStats(shieldGear);
+  fighter.loadout = {
+    ...DEFAULT_LOADOUT, ...loadout, shield: shieldGear.id,
+    perk: loadout?.perk || null
+  };
+  fighter.perkId = loadout?.perk || null;
+  fighter.weaponId = weapon.id;
+  fighter.weapon = weaponKind(weapon);
+  fighter.weaponStats = { ...weaponStats(weapon) };
+  fighter.maxHp = stats.hp;
+  fighter.hp = stats.hp;
+  fighter.moveSpeed = stats.speed;
+  fighter.acceleration = 1800 * (stats.speed / 520);
+  fighter.damageTaken = stats.damageTaken / 100;
+  fighter.sight = stats.sight;
+  fighter.jetFuelCapacity = stats.fuel / 3;
+  fighter.jetThrust = stats.thrust;
+  fighter.jetRechargeScale = 5 / stats.recharge;
+  fighter.weaponDamage = (weapon.modifiers.damage || 1) * perkCombat.damage;
+  fighter.weaponFireRate = (weapon.modifiers.fireRate || 1) * perkCombat.fireRate;
+  fighter.weaponRange = weapon.modifiers.range || 1;
+  fighter.projectileSpeed = weapon.modifiers.projectileSpeed || 1;
+  fighter.weaponBaseDamage = fighter.weaponStats.baseDamage * perkCombat.damage;
+  fighter.weaponRpm = fighter.weaponStats.rpm * perkCombat.fireRate;
+  fighter.weaponReach = fighter.weaponStats.range;
+  fighter.weaponDropoff = fighter.weaponStats.dropoff;
+  fighter.aimSettleRequired = fighter.weaponStats.aimSettle || 0;
+  fighter.unsettledSpread = fighter.weaponStats.unsettledSpread || 0;
+  fighter.cameraLead = fighter.weaponStats.cameraLead || 0;
+  fighter.iframeMultiplier = (fighter.weaponStats.iframeMultiplier || 1) * perkCombat.iframe;
+  fighter.dodgeCooldownMult = perkCombat.dodgeCooldown;
+  fighter.directionalSightRange = Math.min(
+    2400,
+    fighter.weaponStats.range,
+    fighter.sight + (fighter.weaponStats.sightExtension || 0)
+  );
+  fighter.sightHalfAngle = fighter.weaponStats.sightHalfAngle || 0;
+  // Per-match shield pool: full at spawn, never recharges until the next match.
+  fighter.shieldId = shieldGear.id;
+  fighter.shieldMaxDurability = shield.durability * perkCombat.shieldDurability;
+  fighter.shieldDurability = fighter.shieldMaxDurability;
+  fighter.shieldBlockHalfAngle = shield.blockHalfAngle;
+  fighter.shieldRaisedSpeed = shield.raisedSpeed * perkCombat.shieldRaisedSpeed;
+  fighter.shieldBrokenSpeed = shield.brokenSpeed;
+  fighter.shieldRaised = false;
+  fighter.shieldBroken = false;
+  fighter.shieldFlash = 0;
+  return fighter;
+}
+
+export function trainerLoadout(tier, follower = false) {
+  if (tier === "elite") {
+    return {
+      body: follower ? "field-frame" : "bulwark-frame",
+      helmet: "guard-helm",
+      weapon: follower ? "marksman-rifle" : "heavy-saber",
+      jetpack: "endurance-pack",
+      shield: follower ? "light-buckler" : "kinetic-targe"
+    };
+  }
+  if (tier === "veteran") {
+    return {
+      body: "field-frame", helmet: "survey-visor",
+      weapon: follower ? "pulse-rifle" : "arc-saber", jetpack: "vector-pack",
+      shield: follower ? "no-shield" : "light-buckler"
+    };
+  }
+  // Rookie Conquest: starter-ish kits only — no marksman / bulwark / heavy saber.
+  // Trainer gets a light buckler so naive shield AI can show; follower is bare.
+  if (follower) {
+    return {
+      body: "scout-frame",
+      helmet: "survey-visor",
+      weapon: "pulse-rifle",
+      jetpack: "sprinter-pack",
+      shield: "no-shield"
+    };
+  }
+  return {
+    body: "field-frame",
+    helmet: "survey-visor",
+    weapon: "pulse-rifle",
+    jetpack: "vector-pack",
+    shield: "light-buckler"
+  };
+}

@@ -1,0 +1,535 @@
+{
+  "version": 1,
+  "topics": [
+    "controls",
+    "modes",
+    "learning",
+    "mind",
+    "vision",
+    "jetpack",
+    "equipment",
+    "shop",
+    "weapons",
+    "shield",
+    "perks",
+    "match",
+    "analyzer"
+  ],
+  "unknownHints": [
+    "Controls",
+    "Learning",
+    "Vision",
+    "Shop",
+    "Jetpack"
+  ],
+  "entries": [
+    {
+      "id": "controls-overview",
+      "tags": ["controls", "keys", "input", "hotkeys"],
+      "questions": [
+        "what are the controls",
+        "how do I play",
+        "what are the keys",
+        "control scheme",
+        "how do the controls work",
+        "keyboard controls",
+        "what buttons do I use"
+      ],
+      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
+    },
+    {
+      "id": "controls-shield",
+      "tags": ["controls", "shield", "block", "q"],
+      "questions": [
+        "how do I use the shield",
+        "what does Q do",
+        "shield key",
+        "how to raise shield",
+        "how does blocking work",
+        "shield controls"
+      ],
+      "answer": "Press Q to raise or lower an equipped shield. While raised you cannot fire. It only blocks attacks from the front cone aligned with your aim; rear and flank hits still hurt. Durability is a per-match pool that does not recharge until the next match."
+    },
+    {
+      "id": "controls-move",
+      "tags": ["controls", "move", "wasd", "movement"],
+      "questions": [
+        "how do I move",
+        "how to move left and right",
+        "movement keys",
+        "what keys move me",
+        "can I use WASD"
+      ],
+      "answer": "Use A and D to move left and right. There is no strafe-up on the ground—W and Space jump instead."
+    },
+    {
+      "id": "controls-jump",
+      "tags": ["controls", "jump"],
+      "questions": [
+        "how do I jump",
+        "jump controls",
+        "what key jumps",
+        "how to jump"
+      ],
+      "answer": "Press W or Space to jump. If you keep holding while airborne, that same input also burns jetpack thrust."
+    },
+    {
+      "id": "controls-jetpack-key",
+      "tags": ["controls", "jetpack", "shift"],
+      "questions": [
+        "how do I use the jetpack",
+        "jetpack key",
+        "what key is jetpack",
+        "how to fly",
+        "how to thrust"
+      ],
+      "answer": "Hold Shift to thrust, or keep holding W/Space while airborne. Both burn the same fuel tank."
+    },
+    {
+      "id": "controls-dodge",
+      "tags": ["controls", "dodge", "dash", "iframe"],
+      "questions": [
+        "how do I dodge",
+        "dodge key",
+        "how to dash",
+        "what does C do",
+        "invulnerability dodge",
+        "what key dodges",
+        "how do I dash"
+      ],
+      "answer": "Press C to dodge/dash. You get a short invulnerability window, then a cooldown of about 1.2 seconds before the next dodge."
+    },
+    {
+      "id": "controls-aim-fire",
+      "tags": ["controls", "aim", "fire", "shoot", "mouse"],
+      "questions": [
+        "how do I shoot",
+        "how do I aim",
+        "how to fire",
+        "mouse controls",
+        "how do I attack"
+      ],
+      "answer": "Aim with the mouse and left-click to fire a gun or swing a melee weapon. Snipers need a short aim settle before they are accurate."
+    },
+    {
+      "id": "controls-ping",
+      "tags": ["controls", "ping", "mark", "callout"],
+      "questions": [
+        "how do I ping",
+        "what does G do",
+        "how to mark a target",
+        "ping controls",
+        "call out a location"
+      ],
+      "answer": "Press G to ping your cursor location. I can treat pings and marked targets as priorities when you coach me to focus them."
+    },
+    {
+      "id": "controls-pause",
+      "tags": ["controls", "pause", "escape"],
+      "questions": [
+        "how do I pause",
+        "pause key",
+        "what does escape do",
+        "can I pause the match"
+      ],
+      "answer": "Press Escape to pause. From pause you can resume or return to the menu."
+    },
+    {
+      "id": "modes-training-vs-conquest",
+      "tags": ["modes", "training", "conquest"],
+      "questions": [
+        "what is the difference between training and conquest",
+        "training vs conquest",
+        "what does training do",
+        "what does conquest do",
+        "which mode should I play",
+        "difference between modes"
+      ],
+      "answer": "Training is where evidence and coaching practice happen against Trainer/Follower — unless you flip Spar only / Lock learning, which keeps the fight but writes no learning. Conquest opens an opponent select screen from your Ranking league, then is the scored team fight for Cyber, EXP, and Ranking—no learning payout and no practice coaching after the match, though I can still answer game questions."
+    },
+    {
+      "id": "modes-training",
+      "tags": ["modes", "training", "practice"],
+      "questions": [
+        "how does training work",
+        "what happens in training",
+        "does training give cyber",
+        "does training give exp",
+        "does training change ranking",
+        "training mode explained"
+      ],
+      "answer": "Training updates learning only when judged predictions or counters happen, and only when learning is unlocked. It pays no Cyber, no Conquest EXP, and no Ranking change. After Training you can coach me with free text and confirm practice goals. Spar-only Training still fights but does not advance evidence."
+    },
+    {
+      "id": "learning-lock",
+      "tags": ["learning", "training", "spar", "lock"],
+      "questions": [
+        "what is learning lock",
+        "what is spar only",
+        "how do I lock learning",
+        "how do I spar without learning",
+        "does spar update readiness",
+        "lock learning training"
+      ],
+      "answer": "Lock learning / Spar only is a Training toggle on the equipment bay. When locked, 1v1 still uses the same controls, mind modes, Mimic, and gear, but the match writes no habit evidence, capability evidence, readiness changes, coaching practice tallies, or lesson proposals. Conquest Cyber/EXP/Ranking rewards are unchanged. After a spar I can answer questions and save new practice goals for later, but that spar itself does not advance practice evidence."
+    },
+    {
+      "id": "modes-conquest",
+      "tags": ["modes", "conquest", "rewards", "exp", "level", "ranking"],
+      "questions": [
+        "how does conquest work",
+        "what happens in conquest",
+        "conquest rewards",
+        "when do I earn cyber",
+        "does conquest give exp",
+        "how do I level up",
+        "conquest experience",
+        "what is ranking",
+        "how does ranking work",
+        "conquest rank"
+      ],
+      "answer": "Conquest opens an opponent select screen first. Your Ranking sets a league (Rookie / Contender / Veteran / Challenger / Elite / Apex) that picks the enemy duo AI and Cyber/EXP tier. Winning earns Cyber (35¢ Rookie-tier, 60¢ Veteran-tier, 90¢ Elite-tier) and EXP (about 40 / 70 / 110). Level-ups unlock a 3-choice perk pick. Ranking starts at 100: a win gains ceil(100 + (rank − 100) × 0.5) points; a loss drops ceil(25% of that win gain), floored at 0. Training and Spar change no Ranking and pay no Conquest EXP. Defeats remove no Cyber or EXP."
+    },
+    {
+      "id": "conquest-select",
+      "tags": ["modes", "conquest", "league", "ranking", "reroll", "power"],
+      "questions": [
+        "what is conquest select",
+        "how do leagues work",
+        "what league am I in",
+        "how do I reroll opponents",
+        "conquest opponent select",
+        "what is estimated power",
+        "what is power",
+        "what does power mean",
+        "is power hp",
+        "your power buddy power",
+        "contender league",
+        "challenger league",
+        "apex league"
+      ],
+      "answer": "Power is an estimate of danger, not HP. The same formula scores Your Power and Buddy Power in the Equipment Bay and opponent trainer / follower / duo power on Conquest select (gear + combat perks + AI skill or training). Conquest also shows Ranking, your league, and the themed map for the encounter before the fight. Leagues: 0–149 Rookie, 150–299 Contender, 300–499 Veteran, 500–749 Challenger, 750–999 Elite, 1000+ Apex. The panel lists the trainer and follower kits, training flavor, map name, and Power. First reroll each visit is free; later rerolls cost 10¢ Cyber and also roll a new map. Fight uses the displayed duo and map — it does not roll again when you press Fight."
+    },
+    {
+      "id": "learning-overview",
+      "tags": ["learning", "evidence", "coaching", "xp"],
+      "questions": [
+        "how does learning work",
+        "how do you learn",
+        "is there XP",
+        "skill percentage",
+        "how does the buddy learn",
+        "what is evidence based learning"
+      ],
+      "answer": "I learn from judged evidence, not from Conquest EXP or match timers. A record changes only when a relevant situation happens, I predict or attempt a counter, and the result can be judged. Idle play and just finishing a match do not invent skill. Spar-only / Lock learning Training also writes none. Conquest EXP unlocks perks; it does not train habits."
+    },
+    {
+      "id": "learning-readiness",
+      "tags": ["learning", "readiness", "ready"],
+      "questions": [
+        "what does readiness mean",
+        "am I ready",
+        "I'm not ready yet",
+        "how is readiness calculated",
+        "what does ready mean"
+      ],
+      "answer": "Readiness is one of three honest lines: “I'm not ready yet.”, “Am I ready?”, or “I'm ready.” It comes from sample sufficiency, reliability, and uncertainty—not a hidden XP percent. One strong habit does not make every domain ready."
+    },
+    {
+      "id": "learning-coaching",
+      "tags": ["learning", "coaching", "directives", "practice"],
+      "questions": [
+        "how does coaching work",
+        "how do I coach you",
+        "what can I tell you to practice",
+        "how do practice goals work",
+        "do you practice after conquest"
+      ],
+      "answer": "After Training, tell me what to practice in natural language. I confirm the interpretation before saving it. Confirmed goals stay needs-practice until judged attempts support them. Practice coaching is Training-only; after Conquest I mostly answer questions."
+    },
+    {
+      "id": "learning-domains",
+      "tags": ["learning", "habits", "gun", "saber"],
+      "questions": [
+        "what do you track when learning",
+        "what habits do you learn",
+        "gun vs saber learning",
+        "what domains do you remember"
+      ],
+      "answer": "Gun and saber profiles track separately: engagement range, rush prediction, dodge timing, jetpack use, and low-HP behavior, plus aim, useful dodge, and fuel management outcomes. Learning one domain does not auto-upgrade unrelated ones."
+    },
+    {
+      "id": "mind-modes",
+      "tags": ["mind", "flash", "balanced", "thinker", "mimic", "reaction"],
+      "questions": [
+        "what are mind modes",
+        "flash vs balanced vs thinker",
+        "what does flash mean",
+        "what does thinker mean",
+        "buddy mind modes",
+        "reaction delay modes"
+      ],
+      "answer": "Flash, Balanced, and Thinker set mind ceilings for reaction tempo and risk style. Untrained buddies start clumsy and hesitant (Flash still faster than Thinker, but not equal to trained Flash); evidence earns them up toward their mind's ceiling. Mimic is a fourth option that copies your learned fight style once readiness unlocks it."
+    },
+    {
+      "id": "mimic-mind",
+      "tags": ["mimic", "mind", "style", "intensity", "copy", "readiness"],
+      "questions": [
+        "what is mimic",
+        "how does mimic work",
+        "mimic intensity",
+        "when does mimic unlock",
+        "copy my style",
+        "slight quite a bit full",
+        "does mimic counter me"
+      ],
+      "answer": "Mimic tries to copy how you fight from evidence — range, rush, dodge, jetpack use, low-HP aggression, and shield habits — not primarily counter you. It unlocks at Am I ready? (Slight and Quite a bit). Full intensity unlocks at I'm ready. In Conquest, a light teammate-safety blend (~28%) still keeps Full Mimic from always mirror-suiciding with you. Shield copy stays inside short-hold safety rails so even a camp-heavy style never parks raised until broken."
+    },
+    {
+      "id": "vision-fog",
+      "tags": ["vision", "fog", "sight", "fow"],
+      "questions": [
+        "how does fog of war work",
+        "what is fog of war",
+        "why can't I see enemies",
+        "shared vision",
+        "how does vision work",
+        "sight range"
+      ],
+      "answer": "Enemies outside our team's sight are hidden. Sight is shared: if either of us can see a foe, that foe is visible to the team. Helmets can change sensor range. Snipers also get a narrow forward sight cone when aimed. Solid city building walls can block line of sight; forest trunks and desert bushes do not hard-block shared vision."
+    },
+    {
+      "id": "maps-themes",
+      "tags": ["maps", "arena", "battlefield", "desert", "forest", "city", "cover"],
+      "questions": [
+        "what maps are there",
+        "how do maps work",
+        "what is battlefield",
+        "desert map",
+        "forest map",
+        "city map",
+        "docks map",
+        "ruins map",
+        "yard map",
+        "can I pick a map",
+        "breakable cover",
+        "how does breakable cover work",
+        "cactus cover",
+        "forest trees"
+      ],
+      "answer": "Matches use themed fixed layouts (~3 screens wide): Battlefield (classic open platforms), City (rooftops / tall stacks), Desert (hills with breakable cactus and bush cover), Forest (walk-through dark trees with canopy overlay), Yard (industrial crates and pipes), Ruins (pillars and asymmetric ledges), and Docks (piers over a pit). Training lets you pick a map or Random. Conquest rolls a map with the encounter (shown on select); reroll regenerates map and duo. Soft cover blocks projectiles until destroyed; forest trunks let fighters walk through but bullets can still break them. Props reset each match. Metal power-up crates also appear (map-themed overlays); break them for temporary buffs — only the fighter who lands the killing blow gets the loot. Crates follow fog of war (unseen = not drawn / not AI-targeted) and respawn after a delay, preferring off-sight spots."
+    },
+    {
+      "id": "powerups-crates",
+      "tags": ["powerup", "power-up", "crate", "loot", "buff", "heal", "regen"],
+      "questions": [
+        "what are power up crates",
+        "what are power-up boxes",
+        "metal crates",
+        "how do powerups work",
+        "how do power-ups work",
+        "what buffs are there",
+        "fire rate boost",
+        "counter slash",
+        "loot crates"
+      ],
+      "answer": "Metal power-up crates are breakable loot boxes separate from wooden cover crates. Damage them with bullets, lasers, sabers, or melee; whoever lands the killing blow receives the power-up. Timed buffs show a countdown clock on the fighter and HUD. Pool: Fire Rate (15s ×1.35), Heal +50 (instant, clamped to max HP), Regen (+50 HP over 15s), Counter Slash (melee/saber only — while Q shield is raised, getting hit by melee or a projectile/laser dashes you at the attacker for a slash, with a short cooldown between counters; gun users reroll this type), Speed Surge (10s modest move speed), Shield Patch (restore shield durability or a small heal), Jet Siphon (restore jet fuel), Overcharge (next 1–2 shots/swings deal bonus damage). Abundance scales with match time and map (Forest/Yard denser; City fewer). Destroyed crates respawn after about 20s, preferring locations neither team can currently see."
+    },
+    {
+      "id": "vision-arrows",
+      "tags": ["vision", "arrows", "offscreen", "indicators"],
+      "questions": [
+        "what are the cyan arrows",
+        "vision arrows",
+        "offscreen enemy markers",
+        "what do the edge arrows mean",
+        "why do I see arrows on the screen edge"
+      ],
+      "answer": "Cyan edge arrows point toward enemies your team can see that are outside your personal sight, so you still know where shared vision spotted them."
+    },
+    {
+      "id": "vision-buddy-outline",
+      "tags": ["vision", "buddy", "outline", "cyan", "teammate"],
+      "questions": [
+        "why is my buddy outlined",
+        "cyan outline",
+        "teammate outline",
+        "how do I find my buddy",
+        "buddy highlight"
+      ],
+      "answer": "I keep a cyan outline so you can spot your teammate even when the arena is busy. Enemies still hide in fog until someone on our team sees them."
+    },
+    {
+      "id": "jetpack-fuel",
+      "tags": ["jetpack", "fuel", "burn", "recharge"],
+      "questions": [
+        "how does jetpack fuel work",
+        "how long does the jetpack last",
+        "jetpack recharge",
+        "fuel tank rules",
+        "how fast does fuel recharge"
+      ],
+      "answer": "A full tank sustains about 3 seconds of continuous thrust and recharges from empty in about 5 seconds while idle. Gear packs can change capacity, thrust, and recharge, but the exhaustion rules stay the same."
+    },
+    {
+      "id": "jetpack-lockout",
+      "tags": ["jetpack", "exhausted", "lockout", "restart"],
+      "questions": [
+        "what is jetpack exhausted",
+        "why is my jetpack locked",
+        "jetpack lockout",
+        "how do I unlock the jetpack",
+        "restart reserve"
+      ],
+      "answer": "Running the tank dry locks the jet. The HUD shows EXHAUSTED. Thrust returns only after you fully release thrust input and fuel rebuilds to a 20% restart reserve. Holding the key recharges but will not re-arm thrust by itself."
+    },
+    {
+      "id": "jetpack-ceiling",
+      "tags": ["jetpack", "ceiling", "boundary", "height"],
+      "questions": [
+        "is there a ceiling",
+        "how high can I fly",
+        "red line at the top",
+        "world ceiling",
+        "jetpack height limit"
+      ],
+      "answer": "Yes. There is a hard ceiling just above the highest airspace (world y = 12), marked by the red boundary. Fighters clamp against it; projectiles that leave bounds disappear."
+    },
+    {
+      "id": "equipment-slots",
+      "tags": ["equipment", "slots", "loadout", "gear"],
+      "questions": [
+        "what equipment slots are there",
+        "how does equipment work",
+        "what can I equip",
+        "loadout slots",
+        "armor helmet weapon jetpack"
+      ],
+      "answer": "Five slots: body armor, helmet, weapon, jetpack, and shield. Starters include ten free items (two per slot, including No Shield). Every piece is a tradeoff, not a straight power level."
+    },
+    {
+      "id": "equipment-shields",
+      "tags": ["equipment", "shield", "block", "durability"],
+      "questions": [
+        "how do shields work",
+        "shield durability",
+        "what shields are there",
+        "does shield recharge",
+        "broken shield",
+        "block cone"
+      ],
+      "answer": "Shields have a per-match block HP pool that does not refill mid-match. Raise with Q to block frontal hits only. Heavier shields soak more but slow you more while raised or when broken. A broken shield stays as dead weight and no longer blocks until the next match."
+    },
+    {
+      "id": "equipment-buddy-modes",
+      "tags": ["equipment", "buddy", "autonomy", "suggested", "choice"],
+      "questions": [
+        "what is AI Suggested",
+        "what is AI's Choice",
+        "buddy equipment modes",
+        "user picked vs ai suggested",
+        "how does buddy gear autonomy work"
+      ],
+      "answer": "User Picked lets you edit every buddy slot. AI Suggested proposes owned gear with a humble evidence-based reason you can accept, reject, or edit. AI's Choice locks buddy cards while I equip from owned gear myself. Buddy perk autonomy is a separate control with the same three modes, but only over unlocked perks."
+    },
+    {
+      "id": "perks-overview",
+      "tags": ["perks", "exp", "level", "tradeoff", "milestone"],
+      "questions": [
+        "what are perks",
+        "how do perks work",
+        "how do I unlock perks",
+        "perk picks",
+        "level milestones",
+        "what is a tradeoff perk"
+      ],
+      "answer": "Perks are permanent tradeoffs unlocked by Conquest EXP level-ups. Each level grants a classic 3-choice pick; you unlock one. You and I each equip exactly one unlocked perk at a time. Most perks pair an upside with a real downside."
+    },
+    {
+      "id": "perks-buddy",
+      "tags": ["perks", "buddy", "autonomy"],
+      "questions": [
+        "buddy perk autonomy",
+        "how does buddy perk choice work",
+        "can the buddy pick perks",
+        "AI perk suggestion"
+      ],
+      "answer": "Your perk is always user-picked. Mine uses a separate autonomy meter: User Picked, AI Suggested (humble reason from training evidence, accept/reject/edit), or AI's Choice (auto-equip from unlocked only)."
+    },
+    {
+      "id": "shop-cyber",
+      "tags": ["shop", "cyber", "currency", "buy", "economy"],
+      "questions": [
+        "what is cyber",
+        "how do I buy gear",
+        "how does the shop work",
+        "starting cyber",
+        "what does the cent sign mean",
+        "currency"
+      ],
+      "answer": "Cyber (¢) is the shop currency. New profiles start at 120¢ plus starter gear. Purchases permanently unlock items for either teammate. Cyber is earned only by winning Conquest; Training pays none and defeats remove none. Some perks can boost Cyber after wins with a combat downside."
+    },
+    {
+      "id": "weapons-families",
+      "tags": ["weapons", "guns", "snipers", "sabers", "daggers", "melee"],
+      "questions": [
+        "what weapons are there",
+        "weapon types",
+        "guns vs sabers",
+        "are there snipers",
+        "what about daggers",
+        "weapon families"
+      ],
+      "answer": "Weapons are guns or melee. Guns include rifles/carbines, snipers that need aim settle, plus next-gen options like the Gattler spray hose and the hitscan Laser beam. Melee includes sabers and short-reach daggers with speed and dodge i-frame bonuses. Learning still keys off gun vs saber families."
+    },
+    {
+      "id": "weapons-next-gen",
+      "tags": ["weapons", "guns", "gattler", "laser", "beam", "hitscan"],
+      "questions": [
+        "what is the gattler",
+        "how does the laser work",
+        "gattler vs laser",
+        "next gen guns",
+        "does the laser reveal vision"
+      ],
+      "answer": "Gattler is a high-RPM hose (4 damage, 1380 RPM, 92 DPS) with short range, more spread, and 1.35× shield shred. Laser is a hitscan beam (2 damage, 3150 RPM, 105 DPS) with no spread or dropoff, a finite beam length, and a tiny shared-vision reveal along the beam that enemies can also see as a telegraph."
+    },
+    {
+      "id": "weapons-snipers",
+      "tags": ["weapons", "snipers", "aim settle", "hip fire"],
+      "questions": [
+        "how do snipers work",
+        "aim settle",
+        "why is my sniper inaccurate",
+        "hip fire sniper",
+        "sniper mechanics"
+      ],
+      "answer": "Snipers hit hard at low RPM with no damage dropoff, but they need an aim-settle time and spread badly if you hip-fire. They also extend a narrow forward sight cone while aimed."
+    },
+    {
+      "id": "match-win",
+      "tags": ["match", "win", "wipe", "victory"],
+      "questions": [
+        "how do I win",
+        "what is the win condition",
+        "team wipe",
+        "how does a match end",
+        "victory condition"
+      ],
+      "answer": "A match ends on team wipe: when every fighter on one team is down. If your team still has someone alive and the enemy does not, you win."
+    },
+    {
+      "id": "analyzer-offline",
+      "tags": ["analyzer", "minilm", "offline", "language", "faq"],
+      "questions": [
+        "what is the local language analyzer",
+        "does the buddy use the internet",
+        "is language help offline",
+        "MiniLM",
+        "basic understanding active",
+        "how does Q and A work"
+      ],
+      "answer": "Language help is offline. When vendored MiniLM assets are present I rank coaching intents and FAQ matches locally; otherwise I use keyword rules. I never download models at runtime, and I never invent combat rules outside this curated FAQ."
+    }
+  ]
+}

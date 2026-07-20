@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Robot Buddy Arena browser smoke</title>
+<body>
+  <pre id="result">RUNNING</pre>
+  <iframe id="app" src="index.html" style="width:1280px;height:900px"></iframe>
+  <script>
+    localStorage.removeItem("robotBuddyArena.v1");
+    const frame = document.querySelector("#app");
+    frame.addEventListener("load", () => setTimeout(async () => {
+      try {
+        const doc = frame.contentDocument;
+        doc.querySelector('[data-bay-tab="shop"]').click();
+        const row = doc.querySelector(".shop-row");
+        const style = frame.contentWindow.getComputedStyle(row);
+        if (!doc.body.textContent.includes("¢")) throw new Error("cent sign missing");
+        if (row.scrollWidth <= row.clientWidth) throw new Error("shop row does not overflow");
+        if (style.scrollbarWidth !== "none") throw new Error("scrollbar is not hidden");
+        for (const id of ["quick-fire-sniper", "classic-sniper", "strong-sniper", "daggers"]) {
+          const card = doc.querySelector(`[data-buy="${id}"]`);
+          if (!card) throw new Error(`${id} shop card missing`);
+          if (card.disabled) throw new Error(`${id} should begin locked and purchasable`);
+        }
+        if (!doc.body.textContent.includes("Settle aim")) throw new Error("sniper handling text missing");
+        if (!doc.body.textContent.includes("Dodge i-frames +25%")) throw new Error("dagger iframe stat missing");
+        doc.querySelector('[data-buy="bulwark-frame"]').click();
+        doc.querySelector('[data-bay-tab="equipment"]').click();
+        const later = doc.querySelector('[data-owner="player"][data-gear="bulwark-frame"]');
+        if (!later) throw new Error("purchased later card missing");
+        later.click();
+        const saved = JSON.parse(localStorage.getItem("robotBuddyArena.v1"));
+        if (saved.equipment.player.body !== "bulwark-frame") {
+          throw new Error("later selection did not persist");
+        }
+        doc.querySelector("#trainingBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        if (!doc.querySelector("#menu").classList.contains("hidden")) {
+          throw new Error("gameplay did not start");
+        }
+        if (doc.querySelector("#hud").classList.contains("hidden")) {
+          throw new Error("gameplay HUD missing");
+        }
+        const canvas = doc.querySelector("#game");
+        if (!canvas.width || !canvas.height) throw new Error("game canvas did not render");
+        document.querySelector("#result").textContent = "PASS";
+      } catch (error) {
+        document.querySelector("#result").textContent = `FAIL: ${error.message}`;
+      }
+    }, 150), { once: true });
+  </script>
+</body>
+</html>

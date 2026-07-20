@@ -1,0 +1,6 @@
+node_modules/
+.smoke-profile/
+package-lock.json
+*.partial
+vendor/.bundle-staging/
+vendor/.npm-staging/

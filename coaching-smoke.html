@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Robot Buddy Arena coaching smoke</title>
+<body>
+  <pre id="result">RUNNING</pre>
+  <script type="module">
+    const out = document.querySelector("#result");
+    try {
+      localStorage.removeItem("robotBuddyArena.v1");
+      const { profile, saveProfile, migrateProfile } = await import("./storage.js");
+      const { createTrainingProposal } = await import("./learning.js");
+      const { coachingReply, topicPreference } = await import("./coaching.js");
+      const gameWith = () => ({
+        mode: "training", elapsed: 60, startedAt: 10, pings: [],
+        fighters: [{ weapon: "gun", human: true, hp: 500 }, { buddy: true, fuel: 1 }],
+        stats: {
+          attacks: 0, attackRangeSum: 0, rangeSum: 12 * 350, samples: 12, closing: 0,
+          rushOpportunities: 0, rushCounterSuccesses: 0, dodges: 6, reactive: 4,
+          jetOpportunities: 8, jetAggro: 4, jetEscape: 1, playerJetTime: 6,
+          lowHpOpportunities: 0, lowHpAttack: 0, buddyAttacks: 0, buddyHits: 0,
+          buddyDodgeAttempts: 0, buddyDodgeSuccesses: 0, fuelOpportunities: 0,
+          fuelSuccesses: 0, buddyRetreat: 0, buddyDamageTaken: 0, buddyClose: 0,
+          buddyFar: 0, buddyJet: 0, buddyMoving: 0, pingTargetHits: 0
+        }
+      });
+      const first = createTrainingProposal(gameWith(), profile);
+      if (first.intent !== "useJetpack") throw new Error(`expected height proposal, got ${first.intent}`);
+      const denial = coachingReply(profile, "no, don't learn that", "gun");
+      if (!/won't prioritize that lesson in future reviews/i.test(denial.reply)) {
+        throw new Error(`unexpected denial reply: ${denial.reply}`);
+      }
+      if (!topicPreference(profile, "gun", "useJetpack")?.declined) {
+        throw new Error("denial did not persist a topic preference");
+      }
+      const second = createTrainingProposal(gameWith(), profile);
+      if (second.intent !== "dodgeMore") throw new Error(`expected another factor, got ${second.intent}`);
+      saveProfile();
+      const reloaded = migrateProfile(JSON.parse(localStorage.getItem("robotBuddyArena.v1")));
+      if (!reloaded.coaching.topicPrefs.gun?.useJetpack?.declined) {
+        throw new Error("topic preference did not survive save/load migration");
+      }
+      const revisit = coachingReply(profile, "revisit the height lesson", "gun");
+      if (!/back to normal priority/i.test(revisit.reply)) {
+        throw new Error(`revisit failed: ${revisit.reply}`);
+      }
+      if (topicPreference(profile, "gun", "useJetpack")) throw new Error("revisit did not clear suppression");
+      out.textContent = "PASS";
+    } catch (error) {
+      out.textContent = `FAIL: ${error.message}`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,479 @@
+import { SIZE, WORLD } from "./config.js";
+import { updateCamera } from "./camera.js";
+import { Fighter, hit, stepBullets, stepFighter, triggerDodge } from "./combat.js";
+import { buddyChatReply, ensureCoaching } from "./coaching.js";
+import { analyzeBuddyMessage } from "./language-analyzer.js";
+import {
+  acceptSuggestion, applyLoadout, awardConquest, equipOwned, purchaseGear,
+  setBuddyMode, toggleShieldRaise, trainerLoadout, weaponKind
+} from "./equipment.js";
+import {
+  getPendingEncounter, rerollEncounter, setPendingEncounter
+} from "./conquest.js";
+import {
+  createMapRuntime, pickRandomMapId
+} from "./maps.js";
+import {
+  initPowerCrates, tickFighterPowerBuffs, tickPowerCrateSpawns
+} from "./powerups.js";
+import {
+  acceptPerkSuggestion, choosePerkUnlock, equipPerk as equipOwnedPerk, setBuddyPerkAutonomy
+} from "./perks.js";
+import { keys, mouse, installInput } from "./input.js";
+import {
+  advanceDirectiveTraining, createTrainingProposal, mimicUnlockLevel, normalizeAiMode,
+  normalizeMimicIntensity, trackTraining, updateLearning
+} from "./learning.js";
+import { createRenderer } from "./rendering.js";
+import { profile, saveProfile } from "./storage.js";
+import {
+  bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, showConquestSelect,
+  showGame, showMenu, showPause, showResults, ui, updateHud
+} from "./ui.js";
+import { capitalize, clamp, formatTime, thoughtReason } from "./utils.js";
+
+const canvas = document.querySelector("#game");
+const renderer = createRenderer(canvas);
+let game = null;
+let lastTime = performance.now();
+
+function resolveMapId(mode) {
+  if (mode === "conquest") {
+    const encounter = getPendingEncounter();
+    if (encounter?.mapId) return encounter.mapId;
+  }
+  const picked = ui.mapSelect?.value || "random";
+  if (picked && picked !== "random") return picked;
+  return pickRandomMapId();
+}
+
+function makeGame(mode) {
+  const buddyName = ui.name.value.trim() || "Pixel";
+  profile.botName = buddyName;
+  const learned = profile.weapons[weaponKind(profile.equipment.player.weapon)];
+  let mind = normalizeAiMode(ui.aiMode.value);
+  if (mind === "mimic" && mimicUnlockLevel(learned) === "locked") mind = "balanced";
+  profile.aiMode = mind;
+  ui.aiMode.value = mind;
+  saveProfile();
+  if (profile.equipment.buddyMode === "choice") setBuddyMode(profile, "choice");
+  if (profile.buddyPerkAutonomy === "choice") setBuddyPerkAutonomy(profile, "choice");
+
+  const mapId = resolveMapId(mode);
+  const map = createMapRuntime(mapId);
+  const powerCrateState = initPowerCrates(map.id, map.theme);
+  const spawns = map.spawnPoints[mode === "training" ? "training" : "conquest"];
+
+  const fighters = [
+    applyLoadout(new Fighter({
+      x: spawns.player.x, y: spawns.player.y, team: 0, color: "#e7f9ff", name: "YOU",
+      human: true
+    }), profile.equipment.player)
+  ];
+  if (mode === "training") {
+    fighters.push(applyLoadout(new Fighter({
+      x: spawns.buddy.x, y: spawns.buddy.y, team: 1, color: "#42dff5", name: buddyName,
+      buddy: true, ai: mind
+    }), profile.equipment.buddy));
+  } else {
+    fighters.push(applyLoadout(new Fighter({
+      x: spawns.buddy.x, y: spawns.buddy.y, team: 0, color: "#42dff5", name: buddyName,
+      buddy: true, ai: mind
+    }), profile.equipment.buddy));
+    const encounter = getPendingEncounter();
+    // Prefer the select-screen encounter; fall back to classic Veteran duo.
+    const trainer = encounter?.trainer || {
+      name: "TRAINER", ai: "veteran", loadout: trainerLoadout("veteran")
+    };
+    const follower = encounter?.follower || {
+      name: "FOLLOWER", ai: "rookie", loadout: trainerLoadout("veteran", true)
+    };
+    fighters.push(applyLoadout(new Fighter({
+      x: spawns.enemy1.x, y: spawns.enemy1.y, team: 1,
+      color: trainer.color || "#ff5e56",
+      name: trainer.name || "TRAINER",
+      ai: trainer.ai || "veteran"
+    }), trainer.loadout || trainerLoadout("veteran")));
+    fighters.push(applyLoadout(new Fighter({
+      x: spawns.enemy2.x, y: spawns.enemy2.y, team: 1,
+      color: follower.color || "#ff9b4a",
+      name: follower.name || "FOLLOWER",
+      ai: follower.ai || "rookie"
+    }), follower.loadout || trainerLoadout("veteran", true)));
+  }
+  const difficulty = mode === "conquest"
+    ? (getPendingEncounter()?.rewardTier || "veteran")
+    : "veteran";
+  return {
+    id: `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`,
+    mode,
+    difficulty,
+    encounter: mode === "conquest" ? getPendingEncounter() : null,
+    mapId: map.id,
+    mapName: map.name,
+    theme: map.theme,
+    platforms: map.platforms,
+    props: map.props,
+    powerCrates: powerCrateState.crates,
+    powerCrateState,
+    _powerupHit: hit,
+    spawnPoints: map.spawnPoints,
+    ceiling: map.ceiling,
+    groundStyle: map.groundStyle,
+    backdrop: map.backdrop,
+    learningLocked: !!profile.learningLocked,
+    fighters,
+    bullets: [],
+    effects: [],
+    beamReveals: [],
+    pings: [],
+    camera: { x: 0, y: 0 },
+    startedAt: Date.now(),
+    elapsed: 0,
+    over: false,
+    paused: false,
+    announcement: 2.2,
+    thoughts: [],
+    thoughtClock: 8,
+    lastShotAtPlayer: -99,
+    stats: {
+      rangeSum: 0, samples: 0, closing: 0, dodges: 0, reactive: 0,
+      attackRangeSum: 0, jetAggro: 0, jetEscape: 0, playerJetTime: 0,
+      lowHpAttack: 0, lowHpTime: 0, lowHpOpportunities: 0,
+      attacks: 0, buddyDamage: 0, buddyClosing: 0, buddyRetreat: 0,
+      buddyClose: 0, buddyFar: 0, buddyMoving: 0, buddyJet: 0, buddyDodges: 0,
+      rushOpportunities: 0, rushCounterSuccesses: 0, jetOpportunities: 0,
+      buddyAttacks: 0, buddyHits: 0, buddyDamageTaken: 0,
+      buddyDodgeAttempts: 0, buddyDodgeSuccesses: 0,
+      fuelOpportunities: 0, fuelSuccesses: 0, pingTargetHits: 0,
+      // Shield habits (Training only; ignored when player never equips a shield).
+      shieldOpportunities: 0, shieldRaisesOnOpp: 0, shieldRaiseCount: 0,
+      shieldPressureTime: 0, shieldRaisedUnderPressure: 0, shieldRaisedTime: 0,
+      shieldHoldSum: 0, shieldHolds: 0, shieldBlocks: 0, shieldDamageAbsorbed: 0,
+      shieldBroke: 0, shieldRaiseOnApproach: 0, shieldRaiseAfterShot: 0,
+      shieldRaiseLowHp: 0
+    }
+  };
+}
+
+function start(mode) {
+  const blockedWords = ["fuck", "shit", "bitch", "cunt", "nazi"];
+  const name = ui.name.value.trim();
+  if (!name || blockedWords.some((word) => name.toLowerCase().includes(word))) {
+    ui.nameError.textContent = "Please pick another name for your buddy.";
+    return;
+  }
+  ui.nameError.textContent = "";
+  if (mode === "conquest" && !getPendingEncounter()) {
+    showConquestSelect(profile);
+    return;
+  }
+  game = makeGame(mode);
+  showGame(mode, profile, game.mapName);
+  mouse.down = false;
+}
+
+function openConquest() {
+  const blockedWords = ["fuck", "shit", "bitch", "cunt", "nazi"];
+  const name = ui.name.value.trim();
+  if (!name || blockedWords.some((word) => name.toLowerCase().includes(word))) {
+    ui.nameError.textContent = "Please pick another name for your buddy.";
+    return;
+  }
+  ui.nameError.textContent = "";
+  showConquestSelect(profile);
+}
+
+function conquestFight() {
+  if (!getPendingEncounter()) {
+    showConquestSelect(profile);
+    return;
+  }
+  start("conquest");
+}
+
+function conquestReroll() {
+  const result = rerollEncounter(profile);
+  if (!result.ok) {
+    refreshConquestSelect(
+      profile,
+      getPendingEncounter(),
+      result.error === "broke"
+        ? `Need ${result.cost}¢ Cyber to reroll.`
+        : "Could not reroll."
+    );
+    return;
+  }
+  if (result.cost > 0) saveProfile();
+  refreshMenu(profile);
+  refreshConquestSelect(
+    profile,
+    result.encounter,
+    result.free ? "Free reroll used." : `Spent ${result.cost}¢ on reroll.`
+  );
+}
+
+function conquestBack() {
+  setPendingEncounter(null);
+  showMenu(false, profile);
+  refreshMenu(profile);
+}
+
+function screenToWorld(x, y) {
+  return game
+    ? { x: x + game.camera.x, y: y + game.camera.y }
+    : { x, y };
+}
+
+function humanIntent(fighter) {
+  const cursor = screenToWorld(mouse.x, mouse.y);
+  fighter.aim = Math.atan2(
+    cursor.y - (fighter.y + SIZE / 2),
+    cursor.x - (fighter.x + SIZE / 2)
+  );
+  return {
+    mx: (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0),
+    jump: !!(keys.KeyW || keys.Space),
+    jet: !!(
+      keys.ShiftLeft || keys.ShiftRight
+      || (!fighter.grounded && (keys.KeyW || keys.Space))
+    ),
+    // Raw thrust-capable input: an exhausted jet only re-arms after ALL of
+    // these are released, so holding jump or spamming Shift can't cheat it.
+    jetHeld: !!(keys.ShiftLeft || keys.ShiftRight || keys.KeyW || keys.Space),
+    attack: mouse.down,
+    dodge: false
+  };
+}
+
+function update(dt) {
+  if (!game || game.paused || game.over) return;
+  game.elapsed += dt;
+  game.announcement -= dt;
+  game.thoughtClock -= dt;
+  for (const fighter of game.fighters) {
+    stepFighter(fighter, dt, game, profile, keys, humanIntent);
+    tickFighterPowerBuffs(fighter, dt);
+  }
+  stepBullets(game, dt);
+  tickPowerCrateSpawns(game, dt);
+  trackTraining(game, dt);
+  if (game.mode === "training") {
+    const buddy = game.fighters.find((fighter) => fighter.buddy);
+    if (buddy && !buddy.grounded && buddy.fuel < .12 && !game.lowFuelJudged) {
+      game.lowFuelJudged = true;
+      game.stats.fuelOpportunities++;
+    }
+    if (game.lowFuelJudged && buddy?.grounded && !game.lowFuelResolved) {
+      game.lowFuelResolved = true;
+      game.stats.fuelSuccesses++;
+    }
+  }
+  for (const effect of game.effects) effect.life -= dt;
+  for (const ping of game.pings) ping.life -= dt;
+  for (const sample of game.beamReveals || []) sample.life -= dt;
+  for (const prop of game.props || []) {
+    if (prop.hitFlash > 0) prop.hitFlash -= dt;
+  }
+  game.effects = game.effects.filter((effect) => effect.life > 0);
+  game.pings = game.pings.filter((ping) => ping.life > 0);
+  game.beamReveals = (game.beamReveals || []).filter((sample) => sample.life > 0);
+
+  if (game.thoughtClock <= 0) {
+    const buddy = game.fighters.find((fighter) => fighter.buddy);
+    if (buddy && !buddy.dead && game.thoughts.length < 6) {
+      game.thoughts.push(
+        `${formatTime(game.elapsed)} — ${capitalize(buddy.aiState.plan)}: ${thoughtReason(buddy.aiState.plan)}`
+      );
+    }
+    game.thoughtClock = 10 + Math.random() * 8;
+  }
+
+  const player = game.fighters[0];
+  updateCamera(game.camera, player, { width: canvas.width, height: canvas.height }, dt);
+  updateHud(game);
+
+  const teamZeroAlive = game.fighters.some((fighter) => fighter.team === 0 && !fighter.dead);
+  const teamOneAlive = game.fighters.some((fighter) => fighter.team === 1 && !fighter.dead);
+  if (!teamZeroAlive || !teamOneAlive) finish(teamZeroAlive && !teamOneAlive);
+}
+
+function finish(win) {
+  if (!game || game.over) return;
+  game.over = true;
+  profile.matches++;
+  let practiceLines = [];
+  let learningChanged = [];
+  if (game.mode === "training") {
+    practiceLines = advanceDirectiveTraining(game, profile);
+    learningChanged = updateLearning(game, profile);
+    createTrainingProposal(game, profile);
+  }
+  const rewards = awardConquest(profile, {
+    id: game.id, mode: game.mode, difficulty: game.difficulty, win
+  });
+  saveProfile();
+  showResults(game, profile, win, practiceLines, rewards, learningChanged);
+  refreshMenu(profile);
+}
+
+function handleKeyDown(event) {
+  if (!game || game.over) return;
+  if (event.code === "KeyQ" && !event.repeat) {
+    toggleShieldRaise(game.fighters[0]);
+  }
+  if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
+  if (event.code === "KeyG") {
+    const point = screenToWorld(mouse.x, mouse.y);
+    game.pings.push({
+      x: clamp(point.x, 0, WORLD.w),
+      y: clamp(point.y, 0, WORLD.h),
+      life: 3
+    });
+    game.thoughts.push(`${formatTime(game.elapsed)} — Answered your ping: you marked a priority`);
+  }
+  if (event.code === "Escape") {
+    game.paused = !game.paused;
+    showPause(game.paused);
+  }
+  if (["Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ"].includes(event.code)) {
+    event.preventDefault();
+  }
+}
+
+function loop(now) {
+  const dt = Math.min(.033, (now - lastTime) / 1000);
+  lastTime = now;
+  update(dt);
+  renderer.draw(game);
+  requestAnimationFrame(loop);
+}
+
+installInput(canvas, handleKeyDown);
+bindUi({
+  start,
+  openConquest,
+  conquestFight,
+  conquestReroll,
+  conquestBack,
+  resume() {
+    game.paused = false;
+    showPause(false);
+  },
+  quit() {
+    game = null;
+    setPendingEncounter(null);
+    showMenu(false, profile);
+  },
+  menu() {
+    game = null;
+    setPendingEncounter(null);
+    showMenu(true, profile);
+  },
+  again() {
+    if (game?.mode === "conquest") {
+      openConquest();
+      return;
+    }
+    start(game.mode);
+  },
+  aiMode(mode) {
+    const learned = profile.weapons[weaponKind(profile.equipment.player.weapon)];
+    let next = normalizeAiMode(mode);
+    if (next === "mimic" && mimicUnlockLevel(learned) === "locked") next = "balanced";
+    profile.aiMode = next;
+    saveProfile();
+    refreshMenu(profile);
+  },
+  mimicIntensity(level) {
+    const learned = profile.weapons[weaponKind(profile.equipment.player.weapon)];
+    let next = normalizeMimicIntensity(level);
+    if (next === "full" && mimicUnlockLevel(learned) !== "full") next = "quite";
+    if (mimicUnlockLevel(learned) === "locked") return;
+    profile.mimicIntensity = next;
+    saveProfile();
+    refreshMenu(profile);
+  },
+  equip(owner, slot, gearId) {
+    if (!equipOwned(profile, owner, slot, gearId)) return;
+    saveProfile();
+    refreshMenu(profile);
+  },
+  equipPerk(owner, perkId) {
+    if (!equipOwnedPerk(profile, owner, perkId === "none" ? null : perkId)) return;
+    saveProfile();
+    refreshMenu(profile);
+  },
+  choosePerk(pickId, perkId) {
+    const result = choosePerkUnlock(profile, pickId, perkId);
+    if (!result.ok) return;
+    saveProfile();
+    refreshMenu(profile);
+  },
+  purchase(gearId) {
+    const result = purchaseGear(profile, gearId);
+    if (result.ok) {
+      ui.shopFeedback.textContent = `${result.gear.name} unlocked for ${result.spent}¢.`;
+      ui.shopFeedback.className = "shop-feedback success";
+      saveProfile();
+      refreshMenu(profile);
+    } else {
+      ui.shopFeedback.textContent = result.reason === "insufficient"
+        ? `Insufficient Cyber — need ${result.shortfall}¢ more.`
+        : result.reason === "owned" ? "That item is already owned." : "That item is not for sale.";
+      ui.shopFeedback.className = "shop-feedback error";
+    }
+  },
+  buddyMode(mode) {
+    setBuddyMode(profile, mode);
+    saveProfile();
+    refreshMenu(profile);
+  },
+  buddyPerkMode(mode) {
+    setBuddyPerkAutonomy(profile, mode);
+    saveProfile();
+    refreshMenu(profile);
+  },
+  learningLock(locked) {
+    profile.learningLocked = !!locked;
+    saveProfile();
+    refreshMenu(profile);
+  },
+  acceptSuggestion() {
+    acceptSuggestion(profile);
+    saveProfile();
+    refreshMenu(profile);
+  },
+  rejectSuggestion() {
+    profile.equipment.suggestion = null;
+    profile.equipment.buddyMode = "user";
+    saveProfile();
+    refreshMenu(profile);
+  },
+  acceptPerkSuggestion() {
+    acceptPerkSuggestion(profile);
+    saveProfile();
+    refreshMenu(profile);
+  },
+  rejectPerkSuggestion() {
+    profile.perkSuggestion = null;
+    profile.buddyPerkAutonomy = "user";
+    saveProfile();
+    refreshMenu(profile);
+  },
+  coaching: async (text, weapon) => {
+    ensureCoaching(profile);
+    const allowDirectives = !ui.coachingPanel.classList.contains("read-only");
+    const pendingOpen = Boolean(profile.coaching?.pending || profile.coaching?.clarification);
+    const analysis = await analyzeBuddyMessage(
+      text,
+      profile.coaching?.learnedVocabulary || [],
+      { allowRoute: !pendingOpen }
+    );
+    const response = buddyChatReply(profile, text, weapon, analysis, { allowDirectives });
+    saveProfile();
+    refreshCoaching(profile, response.quickReplies);
+  }
+});
+refreshMenu(profile);
+requestAnimationFrame(loop);
