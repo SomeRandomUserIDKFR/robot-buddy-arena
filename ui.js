@@ -31,6 +31,7 @@ export const ui = {
   pause: $("#pause"),
   results: $("#results"),
   hud: $("#hud"),
+  buildStamp: $("#buildStamp"),
   name: $("#botName"),
   nameError: $("#nameError"),
   aiMode: $("#aiMode"),

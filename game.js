@@ -28,8 +28,8 @@ import { createRenderer } from "./rendering.js";
 import { profile, saveProfile } from "./storage.js";
 import { cloneSettings, ensureSettingsProfile, normalizeModularMorphStyle } from "./settings.js";
 import {
-  bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, refreshSettings, showConquestSelect,
-  showGame, showMenu, showPause, showResults, showSettings, ui, updateHud
+  bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, refreshSettings, showBuildStamp,
+  showConquestSelect, showGame, showMenu, showPause, showResults, showSettings, ui, updateHud
 } from "./ui.js";
 import { capitalize, clamp, formatTime, thoughtReason } from "./utils.js";
 
@@ -495,4 +495,5 @@ bindUi({
   }
 });
 refreshMenu(profile);
+showBuildStamp();
 requestAnimationFrame(loop);

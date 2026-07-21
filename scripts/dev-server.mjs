@@ -45,6 +45,20 @@ async function git(args) {
 
 let syncing = false;
 let lastSyncNote = "not synced yet";
+let cachedCommit = null;
+
+async function currentCommit() {
+  if (cachedCommit) return cachedCommit;
+  try {
+    cachedCommit = {
+      commit: await git(["rev-parse", "--short", "HEAD"]),
+      branch: await git(["rev-parse", "--abbrev-ref", "HEAD"]),
+    };
+  } catch {
+    cachedCommit = { commit: "unknown", branch: syncBranch };
+  }
+  return cachedCommit;
+}
 
 async function syncFromRemote(reason = "poll") {
   if (!autoPull || syncing) return;
@@ -69,12 +83,14 @@ async function syncFromRemote(reason = "poll") {
     const remote = await git(["rev-parse", `origin/${syncBranch}`]);
     if (local === remote) {
       lastSyncNote = `up to date with origin/${syncBranch}`;
+      cachedCommit = null;
       if (reason === "start") console.log(`[sync] ${lastSyncNote}`);
       return;
     }
 
     // Fast-forward only — never invent merge commits while serving.
     await git(["merge", "--ff-only", `origin/${syncBranch}`]);
+    cachedCommit = null;
     const after = await git(["rev-parse", "--short", "HEAD"]);
     lastSyncNote = `updated to ${after} (${reason})`;
     console.log(`[sync] ${lastSyncNote} — hard-refresh the browser`);
@@ -90,15 +106,22 @@ const noCacheExt = new Set([".html", ".js", ".mjs", ".css", ".json"]);
 
 createServer(async (req, res) => {
   if ((req.url || "").split("?")[0] === "/__sync") {
+    const identity = await currentCommit();
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
     });
     res.end(JSON.stringify({
       autoPull,
-      branch: syncBranch,
+      branch: identity.branch || syncBranch,
+      commit: identity.commit,
       intervalSeconds: pullSeconds,
       lastSyncNote,
+      features: [
+        "dodge-face",
+        "ai-retractable-on-sight",
+        "auto-pull",
+      ],
     }));
     return;
   }
