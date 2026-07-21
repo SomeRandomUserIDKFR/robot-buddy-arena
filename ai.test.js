@@ -7,11 +7,14 @@ import {
   isGreenEnemyAi, mindDodgeScale, pickEscapeCrateHop, pickNearestVisibleCrate,
   ROOKIE_BUDDY, SHIELD_MAX_HOLD, shieldHoldDuration, shieldLowerCooldown,
   shieldRaiseAllowed, shieldStyleBias, stepAimSmoothing, tickAiShieldHold,
-  updateAI, updateAiShield
+  updateAI, updateAiRetractableArmor, updateAiShield, wantRetractableDeployed
 } from "./ai.js";
 import { Fighter } from "./combat.js";
 import { AI_PRESETS, DEFAULT_PROFILE, SIZE, WORLD } from "./config.js";
-import { applyLoadout, DEFAULT_LOADOUT, isPrecisionAimWeapon, trainerLoadout } from "./equipment.js";
+import {
+  applyLoadout, DEFAULT_LOADOUT, isPrecisionAimWeapon, RETRACTABLE_MORPH_DURATION,
+  tickRetractableArmor, trainerLoadout
+} from "./equipment.js";
 import {
   ensureLearningProfile, PRECISION_AIM_MAX_REDUCTION, precisionAimErrorScale, recordEvidence
 } from "./learning.js";
@@ -900,3 +903,151 @@ console.log("Dodge AI suite passed.");
 }
 
 console.log("Power-crate AI suite passed.");
+
+// --- Retractable armor AI: plates on in fights, fold when safe ---
+{
+  const armored = applyLoadout(new Fighter({
+    x: 800, y: 700, team: 0, aim: 0, ai: "veteran", grounded: true
+  }), { ...DEFAULT_LOADOUT, body: "retractable-armor" });
+  assert.ok(armored.retractableMax > 0);
+  assert.equal(armored.retractableDeployed, false);
+
+  const saber = new Fighter({
+    x: 860, y: 700, team: 1, weapon: "saber", vx: -80, grounded: true
+  });
+  const game = {
+    fighters: [armored, saber], bullets: [], elapsed: 1, pings: [], thoughts: []
+  };
+  const state = armored.aiState;
+  state.retractableCooldownUntil = 0;
+
+  assert.equal(
+    wantRetractableDeployed(armored, state, game, [saber], saber),
+    true,
+    "visible foe should want plates out"
+  );
+  updateAiRetractableArmor(armored, state, game, [saber], saber, "veteran");
+  assert.equal(armored.retractableMorphing, true);
+  assert.equal(armored.retractableMorphTo, "on");
+  tickRetractableArmor(armored, RETRACTABLE_MORPH_DURATION + 0.01);
+  assert.equal(armored.retractableDeployed, true);
+
+  // Mid-range gunfight at full HP still deploys (was the shy-policy bug).
+  const gunner = new Fighter({
+    x: 1200, y: 700, team: 1, weapon: "gun", grounded: true, vx: 0
+  });
+  assert.equal(
+    wantRetractableDeployed(armored, state, game, [gunner], gunner),
+    true,
+    "any visible gunfight should keep plates available"
+  );
+
+  // Safe / no threat: fold for speed after cooldown + min hold.
+  game.elapsed = 5;
+  state.retractableCooldownUntil = 0;
+  state.retractableHoldUntil = 0;
+  assert.equal(
+    wantRetractableDeployed(armored, state, game, [], null),
+    false,
+    "quiet field should prefer folded plates"
+  );
+  updateAiRetractableArmor(armored, state, game, [], null, "veteran");
+  assert.equal(armored.retractableMorphTo, "off");
+
+  // Empty pool cannot deploy.
+  tickRetractableArmor(armored, RETRACTABLE_MORPH_DURATION + 0.01);
+  armored.retractableHp = 0;
+  armored.retractableDeployed = false;
+  armored.retractableMorphing = false;
+  state.retractableCooldownUntil = 0;
+  game.elapsed = 7;
+  assert.equal(wantRetractableDeployed(armored, state, game, [saber], saber), false);
+  updateAiRetractableArmor(armored, state, game, [saber], saber, "veteran");
+  assert.equal(armored.retractableMorphing, false);
+  assert.equal(armored.retractableDeployed, false);
+}
+
+{
+  // Escape without hard pressure → fold for mobility.
+  const armored = applyLoadout(new Fighter({
+    x: 800, y: 700, team: 1, aim: Math.PI, ai: "veteran", grounded: true
+  }), { ...DEFAULT_LOADOUT, body: "retractable-armor" });
+  armored.retractableDeployed = true;
+  armored.retractableMorphing = false;
+  armored.coreHp = armored.coreMaxHp;
+  armored.retractableHp = armored.retractableMax;
+  const foe = new Fighter({
+    x: 1400, y: 700, team: 0, weapon: "gun", grounded: true, vx: 0
+  });
+  const game = {
+    fighters: [foe, armored], bullets: [], elapsed: 2, pings: [], thoughts: []
+  };
+  const state = armored.aiState;
+  state.escape = {
+    direction: -1, targetX: 200, until: 99, threatWeapon: "gun", vertical: false
+  };
+  state.retractableCooldownUntil = 0;
+  state.retractableHoldUntil = 0;
+  assert.equal(
+    wantRetractableDeployed(armored, state, game, [foe], foe),
+    false,
+    "escape should fold plates when not hard-pressed"
+  );
+  updateAiRetractableArmor(armored, state, game, [foe], foe, "veteran");
+  assert.equal(armored.retractableMorphTo, "off");
+}
+
+{
+  // Player buddy with retractable armor deploys on sight — not gated on shield evidence.
+  const profile = clone(DEFAULT_PROFILE);
+  const player = new Fighter({
+    x: 400, y: 700, human: true, team: 0, weapon: "gun", grounded: true
+  });
+  const buddy = applyLoadout(new Fighter({
+    x: 800, y: 700, team: 0, weapon: "gun", buddy: true, ai: "balanced",
+    grounded: true, aim: 0, sight: 820
+  }), { ...DEFAULT_LOADOUT, body: "retractable-armor" });
+  const enemy = new Fighter({
+    x: 1180, y: 700, team: 1, weapon: "gun", hp: 500, grounded: true, vx: 0
+  });
+  buddy.aiState.timer = 0;
+  buddy.aiState.retractableCooldownUntil = 0;
+  const game = {
+    mode: "conquest", elapsed: 1, lastShotAtPlayer: -99,
+    fighters: [player, buddy, enemy], pings: [], thoughts: [], bullets: []
+  };
+  updateAI(buddy, .05, game, profile);
+  assert.ok(
+    buddy.retractableMorphing || buddy.retractableDeployed,
+    "buddy should deploy retractable armor when a foe is visible"
+  );
+  assert.equal(buddy.retractableMorphTo, "on");
+}
+
+{
+  // End-to-end: veteran enemy with retractable armor deploys via updateAI under melee.
+  const profile = clone(DEFAULT_PROFILE);
+  const buddy = new Fighter({
+    x: 500, y: 700, team: 0, weapon: "gun", buddy: true, ai: "balanced", grounded: true
+  });
+  const enemy = applyLoadout(new Fighter({
+    x: 800, y: 700, team: 1, weapon: "gun", ai: "veteran",
+    grounded: true, aim: Math.PI, sight: 820
+  }), { ...DEFAULT_LOADOUT, body: "retractable-armor" });
+  const rusher = new Fighter({
+    x: 860, y: 700, team: 0, weapon: "saber", grounded: true, vx: 40, human: true
+  });
+  enemy.aiState.timer = 0;
+  enemy.aiState.retractableCooldownUntil = 0;
+  const game = {
+    mode: "conquest", elapsed: 1, lastShotAtPlayer: -99,
+    fighters: [rusher, buddy, enemy], pings: [], thoughts: [], bullets: []
+  };
+  updateAI(enemy, .05, game, profile);
+  assert.ok(
+    enemy.retractableMorphing || enemy.retractableDeployed,
+    "veteran AI should start deploying retractable armor under saber pressure"
+  );
+}
+
+console.log("Retractable armor AI suite passed.");
