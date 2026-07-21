@@ -34,7 +34,8 @@ export class Fighter {
       x: 0, y: 0, vx: 0, vy: 0, team: 0, color: "#fff", name: "Bot", weapon: "gun",
       human: false, buddy: false, hp: 500, fuel: 1, grounded: false, dead: false,
       facing: 1, aim: 0, attackCd: 0, dodgeCd: 0, iframe: 0, hitFlash: 0, hitFace: 0,
-      spotted: 0, thrusting: false, lastHitAt: -99, ai: null, totalDamage: 0, fuelWasted: 0,
+      dodgeFace: 0, spotted: 0, thrusting: false, lastHitAt: -99, ai: null, totalDamage: 0,
+      fuelWasted: 0,
       jetLocked: false, jetReleased: true, maxHp: 500, moveSpeed: 520, acceleration: 1800,
       damageTaken: 1, sight: 820, jetFuelCapacity: 1, jetThrust: JET_THRUST,
       jetRechargeScale: 1, weaponDamage: 1, weaponFireRate: 1, weaponRange: 1,
@@ -82,8 +83,12 @@ export function triggerDodge(fighter, game, keys) {
 
 function hit(target, source, damage, angle, game, extras = {}) {
   if (target.iframe > 0 || target.dead) {
-    if (target.buddy && target.iframe > 0 && game.mode === "training") {
-      game.stats.buddyDodgeSuccesses++;
+    // A successful dodge is only when iframes negate a hit that would have landed.
+    if (target.iframe > 0 && !target.dead) {
+      target.dodgeFace = .45;
+      if (target.buddy && game.mode === "training") {
+        game.stats.buddyDodgeSuccesses++;
+      }
     }
     return;
   }
@@ -398,6 +403,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   fighter.iframe -= dt;
   fighter.hitFlash -= dt;
   fighter.hitFace -= dt;
+  fighter.dodgeFace -= dt;
   fighter.spotted -= dt;
   fighter.shieldFlash -= dt;
   tickModularWeapon(fighter, dt);

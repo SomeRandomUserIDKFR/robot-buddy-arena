@@ -996,7 +996,13 @@ export function createRenderer(canvas) {
       ? "-_-"
       : game.over && fighter.team === winningTeam
         ? "^_^"
-        : fighter.hitFace > 0 ? ">_<" : fighter.spotted > 0 ? "o_o" : "._.";
+        : fighter.hitFace > 0
+          ? ">_<"
+          : fighter.dodgeFace > 0
+            ? ":P"
+            : fighter.spotted > 0
+              ? "o_o"
+              : "._.";
     context.fillText(face, centerX, centerY);
     context.translate(centerX, centerY);
     context.rotate(fighter.aim);

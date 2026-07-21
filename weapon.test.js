@@ -281,4 +281,29 @@ const loadout = (weapon, body = "field-frame") => ({
   assert.equal(buddyTintIgnored.color, buddy.color);
 }
 
+// Successful dodge face: iframes that negate a would-be hit flash ":P" (dodgeFace).
+{
+  const dodger = new Fighter({ x: 100, y: 100, team: 0, human: true, hp: 500 });
+  const attacker = new Fighter({ x: 200, y: 100, team: 1 });
+  const game = {
+    effects: [], fighters: [dodger, attacker], stats: {}, mode: "conquest", elapsed: 1
+  };
+  triggerDodge(dodger, game, {});
+  assert.ok(dodger.iframe > 0);
+  hit(dodger, attacker, 40, 0, game);
+  assert.equal(dodger.hp, 500);
+  assert.ok(dodger.dodgeFace > 0);
+  assert.equal(dodger.hitFace, 0);
+
+  const open = new Fighter({ x: 100, y: 100, team: 0, hp: 500, iframe: 0 });
+  hit(open, attacker, 40, 0, game);
+  assert.ok(open.hp < 500);
+  assert.ok(open.hitFace > 0);
+  assert.equal(open.dodgeFace || 0, 0);
+
+  const corpse = new Fighter({ x: 100, y: 100, team: 0, dead: true, iframe: .2, dodgeFace: 0 });
+  hit(corpse, attacker, 40, 0, game);
+  assert.equal(corpse.dodgeFace, 0);
+}
+
 console.log("Weapon, camera, and sight suite passed.");
