@@ -10,6 +10,7 @@
     "vendor-model:runtime": "node scripts/vendor-model.mjs --runtime-only",
     "dev": "node scripts/dev-server.mjs",
     "serve": "node scripts/dev-server.mjs",
+    "serve:nosync": "node scripts/dev-server.mjs --no-sync",
     "smoke:analyzer": "node scripts/analyzer-smoke.mjs"
   },
   "optionalDependencies": {
