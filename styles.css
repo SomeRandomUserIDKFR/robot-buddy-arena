@@ -298,7 +298,20 @@ button span { opacity: .6; font-size: 11px; }
   cursor: pointer;
 }
 .settings-choice:last-child { margin-bottom: 0; }
+.settings-choice-group {
+  margin: 0 0 8px;
+}
+.settings-choice-group:last-child { margin-bottom: 0; }
+.settings-choice-group > .settings-choice {
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
 .settings-choice:has(input:checked) {
+  border-color: rgba(72, 232, 255, .45);
+  background: rgba(72, 232, 255, .06);
+}
+.settings-choice-group:has(input[value="reconquer"]:checked) > .settings-choice {
   border-color: rgba(72, 232, 255, .45);
   background: rgba(72, 232, 255, .06);
 }
@@ -387,9 +400,23 @@ button span { opacity: .6; font-size: 11px; }
   border: 1px solid #29404c;
   background: rgba(255, 255, 255, .025);
 }
+.settings-slider-nested {
+  margin: 0;
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  padding-left: 40px;
+}
+/* Grayed out unless the Reconquer radio above is selected. */
+.settings-choice-group:not(:has(input[value="reconquer"]:checked)) .settings-slider-nested,
 .settings-slider.is-disabled {
-  opacity: 0.45;
+  opacity: 0.4;
+  filter: grayscale(0.55);
   pointer-events: none;
+}
+.settings-choice-group:not(:has(input[value="reconquer"]:checked)) .settings-slider-nested input,
+.settings-slider.is-disabled input {
+  cursor: not-allowed;
 }
 .settings-slider-copy strong {
   display: block;
