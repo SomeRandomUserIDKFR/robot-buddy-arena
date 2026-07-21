@@ -196,6 +196,38 @@
               </span>
             </label>
           </fieldset>
+          <fieldset class="settings-fieldset">
+            <legend>Debris disappear</legend>
+            <p class="settings-hint">Non-armor scraps (wood, metal, plants) leave after a short while. Armor plates stay for the match.</p>
+            <label class="settings-choice">
+              <input type="radio" name="debrisDespawnStyle" value="fade" checked>
+              <span class="settings-choice-copy">
+                <strong>Fade out</strong>
+                <small>Scraps quietly fade away.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="debrisDespawnStyle" value="shrink">
+              <span class="settings-choice-copy">
+                <strong>Shrink out</strong>
+                <small>Pieces collapse into nothing.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="debrisDespawnStyle" value="decimate">
+              <span class="settings-choice-copy">
+                <strong>Decimate</strong>
+                <small>Thanos-snap scatter — fragments fling off and vanish.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="debrisDespawnStyle" value="reconquer">
+              <span class="settings-choice-copy">
+                <strong>Reconquer</strong>
+                <small>Waits for a spawn window, then rebuilds the object at a random eligible slot.</small>
+              </span>
+            </label>
+          </fieldset>
         </section>
         <div class="button-row settings-actions">
           <button type="button" id="settingsCloseBtn" class="primary">Done</button>

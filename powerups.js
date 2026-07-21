@@ -4,7 +4,7 @@
  */
 
 import { SIZE, SIGHT } from "./config.js";
-import { spawnPowerCrateDebris } from "./debris.js";
+import { spawnPowerCrateDebris, tryReconquerAtSpawn } from "./debris.js";
 import { healFighter } from "./equipment.js";
 import { POWER_CRATE_MAP, POWER_CRATE_SPAWNS } from "./maps.js";
 import { inBeamReveal, inDirectionalSight, hasLineOfSight } from "./vision.js";
@@ -589,6 +589,9 @@ export function tickPowerCrateSpawns(game, dt, random = Math.random) {
       `pc-r-${Math.floor(elapsed * 10)}-${state.spawnIndex++}`
     );
     game.powerCrates.push(crate);
+    // Reconquer debris may rebuild here when a new object spawns.
+    tryReconquerAtSpawn(game, crate, { preferPowerCrate: true });
+    tryReconquerAtSpawn(game, crate, { preferPowerCrate: false });
   }
   state.pending = stillPending;
 
@@ -610,12 +613,15 @@ export function tickPowerCrateSpawns(game, dt, random = Math.random) {
     const unseenTry = pickRespawnSpot(game, random);
     if (!unseenTry || spawnPointVisibleToAnyTeam(game, unseenTry)) return;
   }
-  game.powerCrates.push(createPowerCrate(
+  const spawned = createPowerCrate(
     spot,
     game.mapId,
     game.theme,
     `pc-s-${state.spawnIndex++}`
-  ));
+  );
+  game.powerCrates.push(spawned);
+  tryReconquerAtSpawn(game, spawned, { preferPowerCrate: true });
+  tryReconquerAtSpawn(game, spawned, { preferPowerCrate: false });
 }
 
 /**

@@ -84,6 +84,9 @@ function prop(kind, x, yBottom) {
       h: preset.canopy.h
     }
     : null;
+  const solid = !!preset.solid;
+  const blocksProjectiles = preset.blocksProjectiles !== false;
+  const blocksSight = !!preset.blocksSight;
   return {
     kind: preset.kind,
     x,
@@ -92,13 +95,17 @@ function prop(kind, x, yBottom) {
     h: preset.h,
     hp: preset.hp,
     maxHp: preset.hp,
-    solid: !!preset.solid,
-    blocksProjectiles: preset.blocksProjectiles !== false,
-    blocksSight: !!preset.blocksSight,
+    solid,
+    blocksProjectiles,
+    blocksSight,
+    baseSolid: solid,
+    baseBlocksProjectiles: blocksProjectiles,
+    baseBlocksSight: blocksSight,
     breakable: preset.breakable !== false,
     canopy,
     hitFlash: 0,
-    destroyed: false
+    destroyed: false,
+    groundDebrisDropped: false
   };
 }
 
@@ -576,8 +583,15 @@ export function createMapRuntime(mapId) {
       canopy: p.canopy ? { ...p.canopy } : null,
       hp: p.maxHp ?? p.hp,
       maxHp: p.maxHp ?? p.hp,
+      solid: p.baseSolid ?? p.solid,
+      blocksProjectiles: p.baseBlocksProjectiles ?? p.blocksProjectiles,
+      blocksSight: p.baseBlocksSight ?? p.blocksSight,
+      baseSolid: p.baseSolid ?? !!p.solid,
+      baseBlocksProjectiles: p.baseBlocksProjectiles ?? p.blocksProjectiles !== false,
+      baseBlocksSight: p.baseBlocksSight ?? !!p.blocksSight,
       hitFlash: 0,
-      destroyed: false
+      destroyed: false,
+      groundDebrisDropped: false
     })),
     spawnPoints: structuredClone
       ? structuredClone(template.spawnPoints)

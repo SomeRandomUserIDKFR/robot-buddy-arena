@@ -113,7 +113,8 @@ export const ui = {
   settingsBtn: $("#settingsBtn"),
   settingsCloseBtn: $("#settingsCloseBtn"),
   settingsVisualPanel: $("#settingsVisualPanel"),
-  modularMorphStyleInputs: [...document.querySelectorAll('input[name="modularMorphStyle"]')]
+  modularMorphStyleInputs: [...document.querySelectorAll('input[name="modularMorphStyle"]')],
+  debrisDespawnStyleInputs: [...document.querySelectorAll('input[name="debrisDespawnStyle"]')]
 };
 
 /** Show git commit / sync identity so localhost builds are easy to verify. */
@@ -508,6 +509,10 @@ export function refreshSettings(profile) {
   const style = profile.settings.visual.modularMorphStyle;
   for (const input of ui.modularMorphStyleInputs) {
     input.checked = input.value === style;
+  }
+  const debrisStyle = profile.settings.visual.debrisDespawnStyle;
+  for (const input of ui.debrisDespawnStyleInputs) {
+    input.checked = input.value === debrisStyle;
   }
 }
 
@@ -1040,9 +1045,15 @@ export function bindUi(handlers) {
     ui.settingsVisualPanel?.classList.toggle("hidden", !visual);
   });
   ui.settingsModal?.addEventListener("change", (event) => {
-    const input = event.target.closest('input[name="modularMorphStyle"]');
-    if (!input) return;
-    handlers.settingsChange?.({ modularMorphStyle: input.value });
+    const morph = event.target.closest('input[name="modularMorphStyle"]');
+    if (morph) {
+      handlers.settingsChange?.({ modularMorphStyle: morph.value });
+      return;
+    }
+    const debris = event.target.closest('input[name="debrisDespawnStyle"]');
+    if (debris) {
+      handlers.settingsChange?.({ debrisDespawnStyle: debris.value });
+    }
   });
   $("#menu").addEventListener("keydown", (event) => {
     const row = event.target.closest(".hidden-scroll-row");

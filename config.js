@@ -70,7 +70,8 @@ export const DEFAULT_PROFILE = {
   mimicIntensity: "quite",
   settings: {
     visual: {
-      modularMorphStyle: "fold"
+      modularMorphStyle: "fold",
+      debrisDespawnStyle: "fade"
     }
   },
   rewardedConquests: [],

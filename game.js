@@ -27,7 +27,10 @@ import {
 } from "./learning.js";
 import { createRenderer } from "./rendering.js";
 import { profile, saveProfile } from "./storage.js";
-import { cloneSettings, ensureSettingsProfile, normalizeModularMorphStyle } from "./settings.js";
+import {
+  cloneSettings, ensureSettingsProfile, normalizeDebrisDespawnStyle,
+  normalizeModularMorphStyle
+} from "./settings.js";
 import {
   bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, refreshSettings, showBuildStamp,
   showConquestSelect, showGame, showMenu, showPause, showResults, showSettings, ui, updateHud
@@ -130,6 +133,7 @@ function makeGame(mode) {
     bullets: [],
     effects: [],
     groundDebris: [],
+    reconquerQueue: [],
     beamReveals: [],
     pings: [],
     camera: { x: 0, y: 0 },
@@ -476,9 +480,14 @@ bindUi({
   refreshSettings() {
     refreshSettings(profile);
   },
-  settingsChange({ modularMorphStyle }) {
+  settingsChange({ modularMorphStyle, debrisDespawnStyle } = {}) {
     ensureSettingsProfile(profile);
-    profile.settings.visual.modularMorphStyle = normalizeModularMorphStyle(modularMorphStyle);
+    if (modularMorphStyle != null) {
+      profile.settings.visual.modularMorphStyle = normalizeModularMorphStyle(modularMorphStyle);
+    }
+    if (debrisDespawnStyle != null) {
+      profile.settings.visual.debrisDespawnStyle = normalizeDebrisDespawnStyle(debrisDespawnStyle);
+    }
     saveProfile();
     refreshSettings(profile);
     if (game) game.settings = cloneSettings(profile.settings);

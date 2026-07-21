@@ -4,10 +4,20 @@ import { DEFAULT_PROFILE } from "./config.js";
 // "nanotech" — Mark-85 style nano swarm dissolve / reform.
 export const MODULAR_MORPH_STYLES = Object.freeze(["smooth", "fold", "fly", "nanotech"]);
 
+/** How non-armor ground debris leaves the match. */
+export const DEBRIS_DESPAWN_STYLES = Object.freeze([
+  "fade", "shrink", "decimate", "reconquer"
+]);
+
 export function normalizeModularMorphStyle(value, legacyMechanicalShifting = false) {
   if (MODULAR_MORPH_STYLES.includes(value)) return value;
   if (legacyMechanicalShifting) return "fly";
   return DEFAULT_PROFILE.settings.visual.modularMorphStyle;
+}
+
+export function normalizeDebrisDespawnStyle(value) {
+  if (DEBRIS_DESPAWN_STYLES.includes(value)) return value;
+  return DEFAULT_PROFILE.settings.visual.debrisDespawnStyle;
 }
 
 export function ensureSettingsProfile(profile, saved = profile) {
@@ -18,7 +28,8 @@ export function ensureSettingsProfile(profile, saved = profile) {
       modularMorphStyle: normalizeModularMorphStyle(
         visual.modularMorphStyle,
         !!visual.mechanicalShifting
-      )
+      ),
+      debrisDespawnStyle: normalizeDebrisDespawnStyle(visual.debrisDespawnStyle)
     }
   };
   return profile.settings;
@@ -30,6 +41,9 @@ export function cloneSettings(settings) {
       modularMorphStyle: normalizeModularMorphStyle(
         settings?.visual?.modularMorphStyle,
         !!settings?.visual?.mechanicalShifting
+      ),
+      debrisDespawnStyle: normalizeDebrisDespawnStyle(
+        settings?.visual?.debrisDespawnStyle
       )
     }
   };

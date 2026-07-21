@@ -1245,11 +1245,14 @@ export function createRenderer(canvas) {
     const highlight = mixHexColors(color, "#ffffff", 0.18);
     const settle = piece.grounded ? 0.72 + (piece.settle || 0) * 0.28 : 0.9;
     const material = piece.material || "armor";
+    const scale = Math.max(0.02, piece.scale ?? 1);
+    const pieceAlpha = Math.max(0, Math.min(1, piece.alpha ?? 1));
     context.save();
     context.translate(piece.x, piece.y);
     context.rotate(piece.rot || 0);
+    context.scale(scale, scale);
     // Match prop fog: dim outside sight, full inside the vision clip.
-    context.globalAlpha = settle * fogAlpha;
+    context.globalAlpha = settle * fogAlpha * pieceAlpha;
     context.fillStyle = color;
 
     if (material === "wood") {

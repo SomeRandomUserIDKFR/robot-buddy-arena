@@ -276,6 +276,17 @@ button span { opacity: .6; font-size: 11px; }
   letter-spacing: .06em;
   text-transform: uppercase;
 }
+.settings-fieldset + .settings-fieldset {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(90, 130, 150, 0.2);
+}
+.settings-hint {
+  margin: 0 0 12px;
+  color: #7a929e;
+  font-size: 12px;
+  line-height: 1.4;
+}
 .settings-choice {
   display: flex;
   align-items: flex-start;

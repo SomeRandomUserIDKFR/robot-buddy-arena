@@ -1,9 +1,13 @@
 /**
- * Match-lasting ground debris: broken armor plates, wood from trees,
- * metal fragments from crates/pipes/barrels, plant scraps from cactus/bush.
+ * Match ground debris: armor plates (persist), plus non-armor scraps that
+ * despawn via Settings → Visual → Debris disappear (fade / shrink / decimate / reconquer).
  */
 import { GRAVITY, SIZE, WORLD } from "./config.js";
+import { normalizeDebrisDespawnStyle } from "./settings.js";
 import { clamp } from "./utils.js";
+
+export const NON_ARMOR_DEBRIS_LIFE = 14;
+export const DEBRIS_DESPAWN_DURATION = 1.05;
 
 function debrisLandables(game) {
   const platforms = game?.platforms?.length ? game.platforms : [];
@@ -21,11 +25,18 @@ function pushPiece(game, piece) {
   game.groundDebris.push(piece);
 }
 
+function nextSourceId(game) {
+  game._debrisSourceSeq = (game._debrisSourceSeq || 0) + 1;
+  return `src-${game._debrisSourceSeq}`;
+}
+
 function burstPiece(game, {
-  material, kind, x, y, w, h, color, vx = 0, vy = 0, facing = 0, index = 0
+  material, kind, x, y, w, h, color, vx = 0, vy = 0, facing = 0, index = 0,
+  sourceType = null, sourceKind = null, sourceId = null, sourceProp = null
 }) {
   const burst = 120 + (index % 4) * 30;
   const ang = (-Math.PI / 2) + (Math.random() - 0.5) * 1.5 + facing * 0.12;
+  const armor = material === "armor";
   pushPiece(game, {
     material,
     kind,
@@ -37,9 +48,25 @@ function burstPiece(game, {
     spin: (Math.random() - 0.5) * 10,
     w,
     h,
+    baseW: w,
+    baseH: h,
     color,
     grounded: false,
-    settle: 0
+    settle: 0,
+    // Armor never despawns mid-match; everything else ages out.
+    immortal: armor,
+    life: armor ? Infinity : NON_ARMOR_DEBRIS_LIFE,
+    maxLife: armor ? Infinity : NON_ARMOR_DEBRIS_LIFE,
+    alpha: 1,
+    scale: 1,
+    despawnMode: null,
+    despawnT: 0,
+    sourceType,
+    sourceKind,
+    sourceId,
+    sourceProp,
+    homeX: null,
+    homeY: null
   });
 }
 
@@ -129,6 +156,10 @@ export function propDebrisProfile(kind) {
   }
 }
 
+function despawnStyle(game) {
+  return normalizeDebrisDespawnStyle(game?.settings?.visual?.debrisDespawnStyle);
+}
+
 /**
  * When retractable armor is destroyed, drop helmet/plate pieces that stay
  * on the ground for the rest of the match.
@@ -183,13 +214,17 @@ export function spawnBrokenArmorDebris(game, fighter) {
 }
 
 /** Lasting rubble when a breakable map prop is destroyed. */
-export function spawnPropDebris(game, prop, impactX, impactY) {
+export function spawnPropDebris(game, prop, impactX, impactY, options = {}) {
   if (!game || !prop || prop.groundDebrisDropped) return;
   prop.groundDebrisDropped = true;
 
-  const profile = propDebrisProfile(prop.kind);
+  const kind = options.forceKind || prop.kind;
+  const profile = propDebrisProfile(kind);
   const cx = impactX ?? prop.x + prop.w / 2;
   const cy = impactY ?? prop.y + prop.h / 2;
+  const sourceId = nextSourceId(game);
+  const sourceType = options.sourceType
+    || (kind === "powerCrate" || prop.powerCrate ? "powerCrate" : "prop");
   const count = profile.specs.length;
 
   for (let i = 0; i < count; i++) {
@@ -205,7 +240,11 @@ export function spawnPropDebris(game, prop, impactX, impactY) {
       w: spec.w,
       h: spec.h,
       color,
-      index: i
+      index: i,
+      sourceType,
+      sourceKind: kind,
+      sourceId,
+      sourceProp: sourceType === "prop" ? prop : null
     });
   }
 }
@@ -213,13 +252,15 @@ export function spawnPropDebris(game, prop, impactX, impactY) {
 /** Metal fragments when a power crate is destroyed. */
 export function spawnPowerCrateDebris(game, crate) {
   if (!crate) return;
-  spawnPropDebris(game, { ...crate, kind: "powerCrate", groundDebrisDropped: false });
+  spawnPropDebris(game, crate, crate.x + crate.w / 2, crate.y + crate.h / 2, {
+    forceKind: "powerCrate",
+    sourceType: "powerCrate"
+  });
 }
 
-/** True when a settled piece still rests on an intact platform/solid prop. */
 function pieceHasSupport(piece, surfaces) {
-  const halfW = piece.w * 0.5;
-  const halfH = piece.h * 0.5;
+  const halfW = (piece.w * (piece.scale || 1)) * 0.5;
+  const halfH = (piece.h * (piece.scale || 1)) * 0.5;
   const bottom = piece.y + halfH;
   for (const platform of surfaces) {
     const onTop = Math.abs(bottom - platform.y) <= 4;
@@ -230,25 +271,209 @@ function pieceHasSupport(piece, surfaces) {
   return false;
 }
 
-/** Integrate ground debris; pieces rest on platforms for the whole match. */
+function beginDespawn(piece, style) {
+  if (piece.immortal || piece.despawnMode) return;
+  piece.grounded = false;
+  piece.despawnMode = style;
+  piece.despawnT = 0;
+  if (style === "decimate") {
+    const ang = Math.random() * Math.PI * 2;
+    const speed = 220 + Math.random() * 320;
+    piece.vx = Math.cos(ang) * speed;
+    piece.vy = Math.sin(ang) * speed - 120;
+    piece.spin = (Math.random() - 0.5) * 28;
+  }
+  if (style === "reconquer") {
+    piece.despawnMode = "reconquer-wait";
+  }
+}
+
+function queueReconquer(game, piece) {
+  game.reconquerQueue ||= [];
+  if (game.reconquerQueue.some((entry) => entry.sourceId === piece.sourceId)) return;
+  game.reconquerQueue.push({
+    sourceId: piece.sourceId,
+    sourceType: piece.sourceType,
+    sourceKind: piece.sourceKind,
+    sourceProp: piece.sourceProp || null,
+    ready: true
+  });
+}
+
+function piecesForSource(game, sourceId) {
+  return (game.groundDebris || []).filter((p) => p.sourceId === sourceId);
+}
+
+function removeSourcePieces(game, sourceId) {
+  game.groundDebris = (game.groundDebris || []).filter((p) => p.sourceId !== sourceId);
+}
+
+/** Restore a destroyed map prop in place. */
+export function restoreMapProp(prop) {
+  if (!prop) return false;
+  prop.destroyed = false;
+  prop.hp = prop.maxHp ?? prop.hp ?? 1;
+  prop.solid = prop.baseSolid ?? prop.solid;
+  prop.blocksProjectiles = prop.baseBlocksProjectiles ?? prop.blocksProjectiles;
+  prop.blocksSight = prop.baseBlocksSight ?? prop.blocksSight;
+  prop.hitFlash = .2;
+  prop.groundDebrisDropped = false;
+  return true;
+}
+
+/**
+ * Called when the match spawn system places (or is about to place) a new object.
+ * Reconquer style only rebuilds then, at that spawn opportunity / a random slot.
+ * @returns {boolean} whether a reconquer consumed this spawn opportunity
+ */
+export function tryReconquerAtSpawn(game, spot, options = {}) {
+  if (!game || despawnStyle(game) !== "reconquer") return false;
+  const queue = game.reconquerQueue || [];
+  if (!queue.length) return false;
+
+  const preferPower = options.preferPowerCrate === true;
+  let index = queue.findIndex((entry) => (
+    preferPower ? entry.sourceType === "powerCrate" : entry.sourceType === "prop"
+  ));
+  if (index < 0) index = 0;
+  const entry = queue[index];
+  if (!entry?.ready) return false;
+
+  let homeX;
+  let homeY;
+  let restore = null;
+
+  if (entry.sourceType === "powerCrate") {
+    if (!spot) return false;
+    homeX = spot.x + (spot.w || 40) / 2;
+    homeY = (spot.y ?? (spot.yBottom - 40)) + 20;
+    // Caller still spawns the crate; we just animate debris home and clear.
+    restore = () => removeSourcePieces(game, entry.sourceId);
+  } else {
+    const candidates = (game.props || []).filter(
+      (prop) => prop.destroyed && prop.kind === entry.sourceKind
+    );
+    if (!candidates.length) return false;
+    const prop = candidates[Math.floor(Math.random() * candidates.length) % candidates.length];
+    homeX = prop.x + prop.w / 2;
+    homeY = prop.y + prop.h / 2;
+    restore = () => {
+      restoreMapProp(prop);
+      removeSourcePieces(game, entry.sourceId);
+    };
+  }
+
+  const group = piecesForSource(game, entry.sourceId);
+  if (!group.length) {
+    queue.splice(index, 1);
+    return false;
+  }
+
+  for (const piece of group) {
+    piece.despawnMode = "reconquer-home";
+    piece.despawnT = 0;
+    piece.grounded = false;
+    piece.homeX = homeX;
+    piece.homeY = homeY;
+    piece.homeRestore = restore;
+  }
+  entry.ready = false;
+  entry.homing = true;
+  return entry.sourceType === "prop";
+}
+
+function finishReconquerHome(game, piece) {
+  if (typeof piece.homeRestore === "function") {
+    piece.homeRestore();
+    // Clear restore on siblings so it only runs once.
+    for (const other of piecesForSource(game, piece.sourceId)) {
+      other.homeRestore = null;
+      other.despawnMode = "gone";
+    }
+  }
+  game.reconquerQueue = (game.reconquerQueue || []).filter(
+    (entry) => entry.sourceId !== piece.sourceId
+  );
+  removeSourcePieces(game, piece.sourceId);
+}
+
+/** Integrate ground debris physics + despawn styles. */
 export function tickGroundDebris(game, dt) {
   const pieces = game?.groundDebris;
   if (!pieces?.length) return;
   const surfaces = debrisLandables(game);
+  const style = despawnStyle(game);
+  const keep = [];
+
   for (const piece of pieces) {
-    // If the crate/prop under a settled piece was destroyed, wake it so it falls.
-    if (piece.grounded && !pieceHasSupport(piece, surfaces)) {
+    if (piece.despawnMode === "gone") continue;
+
+    if (!piece.immortal && !piece.despawnMode) {
+      piece.life -= dt;
+      if (piece.life <= 0) {
+        beginDespawn(piece, style);
+        if (piece.despawnMode === "reconquer-wait") queueReconquer(game, piece);
+      }
+    }
+
+    if (piece.despawnMode === "reconquer-wait") {
+      // Idle until a spawn opportunity claims this source.
+      piece.alpha = 0.55 + Math.sin((game.elapsed || 0) * 4 + (piece.x || 0) * 0.01) * 0.2;
+      piece.scale = 1;
+    } else if (piece.despawnMode === "reconquer-home") {
+      piece.despawnT = Math.min(1, piece.despawnT + dt / DEBRIS_DESPAWN_DURATION);
+      const tx = piece.homeX;
+      const ty = piece.homeY;
+      piece.x += (tx - piece.x) * Math.min(1, dt * 6);
+      piece.y += (ty - piece.y) * Math.min(1, dt * 6);
+      piece.scale = 1 - piece.despawnT * 0.35;
+      piece.alpha = 1 - piece.despawnT * 0.15;
+      piece.spin *= Math.max(0, 1 - dt * 4);
+      piece.rot += piece.spin * dt;
+      if (piece.despawnT >= 1 || Math.hypot(tx - piece.x, ty - piece.y) < 10) {
+        finishReconquerHome(game, piece);
+        continue;
+      }
+      keep.push(piece);
+      continue;
+    } else if (piece.despawnMode === "fade") {
+      piece.despawnT = Math.min(1, piece.despawnT + dt / DEBRIS_DESPAWN_DURATION);
+      piece.alpha = 1 - piece.despawnT;
+      if (piece.despawnT >= 1) continue;
+    } else if (piece.despawnMode === "shrink") {
+      piece.despawnT = Math.min(1, piece.despawnT + dt / DEBRIS_DESPAWN_DURATION);
+      piece.scale = Math.max(0.02, 1 - piece.despawnT);
+      piece.alpha = 1 - piece.despawnT * 0.35;
+      if (piece.despawnT >= 1) continue;
+    } else if (piece.despawnMode === "decimate") {
+      piece.despawnT = Math.min(1, piece.despawnT + dt / DEBRIS_DESPAWN_DURATION);
+      piece.alpha = 1 - piece.despawnT;
+      piece.scale = Math.max(0.15, 1 - piece.despawnT * 0.55);
+      // Snap fragments fly off-screen; skip normal grounding.
+      piece.vy += GRAVITY * dt * 0.35;
+      piece.x += piece.vx * dt;
+      piece.y += piece.vy * dt;
+      piece.rot += piece.spin * dt;
+      if (piece.despawnT >= 1) continue;
+      keep.push(piece);
+      continue;
+    }
+
+    if (piece.grounded && piece.despawnMode !== "reconquer-wait" && !pieceHasSupport(piece, surfaces)) {
       piece.grounded = false;
       piece.settle = 0;
       piece.vy = Math.max(piece.vy, 40);
       piece.spin += (Math.random() - 0.5) * 3;
     }
+
     if (piece.grounded) {
       piece.settle = Math.min(1, (piece.settle || 0) + dt * 3);
       piece.spin *= Math.max(0, 1 - dt * 8);
       piece.rot += piece.spin * dt;
+      keep.push(piece);
       continue;
     }
+
     piece.vy += GRAVITY * dt;
     piece.vy = Math.min(piece.vy, 980);
     const oldY = piece.y;
@@ -258,8 +483,9 @@ export function tickGroundDebris(game, dt) {
     piece.vx *= Math.max(0, 1 - dt * 0.35);
     piece.x = clamp(piece.x, 8, WORLD.w - 8);
 
-    const halfW = piece.w * 0.5;
-    const halfH = piece.h * 0.5;
+    const scale = piece.scale || 1;
+    const halfW = piece.w * scale * 0.5;
+    const halfH = piece.h * scale * 0.5;
     const bottom = piece.y + halfH;
     for (const platform of surfaces) {
       const wasAbove = oldY + halfH <= platform.y + 4;
@@ -288,8 +514,11 @@ export function tickGroundDebris(game, dt) {
       piece.vx = 0;
       piece.vy = 0;
     }
+    keep.push(piece);
   }
+
+  game.groundDebris = keep;
 }
 
-/** @deprecated alias — armor debris shares the groundDebris list */
+/** @deprecated alias */
 export const tickArmorDebris = tickGroundDebris;
