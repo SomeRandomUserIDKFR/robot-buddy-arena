@@ -22,7 +22,7 @@ import {
   ensureProgressionProfile, getPerk, perkTradeoffLines
 } from "./perks.js";
 import { escapeHtml, formatTime } from "./utils.js";
-import { ensureSettingsProfile } from "./settings.js";
+import { ensureSettingsProfile, normalizeReconquerRate } from "./settings.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -114,7 +114,10 @@ export const ui = {
   settingsCloseBtn: $("#settingsCloseBtn"),
   settingsVisualPanel: $("#settingsVisualPanel"),
   modularMorphStyleInputs: [...document.querySelectorAll('input[name="modularMorphStyle"]')],
-  debrisDespawnStyleInputs: [...document.querySelectorAll('input[name="debrisDespawnStyle"]')]
+  debrisDespawnStyleInputs: [...document.querySelectorAll('input[name="debrisDespawnStyle"]')],
+  reconquerRateInput: $("#reconquerRate"),
+  reconquerRateValue: $("#reconquerRateValue"),
+  reconquerRateControl: $("#reconquerRateControl")
 };
 
 /** Show git commit / sync identity so localhost builds are easy to verify. */
@@ -514,6 +517,15 @@ export function refreshSettings(profile) {
   for (const input of ui.debrisDespawnStyleInputs) {
     input.checked = input.value === debrisStyle;
   }
+  const rate = normalizeReconquerRate(profile.settings.visual.reconquerRate);
+  if (ui.reconquerRateInput) {
+    ui.reconquerRateInput.value = String(rate);
+    ui.reconquerRateInput.disabled = debrisStyle !== "reconquer";
+  }
+  if (ui.reconquerRateValue) {
+    ui.reconquerRateValue.textContent = `${rate.toFixed(1)}×`;
+  }
+  ui.reconquerRateControl?.classList.toggle("is-disabled", debrisStyle !== "reconquer");
 }
 
 export function showSettings(open) {
@@ -1053,6 +1065,17 @@ export function bindUi(handlers) {
     const debris = event.target.closest('input[name="debrisDespawnStyle"]');
     if (debris) {
       handlers.settingsChange?.({ debrisDespawnStyle: debris.value });
+      return;
+    }
+    const rate = event.target.closest('input[name="reconquerRate"]');
+    if (rate) {
+      handlers.settingsChange?.({ reconquerRate: rate.value });
+    }
+  });
+  ui.reconquerRateInput?.addEventListener("input", () => {
+    const rate = normalizeReconquerRate(ui.reconquerRateInput.value);
+    if (ui.reconquerRateValue) {
+      ui.reconquerRateValue.textContent = `${rate.toFixed(1)}×`;
     }
   });
   $("#menu").addEventListener("keydown", (event) => {

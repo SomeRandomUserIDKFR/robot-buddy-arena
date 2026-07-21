@@ -3,12 +3,14 @@
  * despawn via Settings → Visual → Debris disappear (fade / shrink / decimate / reconquer).
  */
 import { GRAVITY, SIZE, WORLD } from "./config.js";
-import { normalizeDebrisDespawnStyle } from "./settings.js";
+import { normalizeDebrisDespawnStyle, normalizeReconquerRate } from "./settings.js";
 import { clamp } from "./utils.js";
 
 export const NON_ARMOR_DEBRIS_LIFE = 14;
 export const DEBRIS_DESPAWN_DURATION = 1.05;
 export const RECONQUER_DURATION = 1.45;
+/** Bonus reconquer attempts accrue against this baseline (seconds at +1× rate). */
+export const RECONQUER_BONUS_INTERVAL = 8;
 
 /** Metal reconquer: furnace arrives → ingest scraps → cast molten square → cool. */
 export const FORGE_PHASE_DURATIONS = Object.freeze({
@@ -276,6 +278,32 @@ export function propDebrisProfile(kind) {
 
 function despawnStyle(game) {
   return normalizeDebrisDespawnStyle(game?.settings?.visual?.debrisDespawnStyle);
+}
+
+/** 1×–2× multiplier for how often reconquer queues and fires. */
+export function reconquerRate(game) {
+  return normalizeReconquerRate(game?.settings?.visual?.reconquerRate);
+}
+
+/**
+ * Extra reconquer attempts above the baseline (spawn-tied) cadence.
+ * At 1× this never fires; at 2× it adds about one attempt per bonus interval.
+ */
+export function tickReconquerBonus(game, dt) {
+  if (!game || despawnStyle(game) !== "reconquer") return;
+  const rate = reconquerRate(game);
+  const bonus = Math.max(0, rate - 1);
+  if (bonus <= 0) return;
+  const queue = game.reconquerQueue || [];
+  if (!queue.some((entry) => entry.ready)) return;
+
+  game.reconquerBonusAcc = (game.reconquerBonusAcc || 0) + dt * bonus;
+  while (game.reconquerBonusAcc >= RECONQUER_BONUS_INTERVAL) {
+    game.reconquerBonusAcc -= RECONQUER_BONUS_INTERVAL;
+    // Prefer map-prop rebuilds; power crates still need a real spawn slot.
+    if (tryReconquerAtSpawn(game, null, { preferPowerCrate: false })) continue;
+    break;
+  }
 }
 
 /**
@@ -705,6 +733,7 @@ export function tickGroundDebris(game, dt) {
   if (!pieces?.length) {
     // Forge casts can outlive their scraps (molten cool after ingest).
     tickForgeCasts(game, dt);
+    tickReconquerBonus(game, dt);
     return;
   }
   const surfaces = debrisLandables(game);
@@ -715,7 +744,9 @@ export function tickGroundDebris(game, dt) {
     if (piece.despawnMode === "gone") continue;
 
     if (!piece.immortal && !piece.despawnMode) {
-      piece.life -= dt;
+      // Reconquer rate 1×–2× ages scraps into the queue that much faster.
+      const ageMult = style === "reconquer" ? reconquerRate(game) : 1;
+      piece.life -= dt * ageMult;
       if (piece.life <= 0) {
         beginDespawn(piece, style);
         if (piece.despawnMode === "reconquer-wait") queueReconquer(game, piece);
@@ -848,6 +879,7 @@ export function tickGroundDebris(game, dt) {
 
   game.groundDebris = keep;
   tickForgeCasts(game, dt);
+  tickReconquerBonus(game, dt);
 }
 
 /** @deprecated alias */

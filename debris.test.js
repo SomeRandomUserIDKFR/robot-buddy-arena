@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
 import {
   buildPropJigsaw, forgeCastColor, FORGE_PHASE_DURATIONS, NON_ARMOR_DEBRIS_LIFE,
-  PROP_DEBRIS_COLORS, restoreMapProp, spawnPropDebris, tickGroundDebris,
-  tryReconquerAtSpawn
+  PROP_DEBRIS_COLORS, RECONQUER_BONUS_INTERVAL, restoreMapProp, spawnPropDebris,
+  tickGroundDebris, tryReconquerAtSpawn
 } from "./debris.js";
 import { createMapRuntime, damageProp } from "./maps.js";
 import { createPowerCrate } from "./powerups.js";
-import { normalizeDebrisDespawnStyle } from "./settings.js";
+import { normalizeDebrisDespawnStyle, normalizeReconquerRate } from "./settings.js";
 
 assert.equal(normalizeDebrisDespawnStyle("decimate"), "decimate");
 assert.equal(normalizeDebrisDespawnStyle("nope"), "fade");
+assert.equal(normalizeReconquerRate(1), 1);
+assert.equal(normalizeReconquerRate(2), 2);
+assert.equal(normalizeReconquerRate(1.5), 1.5);
+assert.equal(normalizeReconquerRate(0), 1);
+assert.equal(normalizeReconquerRate(9), 2);
 
 // Jigsaw uses exact prop colors and full fragment coverage.
 {
@@ -237,6 +242,79 @@ assert.equal(normalizeDebrisDespawnStyle("nope"), "fade");
   }
   assert.equal(spawned.forgeHidden, false, "crate revealed after cool");
   assert.equal(game.forgeCasts.length, 0);
+}
+
+// Reconquer rate 2× ages scraps into the queue twice as fast.
+{
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate");
+  const baseGame = {
+    elapsed: 0,
+    settings: { visual: { debrisDespawnStyle: "reconquer", reconquerRate: 1 } },
+    platforms: yard.platforms,
+    props: yard.props,
+    groundDebris: [],
+    effects: [],
+    reconquerQueue: [],
+    forgeCasts: [],
+    reconquerBonusAcc: 0,
+    powerCrates: []
+  };
+  damageProp(crate, crate.hp, baseGame, crate.x + 5, crate.y + 5);
+  const halfLife = NON_ARMOR_DEBRIS_LIFE / 2;
+  for (let i = 0; i < Math.ceil(halfLife * 60); i++) {
+    tickGroundDebris(baseGame, 1 / 60);
+  }
+  assert.equal(baseGame.reconquerQueue.length, 0, "1× not ready at half life");
+
+  const fastYard = createMapRuntime("yard");
+  const fastCrate = fastYard.props.find((p) => p.kind === "crate");
+  const fastGame = {
+    elapsed: 0,
+    settings: { visual: { debrisDespawnStyle: "reconquer", reconquerRate: 2 } },
+    platforms: fastYard.platforms,
+    props: fastYard.props,
+    groundDebris: [],
+    effects: [],
+    reconquerQueue: [],
+    forgeCasts: [],
+    reconquerBonusAcc: 0,
+    powerCrates: []
+  };
+  damageProp(fastCrate, fastCrate.hp, fastGame, fastCrate.x + 5, fastCrate.y + 5);
+  for (let i = 0; i < Math.ceil(halfLife * 60) + 5; i++) {
+    tickGroundDebris(fastGame, 1 / 60);
+  }
+  assert.ok(fastGame.reconquerQueue.length >= 1, "2× ready by half life");
+}
+
+// Bonus pulses only accrue above 1× and can rebuild without a crate spawn.
+{
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate");
+  const game = {
+    elapsed: 0,
+    settings: { visual: { debrisDespawnStyle: "reconquer", reconquerRate: 2 } },
+    platforms: yard.platforms,
+    props: yard.props,
+    groundDebris: [],
+    effects: [],
+    reconquerQueue: [],
+    forgeCasts: [],
+    reconquerBonusAcc: 0,
+    powerCrates: []
+  };
+  damageProp(crate, crate.hp, game, crate.x + 5, crate.y + 5);
+  for (const piece of game.groundDebris) piece.life = 0.01;
+  tickGroundDebris(game, 0.02);
+  assert.ok(game.reconquerQueue.length >= 1);
+  assert.equal(crate.destroyed, true);
+
+  // Accrue one full bonus interval at +1× (rate 2 → bonus 1), then let jigsaw finish.
+  for (let i = 0; i < Math.ceil(RECONQUER_BONUS_INTERVAL * 60) + 120; i++) {
+    tickGroundDebris(game, 1 / 60);
+  }
+  assert.equal(crate.destroyed, false, "bonus pulse reconquers without crate spawn");
 }
 
 assert.equal(restoreMapProp(null), false);

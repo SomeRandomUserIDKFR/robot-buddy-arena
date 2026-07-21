@@ -71,7 +71,9 @@ export const DEFAULT_PROFILE = {
   settings: {
     visual: {
       modularMorphStyle: "fold",
-      debrisDespawnStyle: "fade"
+      debrisDespawnStyle: "fade",
+      // 1× = current reconquer cadence; 2× = up to twice as often.
+      reconquerRate: 1
     }
   },
   rewardedConquests: [],

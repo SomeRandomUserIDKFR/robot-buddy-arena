@@ -29,7 +29,7 @@ import { createRenderer } from "./rendering.js";
 import { profile, saveProfile } from "./storage.js";
 import {
   cloneSettings, ensureSettingsProfile, normalizeDebrisDespawnStyle,
-  normalizeModularMorphStyle
+  normalizeModularMorphStyle, normalizeReconquerRate
 } from "./settings.js";
 import {
   bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, refreshSettings, showBuildStamp,
@@ -135,6 +135,7 @@ function makeGame(mode) {
     groundDebris: [],
     reconquerQueue: [],
     forgeCasts: [],
+    reconquerBonusAcc: 0,
     beamReveals: [],
     pings: [],
     camera: { x: 0, y: 0 },
@@ -481,13 +482,16 @@ bindUi({
   refreshSettings() {
     refreshSettings(profile);
   },
-  settingsChange({ modularMorphStyle, debrisDespawnStyle } = {}) {
+  settingsChange({ modularMorphStyle, debrisDespawnStyle, reconquerRate } = {}) {
     ensureSettingsProfile(profile);
     if (modularMorphStyle != null) {
       profile.settings.visual.modularMorphStyle = normalizeModularMorphStyle(modularMorphStyle);
     }
     if (debrisDespawnStyle != null) {
       profile.settings.visual.debrisDespawnStyle = normalizeDebrisDespawnStyle(debrisDespawnStyle);
+    }
+    if (reconquerRate != null) {
+      profile.settings.visual.reconquerRate = normalizeReconquerRate(reconquerRate);
     }
     saveProfile();
     refreshSettings(profile);

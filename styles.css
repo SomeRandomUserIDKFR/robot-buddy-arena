@@ -378,6 +378,51 @@ button span { opacity: .6; font-size: 11px; }
   transform: translateX(22px);
   background: var(--cyan);
 }
+.settings-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 12px;
+  border: 1px solid #29404c;
+  background: rgba(255, 255, 255, .025);
+}
+.settings-slider.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.settings-slider-copy strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #e7f9ff;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.settings-slider-copy small {
+  margin: 0;
+  color: #88a0ab;
+  line-height: 1.35;
+}
+.settings-slider-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-slider-input input[type="range"] {
+  flex: 1 1 auto;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--cyan);
+}
+.settings-slider-input output {
+  min-width: 3.2em;
+  color: #cfeaf4;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
 .settings-actions { justify-content: flex-end; margin-top: 18px; }
 .settings-actions button { width: auto; min-width: 120px; }
 .perk-modal-card {
