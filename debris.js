@@ -216,12 +216,33 @@ export function spawnPowerCrateDebris(game, crate) {
   spawnPropDebris(game, { ...crate, kind: "powerCrate", groundDebrisDropped: false });
 }
 
+/** True when a settled piece still rests on an intact platform/solid prop. */
+function pieceHasSupport(piece, surfaces) {
+  const halfW = piece.w * 0.5;
+  const halfH = piece.h * 0.5;
+  const bottom = piece.y + halfH;
+  for (const platform of surfaces) {
+    const onTop = Math.abs(bottom - platform.y) <= 4;
+    const overlap = piece.x + halfW > platform.x + 1
+      && piece.x - halfW < platform.x + platform.w - 1;
+    if (onTop && overlap) return true;
+  }
+  return false;
+}
+
 /** Integrate ground debris; pieces rest on platforms for the whole match. */
 export function tickGroundDebris(game, dt) {
   const pieces = game?.groundDebris;
   if (!pieces?.length) return;
   const surfaces = debrisLandables(game);
   for (const piece of pieces) {
+    // If the crate/prop under a settled piece was destroyed, wake it so it falls.
+    if (piece.grounded && !pieceHasSupport(piece, surfaces)) {
+      piece.grounded = false;
+      piece.settle = 0;
+      piece.vy = Math.max(piece.vy, 40);
+      piece.spin += (Math.random() - 0.5) * 3;
+    }
     if (piece.grounded) {
       piece.settle = Math.min(1, (piece.settle || 0) + dt * 3);
       piece.spin *= Math.max(0, 1 - dt * 8);

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { tickGroundDebris } from "./debris.js";
 import {
   createMapRuntime, damageProp, MAPS, POWER_CRATE_MAP, POWER_CRATE_SPAWNS, solidProps
 } from "./maps.js";
@@ -70,6 +71,44 @@ import { generateEncounter, resetConquestSelectSession } from "./conquest.js";
   const metal = crateGame.groundDebris.filter((p) => p.material === "metal");
   assert.ok(metal.length >= 6, "crates drop metal fragments");
   assert.ok(metal.some((p) => p.kind === "panel" || p.kind === "shard"));
+}
+
+// Debris settled on a breakable falls again when that support is destroyed.
+{
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate");
+  assert.ok(crate);
+  const groundY = crate.y;
+  const game = {
+    effects: [],
+    props: yard.props,
+    groundDebris: [],
+    platforms: yard.platforms
+  };
+  // Pretend scrap already landed on top of the crate.
+  const scrap = {
+    material: "metal",
+    kind: "panel",
+    x: crate.x + crate.w / 2,
+    y: groundY - 5,
+    w: 14,
+    h: 10,
+    vx: 0,
+    vy: 0,
+    rot: 0,
+    spin: 0,
+    color: "#8a949e",
+    grounded: true,
+    settle: 1,
+    testId: "support-check"
+  };
+  game.groundDebris.push(scrap);
+  damageProp(crate, crate.hp, game, crate.x + 10, crate.y + 10);
+  assert.equal(crate.destroyed, true);
+  // Next ticks: support gone → wake and fall onto a real platform below.
+  for (let i = 0; i < 180; i++) tickGroundDebris(game, 1 / 60);
+  assert.ok(scrap.y > groundY - 5 + 8, `scrap fell (y=${scrap.y}, was ~${groundY - 5})`);
+  assert.equal(scrap.grounded, true);
 }
 
 // Forest trunks are not solid — fighters walk through (no solid prop collision).
