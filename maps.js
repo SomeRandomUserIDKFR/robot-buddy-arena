@@ -3,6 +3,7 @@
  * Props may be breakable soft cover; forest trunks let fighters walk through.
  * Ceiling / world size match `config.js` (avoid importing config — circular with PLATFORMS re-export).
  */
+import { spawnPropDebris } from "./debris.js";
 
 const MAP_CEILING = 12;
 const MAP_WORLD = { w: 3600, h: 1600 };
@@ -640,17 +641,20 @@ export function damageProp(prop, amount, game, impactX, impactY) {
     prop.solid = false;
     prop.blocksProjectiles = false;
     prop.blocksSight = false;
+    const ix = impactX ?? prop.x + prop.w / 2;
+    const iy = impactY ?? prop.y + prop.h / 2;
     if (game?.effects) {
       game.effects.push({
         type: "debris",
-        x: prop.x + prop.w / 2,
-        y: prop.y + prop.h / 2,
+        x: ix,
+        y: iy,
         life: .45,
         kind: prop.kind,
         w: prop.w,
         h: prop.h
       });
     }
+    spawnPropDebris(game, prop, ix, iy);
   }
   return true;
 }

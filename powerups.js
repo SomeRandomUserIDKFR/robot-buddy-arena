@@ -4,6 +4,7 @@
  */
 
 import { SIZE, SIGHT } from "./config.js";
+import { spawnPowerCrateDebris } from "./debris.js";
 import { healFighter } from "./equipment.js";
 import { POWER_CRATE_MAP, POWER_CRATE_SPAWNS } from "./maps.js";
 import { inBeamReveal, inDirectionalSight, hasLineOfSight } from "./vision.js";
@@ -450,6 +451,7 @@ export function damagePowerCrate(crate, amount, attacker, game, impactX, impactY
         color: "#d8e0ea"
       });
     }
+    spawnPowerCrateDebris(game, crate);
     scheduleRespawn(game, crate);
   }
   return true;

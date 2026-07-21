@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { Fighter, hit } from "./combat.js";
+import { tickGroundDebris } from "./debris.js";
 import {
   applyHpDamage, applyLoadout, beginRetractableMorph, DEFAULT_LOADOUT, GEAR_BY_ID,
   healFighter, resolveRetractableArmor, RETRACTABLE_ARMOR_SPEED, RETRACTABLE_MORPH_DURATION,
-  retractableSpeedMultiplier, syncRetractableDisplayedHp, tickArmorDebris,
-  tickRetractableArmor, toggleRetractableArmor
+  retractableSpeedMultiplier, syncRetractableDisplayedHp, tickRetractableArmor,
+  toggleRetractableArmor
 } from "./equipment.js";
 
 const loadout = (overrides = {}) => ({ ...DEFAULT_LOADOUT, ...overrides });
@@ -133,26 +134,26 @@ function finishMorph(fighter) {
   const game = {
     platforms: [{ x: 0, y: 500, w: 2000, h: 40 }],
     props: [],
-    armorDebris: [],
+    groundDebris: [],
     effects: []
   };
   applyHpDamage(fighter, fighter.retractableHp, game);
   assert.equal(fighter.retractableHp, 0);
   assert.equal(fighter.armorDebrisDropped, true);
-  assert.ok(game.armorDebris.length >= 8, "helmet + plate shards");
-  assert.ok(game.armorDebris.some((piece) => piece.kind === "helmet"));
-  assert.ok(game.armorDebris.some((piece) => piece.kind === "breast"));
+  assert.ok(game.groundDebris.length >= 8, "helmet + plate shards");
+  assert.ok(game.groundDebris.some((piece) => piece.kind === "helmet"));
+  assert.ok(game.groundDebris.some((piece) => piece.kind === "breast"));
   assert.ok(game.effects.some((effect) => effect.type === "debris" && effect.kind === "armor"));
 
   // Pieces settle on the platform and stay for the match (no life expiry).
-  for (let i = 0; i < 120; i++) tickArmorDebris(game, 1 / 60);
-  assert.ok(game.armorDebris.every((piece) => piece.grounded));
-  assert.equal(game.armorDebris.length >= 8, true);
+  for (let i = 0; i < 120; i++) tickGroundDebris(game, 1 / 60);
+  assert.ok(game.groundDebris.every((piece) => piece.grounded));
+  assert.equal(game.groundDebris.length >= 8, true);
 
   // Manual / second break does not duplicate debris.
-  const count = game.armorDebris.length;
+  const count = game.groundDebris.length;
   applyHpDamage(fighter, 10, game);
-  assert.equal(game.armorDebris.length, count);
+  assert.equal(game.groundDebris.length, count);
 }
 
 console.log("Retractable armor suite passed.");

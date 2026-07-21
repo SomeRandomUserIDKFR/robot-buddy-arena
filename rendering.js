@@ -689,7 +689,7 @@ export function createRenderer(canvas) {
         context.fill();
       }
     }
-    drawArmorDebris(game);
+    drawGroundDebris(game);
     drawEffects(game);
     drawBullets(game);
     for (const fighter of game.fighters) {
@@ -1238,17 +1238,72 @@ export function createRenderer(canvas) {
     context.restore();
   }
 
-  function drawArmorDebrisPiece(piece) {
+  function drawGroundDebrisPiece(piece) {
     const color = piece.color || "#8aa4b0";
     const edge = mixHexColors(color, "#061018", 0.4);
     const highlight = mixHexColors(color, "#ffffff", 0.18);
     const settle = piece.grounded ? 0.72 + (piece.settle || 0) * 0.28 : 0.9;
+    const material = piece.material || "armor";
     context.save();
     context.translate(piece.x, piece.y);
     context.rotate(piece.rot || 0);
     context.globalAlpha = settle;
     context.fillStyle = color;
-    if (piece.kind === "helmet" || piece.kind === "breast") {
+
+    if (material === "wood") {
+      // Logs / planks / chips with a grain line.
+      context.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      context.strokeStyle = mixHexColors(color, "#2a1808", 0.35);
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(-piece.w / 2 + 2, -1);
+      context.lineTo(piece.w / 2 - 2, 1);
+      context.stroke();
+      context.strokeStyle = highlight;
+      context.beginPath();
+      context.moveTo(-piece.w / 2 + 3, piece.h / 4);
+      context.lineTo(piece.w / 2 - 4, piece.h / 4);
+      context.stroke();
+    } else if (material === "metal") {
+      // Angular metal fragments with a bright edge.
+      context.beginPath();
+      if (piece.kind === "corner") {
+        context.moveTo(-piece.w / 2, -piece.h / 2);
+        context.lineTo(piece.w / 2, -piece.h / 2);
+        context.lineTo(piece.w / 2, 0);
+        context.lineTo(0, piece.h / 2);
+        context.lineTo(-piece.w / 2, piece.h / 2);
+      } else if (piece.kind === "strip") {
+        context.rect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      } else {
+        context.moveTo(-piece.w / 2, -piece.h / 2 + 2);
+        context.lineTo(-piece.w / 4, -piece.h / 2);
+        context.lineTo(piece.w / 2, -piece.h / 3);
+        context.lineTo(piece.w / 2 - 2, piece.h / 2);
+        context.lineTo(-piece.w / 3, piece.h / 2);
+        context.lineTo(-piece.w / 2, 0);
+      }
+      context.closePath();
+      context.fill();
+      context.strokeStyle = highlight;
+      context.lineWidth = 1.2;
+      context.beginPath();
+      context.moveTo(-piece.w / 2 + 1, -piece.h / 4);
+      context.lineTo(piece.w / 2 - 2, -piece.h / 5);
+      context.stroke();
+      context.strokeStyle = edge;
+      context.strokeRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+    } else if (material === "plant") {
+      context.beginPath();
+      context.ellipse(0, 0, piece.w / 2, piece.h / 2, 0, 0, Math.PI * 2);
+      context.fill();
+      context.strokeStyle = mixHexColors(color, "#102010", 0.4);
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(0, -piece.h / 2 + 1);
+      context.lineTo(0, piece.h / 2 - 1);
+      context.stroke();
+    } else if (piece.kind === "helmet" || piece.kind === "breast") {
       context.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
       context.fillStyle = highlight;
       context.fillRect(-piece.w / 2 + 3, -piece.h / 2 + 1, piece.w - 6, 2);
@@ -1268,7 +1323,7 @@ export function createRenderer(canvas) {
       context.fillStyle = highlight;
       context.fillRect(-2, -piece.h / 2 - 1, 4, piece.h + 2);
     } else {
-      // Cheeks, shoulders, ab plate — simple plate shards.
+      // Armor cheeks/shoulders/ab — simple plate shards.
       context.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
       context.strokeStyle = edge;
       context.lineWidth = 1;
@@ -1280,10 +1335,10 @@ export function createRenderer(canvas) {
     context.restore();
   }
 
-  /** Broken retractable armor plates/helmet left on the ground for the match. */
-  function drawArmorDebris(game) {
-    const pieces = game.armorDebris || [];
-    for (const piece of pieces) drawArmorDebrisPiece(piece);
+  /** Broken armor / wood / metal / plant scraps left on the ground for the match. */
+  function drawGroundDebris(game) {
+    const pieces = game.groundDebris || game.armorDebris || [];
+    for (const piece of pieces) drawGroundDebrisPiece(piece);
   }
 
   function drawBullets(game) {

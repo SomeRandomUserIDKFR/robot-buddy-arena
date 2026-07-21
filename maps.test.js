@@ -36,7 +36,7 @@ import { generateEncounter, resetConquestSelectSession } from "./conquest.js";
   const runtime = createMapRuntime("desert");
   const cactus = runtime.props.find((p) => p.kind === "cactus");
   assert.ok(cactus, "desert should have cactus cover");
-  const game = { effects: [], props: runtime.props };
+  const game = { effects: [], props: runtime.props, groundDebris: [], platforms: runtime.platforms };
   const hits = Math.ceil(cactus.hp / 12) + 1;
   for (let i = 0; i < hits; i++) {
     damageProp(cactus, 12, game, cactus.x + 10, cactus.y + 10);
@@ -44,6 +44,32 @@ import { generateEncounter, resetConquestSelectSession } from "./conquest.js";
   assert.equal(cactus.destroyed, true);
   assert.equal(cactus.blocksProjectiles, false);
   assert.ok(game.effects.some((e) => e.type === "debris"));
+  assert.ok(game.groundDebris.some((p) => p.material === "plant"));
+}
+
+// Trees leave wood debris; crates leave metal fragments for the match.
+{
+  const forest = createMapRuntime("forest");
+  const tree = forest.props.find((p) => p.kind === "tree");
+  assert.ok(tree);
+  const treeGame = {
+    effects: [], props: forest.props, groundDebris: [], platforms: forest.platforms
+  };
+  damageProp(tree, tree.hp, treeGame, tree.x + 10, tree.y + 40);
+  assert.equal(tree.destroyed, true);
+  assert.ok(treeGame.groundDebris.filter((p) => p.material === "wood").length >= 6);
+
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate");
+  assert.ok(crate, "yard should have crates");
+  const crateGame = {
+    effects: [], props: yard.props, groundDebris: [], platforms: yard.platforms
+  };
+  damageProp(crate, crate.hp, crateGame, crate.x + 10, crate.y + 10);
+  assert.equal(crate.destroyed, true);
+  const metal = crateGame.groundDebris.filter((p) => p.material === "metal");
+  assert.ok(metal.length >= 6, "crates drop metal fragments");
+  assert.ok(metal.some((p) => p.kind === "panel" || p.kind === "shard"));
 }
 
 // Forest trunks are not solid — fighters walk through (no solid prop collision).
