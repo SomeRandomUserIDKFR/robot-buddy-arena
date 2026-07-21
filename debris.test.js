@@ -12,8 +12,9 @@ assert.equal(normalizeDebrisDespawnStyle("decimate"), "decimate");
 assert.equal(normalizeDebrisDespawnStyle("nope"), "fade");
 assert.equal(normalizeReconquerRate(1), 1);
 assert.equal(normalizeReconquerRate(2), 2);
+assert.equal(normalizeReconquerRate(0.1), 0.1);
 assert.equal(normalizeReconquerRate(1.5), 1.5);
-assert.equal(normalizeReconquerRate(0), 1);
+assert.equal(normalizeReconquerRate(0), 0.1);
 assert.equal(normalizeReconquerRate(9), 2);
 
 // Jigsaw uses exact prop colors and full fragment coverage.

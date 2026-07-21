@@ -72,7 +72,7 @@ export const DEFAULT_PROFILE = {
     visual: {
       modularMorphStyle: "fold",
       debrisDespawnStyle: "fade",
-      // 1× = current reconquer cadence; 2× = up to twice as often.
+      // 0.1×–2× baseline reconquer cadence (1× = default).
       reconquerRate: 1
     }
   },
