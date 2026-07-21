@@ -122,6 +122,7 @@ function makeGame(mode) {
     props: map.props,
     powerCrates: powerCrateState.crates,
     powerCrateState,
+    powerCrateSpawns: map.powerCrateSpawns || [],
     _powerupHit: hit,
     spawnPoints: map.spawnPoints,
     ceiling: map.ceiling,

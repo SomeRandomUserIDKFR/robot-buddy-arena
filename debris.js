@@ -11,6 +11,9 @@ export const DEBRIS_DESPAWN_DURATION = 1.05;
 export const RECONQUER_DURATION = 1.45;
 /** Bonus reconquer attempts accrue against this baseline (seconds at +1× rate). */
 export const RECONQUER_BONUS_INTERVAL = 8;
+/** Prefer restore / cast targets within this distance of the break origin. */
+export const RECONQUER_NEAR_RANGE = 520;
+const POWER_CRATE_FALLBACK_H = 40;
 
 /** Metal reconquer: furnace arrives → ingest scraps → cast molten square → cool. */
 export const FORGE_PHASE_DURATIONS = Object.freeze({
@@ -48,6 +51,7 @@ function nextSourceId(game) {
 function burstPiece(game, {
   material, kind, x, y, w, h, color, vx = 0, vy = 0, facing = 0, index = 0,
   sourceType = null, sourceKind = null, sourceId = null, sourceProp = null,
+  originX = null, originY = null,
   homeLx = 0, homeLy = 0, shape = "rect", detail = null, edge = null
 }) {
   const burst = 100 + (index % 5) * 28;
@@ -87,6 +91,8 @@ function burstPiece(game, {
     sourceKind,
     sourceId,
     sourceProp,
+    originX,
+    originY,
     homeX: null,
     homeY: null
   });
@@ -392,7 +398,9 @@ export function spawnPropDebris(game, prop, impactX, impactY, options = {}) {
       sourceType,
       sourceKind: kind,
       sourceId,
-      sourceProp: sourceType === "prop" ? prop : null
+      sourceProp: sourceType === "prop" ? prop : null,
+      originX: cx,
+      originY: cy
     });
   }
 }
@@ -439,13 +447,145 @@ function beginDespawn(piece, style) {
 function queueReconquer(game, piece) {
   game.reconquerQueue ||= [];
   if (game.reconquerQueue.some((entry) => entry.sourceId === piece.sourceId)) return;
+  const origin = reconquerOriginFromPiece(piece, game);
   game.reconquerQueue.push({
     sourceId: piece.sourceId,
     sourceType: piece.sourceType,
     sourceKind: piece.sourceKind,
     sourceProp: piece.sourceProp || null,
+    originX: origin.x,
+    originY: origin.y,
     ready: true
   });
+}
+
+function propCenter(prop) {
+  return {
+    x: (prop?.x || 0) + (prop?.w || 0) / 2,
+    y: (prop?.y || 0) + (prop?.h || 0) / 2
+  };
+}
+
+function pointDist(a, b) {
+  return Math.hypot((a?.x || 0) - (b?.x || 0), (a?.y || 0) - (b?.y || 0));
+}
+
+function reconquerOriginFromPiece(piece, game) {
+  if (piece?.sourceProp) return propCenter(piece.sourceProp);
+  if (Number.isFinite(piece?.originX) && Number.isFinite(piece?.originY)) {
+    return { x: piece.originX, y: piece.originY };
+  }
+  const group = piecesForSource(game, piece.sourceId);
+  if (group.length) {
+    let sx = 0;
+    let sy = 0;
+    for (const p of group) {
+      sx += p.x;
+      sy += p.y;
+    }
+    return { x: sx / group.length, y: sy / group.length };
+  }
+  return { x: piece?.x || 0, y: piece?.y || 0 };
+}
+
+function entryOrigin(entry, group) {
+  if (entry?.sourceProp) return propCenter(entry.sourceProp);
+  if (Number.isFinite(entry?.originX) && Number.isFinite(entry?.originY)) {
+    return { x: entry.originX, y: entry.originY };
+  }
+  if (group?.length) {
+    let sx = 0;
+    let sy = 0;
+    for (const p of group) {
+      sx += p.x;
+      sy += p.y;
+    }
+    return { x: sx / group.length, y: sy / group.length };
+  }
+  return { x: 0, y: 0 };
+}
+
+/**
+ * Prefer the original break site, else a nearby same-kind slot (slight area shift).
+ * Avoids map-wide random teleports.
+ */
+export function pickNearbyRestoreProp(entry, candidates, group = []) {
+  if (!candidates?.length) return null;
+  const origin = entryOrigin(entry, group);
+  const source = entry.sourceProp;
+  if (source && candidates.includes(source)) {
+    // Usually rebuild in place; sometimes a slight nearby alternate.
+    const nearbyAlts = candidates.filter(
+      (prop) => prop !== source && pointDist(propCenter(prop), origin) <= RECONQUER_NEAR_RANGE
+    );
+    if (nearbyAlts.length && Math.random() < 0.22) {
+      return nearestByOrigin(nearbyAlts, origin);
+    }
+    return source;
+  }
+  const nearby = candidates.filter(
+    (prop) => pointDist(propCenter(prop), origin) <= RECONQUER_NEAR_RANGE
+  );
+  return nearestByOrigin(nearby.length ? nearby : candidates, origin);
+}
+
+function nearestByOrigin(props, origin) {
+  let best = props[0];
+  let bestD = Infinity;
+  for (const prop of props) {
+    const d = pointDist(propCenter(prop), origin);
+    if (d < bestD) {
+      best = prop;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+function listFreePowerCrateSpawns(game, occupied) {
+  const spawns = game?.powerCrateSpawns || [];
+  return spawns.filter((s) => !occupied.has(`${s.x},${s.y}`));
+}
+
+/** Pull a power-crate spawn toward the scrap origin when the roll landed far away. */
+export function pullSpawnTowardOrigin(spot, origin, freeSpawns = []) {
+  if (!spot || !origin) return spot;
+  const spotCenter = {
+    x: spot.x + (spot.w || 40) / 2,
+    y: (spot.y ?? ((spot.yBottom || 0) - (spot.h || 40))) + (spot.h || 40) / 2
+  };
+  if (pointDist(spotCenter, origin) <= RECONQUER_NEAR_RANGE) return spot;
+  if (!freeSpawns.length) return spot;
+
+  let best = null;
+  let bestD = Infinity;
+  for (const spawn of freeSpawns) {
+    const floorY = spawn.y ?? spawn.yBottom ?? 0;
+    const center = spawn.w
+      ? {
+        x: spawn.x + spawn.w / 2,
+        y: (spawn.y ?? (floorY - (spawn.h || POWER_CRATE_FALLBACK_H)))
+          + (spawn.h || POWER_CRATE_FALLBACK_H) / 2
+      }
+      : { x: spawn.x + POWER_CRATE_FALLBACK_H / 2, y: floorY - POWER_CRATE_FALLBACK_H / 2 };
+    const d = pointDist(center, origin);
+    if (d < bestD) {
+      best = spawn;
+      bestD = d;
+    }
+  }
+  if (!best || bestD > RECONQUER_NEAR_RANGE * 1.35) return spot;
+
+  // Relocate the already-created crate onto the nearer spawn.
+  const h = spot.h || POWER_CRATE_FALLBACK_H;
+  const w = spot.w || POWER_CRATE_FALLBACK_H;
+  const floorY = best.y ?? best.yBottom;
+  spot.x = best.x;
+  spot.y = floorY - h;
+  spot.w = w;
+  spot.h = h;
+  if (spot.spawnKey != null) spot.spawnKey = `${best.x},${floorY}`;
+  return spot;
 }
 
 function piecesForSource(game, sourceId) {
@@ -530,7 +670,7 @@ export function beginMetalForgeCast(game, {
 
 /**
  * Called when the match spawn system places (or is about to place) a new object.
- * Reconquer style only rebuilds then, at that spawn opportunity / a random slot.
+ * Reconquer style rebuilds near the break origin (original slot or a slight nearby shift).
  * Metal → furnace cast; wood/plant → jigsaw assemble.
  * @returns {boolean} whether a reconquer consumed this spawn opportunity
  */
@@ -555,8 +695,22 @@ export function tryReconquerAtSpawn(game, spot, options = {}) {
   let hideTarget = null;
   let restoreProp = null;
 
+  const group = piecesForSource(game, entry.sourceId);
+  if (!group.length) {
+    queue.splice(index, 1);
+    return false;
+  }
+  const origin = entryOrigin(entry, group);
+
   if (entry.sourceType === "powerCrate") {
     if (!spot) return false;
+    // If the spawn rolled far from the break, nudge onto a nearer free spawn.
+    const occupied = new Set(
+      (game.powerCrates || [])
+        .filter((c) => !c.destroyed && c !== spot)
+        .map((c) => c.spawnKey)
+    );
+    pullSpawnTowardOrigin(spot, origin, listFreePowerCrateSpawns(game, occupied));
     castW = spot.w || 40;
     castH = spot.h || 40;
     homeX = spot.x + castW / 2;
@@ -572,7 +726,8 @@ export function tryReconquerAtSpawn(game, spot, options = {}) {
       (prop) => prop.destroyed && prop.kind === entry.sourceKind
     );
     if (!candidates.length) return false;
-    restoreProp = candidates[Math.floor(Math.random() * candidates.length) % candidates.length];
+    restoreProp = pickNearbyRestoreProp(entry, candidates, group);
+    if (!restoreProp) return false;
     castW = restoreProp.w;
     castH = restoreProp.h;
     homeX = restoreProp.x + castW / 2;
@@ -581,12 +736,6 @@ export function tryReconquerAtSpawn(game, spot, options = {}) {
       restoreMapProp(restoreProp);
       removeSourcePieces(game, entry.sourceId);
     };
-  }
-
-  const group = piecesForSource(game, entry.sourceId);
-  if (!group.length) {
-    queue.splice(index, 1);
-    return false;
   }
 
   entry.ready = false;

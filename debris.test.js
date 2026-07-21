@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import {
   buildPropJigsaw, forgeCastColor, FORGE_PHASE_DURATIONS, NON_ARMOR_DEBRIS_LIFE,
-  PROP_DEBRIS_COLORS, RECONQUER_BONUS_INTERVAL, restoreMapProp, spawnPropDebris,
+  pickNearbyRestoreProp, PROP_DEBRIS_COLORS, pullSpawnTowardOrigin,
+  RECONQUER_BONUS_INTERVAL, RECONQUER_NEAR_RANGE, restoreMapProp, spawnPropDebris,
   tickGroundDebris, tryReconquerAtSpawn
 } from "./debris.js";
 import { createMapRuntime, damageProp } from "./maps.js";
@@ -316,6 +317,33 @@ assert.equal(normalizeReconquerRate(9), 2);
     tickGroundDebris(game, 1 / 60);
   }
   assert.equal(crate.destroyed, false, "bonus pulse reconquers without crate spawn");
+}
+
+// Reconquer prefers the original break site over far same-kind slots.
+{
+  const near = { kind: "crate", x: 100, y: 200, w: 40, h: 40, destroyed: true };
+  const far = { kind: "crate", x: 3000, y: 200, w: 40, h: 40, destroyed: true };
+  const entry = { sourceProp: near, originX: 120, originY: 220, sourceKind: "crate" };
+  const picked = pickNearbyRestoreProp(entry, [far, near], []);
+  assert.equal(picked, near, "original prop wins over far alternate");
+
+  const orphan = { sourceProp: null, originX: 110, originY: 210, sourceKind: "crate" };
+  const nearest = pickNearbyRestoreProp(orphan, [far, near], []);
+  assert.equal(nearest, near, "nearest slot when original is gone");
+}
+
+// Far power-crate spawns pull back toward the scrap origin when a nearer slot exists.
+{
+  const spot = { x: 3000, y: 200, w: 40, h: 40, spawnKey: "3000,240" };
+  const origin = { x: 120, y: 220 };
+  const free = [{ x: 100, y: 240 }, { x: 2800, y: 240 }];
+  pullSpawnTowardOrigin(spot, origin, free);
+  assert.ok(Math.abs(spot.x - 100) < 1, "crate relocated near origin");
+  assert.ok(pointNear(spot, origin) <= RECONQUER_NEAR_RANGE);
+}
+
+function pointNear(spot, origin) {
+  return Math.hypot(spot.x + spot.w / 2 - origin.x, spot.y + spot.h / 2 - origin.y);
 }
 
 assert.equal(restoreMapProp(null), false);
