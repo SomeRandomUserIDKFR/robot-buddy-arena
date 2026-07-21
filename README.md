@@ -4,8 +4,14 @@ A dependency-free HTML5 Canvas prototype about training an AI partner, then figh
 
 ## Run
 
-From this folder run `python -m http.server 8000` (or `npm run serve`), then open
+From this folder run `npm run serve` (or `dev.cmd` / `dev.ps1` on Windows), then open
 <http://localhost:8000>.
+
+`npm run serve` auto-pulls `origin/master` on start and about every 45s while the
+server runs (skips if you have local uncommitted changes). Hard-refresh the
+browser after a sync log line. Disable with `npm run serve:nosync`.
+
+You can still use `python -m http.server 8000`, but that path does **not** auto-sync.
 
 Chrome, Edge, or Firefox is recommended. **Serve over localhost** rather than
 opening `index.html` through `file://`; module imports, the Web Worker analyzer,
