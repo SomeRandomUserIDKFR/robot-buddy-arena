@@ -116,6 +116,31 @@ export const ui = {
   modularMorphStyleInputs: [...document.querySelectorAll('input[name="modularMorphStyle"]')]
 };
 
+/** Show git commit / sync identity so localhost builds are easy to verify. */
+export async function showBuildStamp() {
+  const el = ui.buildStamp || $("#buildStamp");
+  if (!el) return;
+  try {
+    const response = await fetch("/__sync", { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const features = Array.isArray(data.features) ? data.features : [];
+    const patched = features.includes("ai-retractable-on-sight")
+      && features.includes("dodge-face");
+    el.textContent = patched
+      ? `build ${data.commit || "?"} · patched · ${data.branch || "master"}`
+      : `build ${data.commit || "?"} · ${data.branch || "?"} · incomplete`;
+    el.title = data.lastSyncNote
+      ? `${data.lastSyncNote} · features: ${features.join(", ") || "none"}`
+      : features.join(", ") || "no feature list";
+    el.dataset.patched = patched ? "1" : "0";
+  } catch {
+    el.textContent = "build unknown · not sync server (use npm run serve)";
+    el.title = "Open /__sync — if it 404s, this is not the patched auto-pull server";
+    el.dataset.patched = "0";
+  }
+}
+
 let coachingWeapon = "gun";
 
 function renderAnalyzerStatus() {
