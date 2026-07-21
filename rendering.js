@@ -629,6 +629,7 @@ export function createRenderer(canvas) {
     drawBackdrop(game, .2);
     drawPlatforms(game, .28);
     drawProps(game, .35, false);
+    drawGroundDebris(game, .35);
     drawCeiling(game, .35);
     const player = game.fighters[0];
     const allies = game.fighters.filter((fighter) => !fighter.dead && fighter.team === player.team);
@@ -660,6 +661,7 @@ export function createRenderer(canvas) {
     drawBackdrop(game, .9);
     drawPlatforms(game, 1);
     drawProps(game, 1, false);
+    drawGroundDebris(game, 1);
     drawPowerCrates(game, player);
     drawCeiling(game, 1);
     context.restore();
@@ -689,7 +691,6 @@ export function createRenderer(canvas) {
         context.fill();
       }
     }
-    drawGroundDebris(game);
     drawEffects(game);
     drawBullets(game);
     for (const fighter of game.fighters) {
@@ -1238,7 +1239,7 @@ export function createRenderer(canvas) {
     context.restore();
   }
 
-  function drawGroundDebrisPiece(piece) {
+  function drawGroundDebrisPiece(piece, fogAlpha = 1) {
     const color = piece.color || "#8aa4b0";
     const edge = mixHexColors(color, "#061018", 0.4);
     const highlight = mixHexColors(color, "#ffffff", 0.18);
@@ -1247,7 +1248,8 @@ export function createRenderer(canvas) {
     context.save();
     context.translate(piece.x, piece.y);
     context.rotate(piece.rot || 0);
-    context.globalAlpha = settle;
+    // Match prop fog: dim outside sight, full inside the vision clip.
+    context.globalAlpha = settle * fogAlpha;
     context.fillStyle = color;
 
     if (material === "wood") {
@@ -1336,9 +1338,9 @@ export function createRenderer(canvas) {
   }
 
   /** Broken armor / wood / metal / plant scraps left on the ground for the match. */
-  function drawGroundDebris(game) {
+  function drawGroundDebris(game, fogAlpha = 1) {
     const pieces = game.groundDebris || game.armorDebris || [];
-    for (const piece of pieces) drawGroundDebrisPiece(piece);
+    for (const piece of pieces) drawGroundDebrisPiece(piece, fogAlpha);
   }
 
   function drawBullets(game) {
