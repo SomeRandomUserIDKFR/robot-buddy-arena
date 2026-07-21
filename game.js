@@ -134,6 +134,7 @@ function makeGame(mode) {
     effects: [],
     groundDebris: [],
     reconquerQueue: [],
+    forgeCasts: [],
     beamReveals: [],
     pings: [],
     camera: { x: 0, y: 0 },

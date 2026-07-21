@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import {
-  buildPropJigsaw, NON_ARMOR_DEBRIS_LIFE, PROP_DEBRIS_COLORS, restoreMapProp,
-  spawnPropDebris, tickGroundDebris, tryReconquerAtSpawn
+  buildPropJigsaw, forgeCastColor, FORGE_PHASE_DURATIONS, NON_ARMOR_DEBRIS_LIFE,
+  PROP_DEBRIS_COLORS, restoreMapProp, spawnPropDebris, tickGroundDebris,
+  tryReconquerAtSpawn
 } from "./debris.js";
 import { createMapRuntime, damageProp } from "./maps.js";
+import { createPowerCrate } from "./powerups.js";
 import { normalizeDebrisDespawnStyle } from "./settings.js";
 
 assert.equal(normalizeDebrisDespawnStyle("decimate"), "decimate");
@@ -151,6 +153,90 @@ assert.equal(normalizeDebrisDespawnStyle("nope"), "fade");
   for (let i = 0; i < 200; i++) tickGroundDebris(game, 1 / 60);
   assert.equal(game.groundDebris.length, 1);
   assert.equal(game.groundDebris[0].despawnMode, null);
+}
+
+// Metal reconquer: furnace ingest → cast → cool restores the prop.
+{
+  const yard = createMapRuntime("yard");
+  const barrel = yard.props.find((p) => p.kind === "barrel");
+  assert.ok(barrel, "yard has a metal barrel");
+  const game = {
+    elapsed: 0,
+    settings: { visual: { debrisDespawnStyle: "reconquer" } },
+    platforms: yard.platforms,
+    props: yard.props,
+    groundDebris: [],
+    effects: [],
+    reconquerQueue: [],
+    forgeCasts: [],
+    powerCrates: []
+  };
+  damageProp(barrel, barrel.hp, game, barrel.x + 5, barrel.y + 5);
+  assert.equal(barrel.destroyed, true);
+  assert.ok(game.groundDebris.every((p) => p.material === "metal"));
+  for (const piece of game.groundDebris) piece.life = 0.01;
+  tickGroundDebris(game, 0.02);
+  assert.ok(game.reconquerQueue.length >= 1);
+
+  const used = tryReconquerAtSpawn(game, { x: 10, y: 10, w: 40, h: 40 }, {
+    preferPowerCrate: false
+  });
+  assert.equal(used, true);
+  assert.ok(game.forgeCasts.length >= 1, "metal starts a forge cast");
+  assert.ok(game.groundDebris.every((p) => p.despawnMode === "forge-ingest"));
+
+  const totalForge = Object.values(FORGE_PHASE_DURATIONS).reduce((a, b) => a + b, 0);
+  for (let i = 0; i < Math.ceil(totalForge * 60) + 10; i++) {
+    game.elapsed += 1 / 60;
+    tickGroundDebris(game, 1 / 60);
+  }
+  assert.equal(barrel.destroyed, false, "barrel recast after cool");
+  assert.equal(game.forgeCasts.length, 0);
+  assert.equal(game.groundDebris.length, 0);
+}
+
+// Power-crate metal forge hides the crate until cool finishes.
+{
+  const scrapCrate = createPowerCrate({ x: 400, y: 500 }, "yard", "industrial", "pc-forge-scrap");
+  const game = {
+    elapsed: 0,
+    settings: { visual: { debrisDespawnStyle: "reconquer" } },
+    platforms: [{ x: 0, y: 500, w: 2000, h: 40 }],
+    props: [],
+    groundDebris: [],
+    effects: [],
+    reconquerQueue: [],
+    forgeCasts: [],
+    powerCrates: []
+  };
+  spawnPropDebris(game, scrapCrate, scrapCrate.x + 20, scrapCrate.y + 20, {
+    forceKind: "powerCrate",
+    sourceType: "powerCrate"
+  });
+  assert.ok(game.groundDebris.every((p) => p.material === "metal"));
+  for (const piece of game.groundDebris) piece.life = 0.01;
+  tickGroundDebris(game, 0.02);
+  assert.ok(game.reconquerQueue.some((e) => e.sourceType === "powerCrate"));
+
+  const spawned = createPowerCrate({ x: 800, y: 500 }, "yard", "industrial", "pc-forge-spawn");
+  game.powerCrates.push(spawned);
+  const used = tryReconquerAtSpawn(game, spawned, { preferPowerCrate: true });
+  assert.equal(used, false, "power-crate forge does not consume prop restore");
+  assert.equal(spawned.forgeHidden, true);
+  assert.equal(game.forgeCasts.length, 1);
+  assert.ok(game.groundDebris.every((p) => p.despawnMode === "forge-ingest"));
+
+  const hot = forgeCastColor({ phase: "cool", cool: 0.1, finalColor: "#6a7078" });
+  const cooled = forgeCastColor({ phase: "cool", cool: 1, finalColor: "#6a7078" });
+  assert.notEqual(hot, cooled);
+  assert.equal(cooled, "#6a7078");
+
+  const totalForge = Object.values(FORGE_PHASE_DURATIONS).reduce((a, b) => a + b, 0);
+  for (let i = 0; i < Math.ceil(totalForge * 60) + 10; i++) {
+    tickGroundDebris(game, 1 / 60);
+  }
+  assert.equal(spawned.forgeHidden, false, "crate revealed after cool");
+  assert.equal(game.forgeCasts.length, 0);
 }
 
 assert.equal(restoreMapProp(null), false);

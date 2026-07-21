@@ -302,7 +302,7 @@ export function alivePowerCrates(game) {
 }
 
 export function powerCrateBlockers(game) {
-  return alivePowerCrates(game).filter((c) => c.blocksProjectiles);
+  return alivePowerCrates(game).filter((c) => c.blocksProjectiles && !c.forgeHidden);
 }
 
 /**
@@ -413,7 +413,7 @@ export function awardPowerup(fighter, typeId, game) {
  * @returns {boolean} whether the hit was absorbed (projectile should stop)
  */
 export function damagePowerCrate(crate, amount, attacker, game, impactX, impactY) {
-  if (!crate || crate.destroyed || !crate.breakable) return false;
+  if (!crate || crate.destroyed || crate.forgeHidden || !crate.breakable) return false;
   if (attacker) crate.lastDamager = attacker;
   crate.hp = Math.max(0, (crate.hp ?? crate.maxHp ?? 1) - amount);
   crate.hitFlash = .14;

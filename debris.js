@@ -10,6 +10,18 @@ export const NON_ARMOR_DEBRIS_LIFE = 14;
 export const DEBRIS_DESPAWN_DURATION = 1.05;
 export const RECONQUER_DURATION = 1.45;
 
+/** Metal reconquer: furnace arrives → ingest scraps → cast molten square → cool. */
+export const FORGE_PHASE_DURATIONS = Object.freeze({
+  arrive: 0.45,
+  ingest: 0.95,
+  melt: 0.4,
+  cast: 0.55,
+  cool: 1.05
+});
+
+const MOLTEN_COLOR = "#ff4a00";
+const MOLTEN_HOT = "#ffe14a";
+
 function debrisLandables(game) {
   const platforms = game?.platforms?.length ? game.platforms : [];
   const solids = (game?.props || []).filter(
@@ -429,9 +441,69 @@ export function restoreMapProp(prop) {
   return true;
 }
 
+function groupIsMetal(group) {
+  return group.length > 0 && group.every((p) => p.material === "metal");
+}
+
+function finalMetalColor(entry, group, spot) {
+  if (spot?.look?.metal) return spot.look.metal;
+  if (entry.sourceKind === "powerCrate") {
+    return PROP_DEBRIS_COLORS.powerCrate.fill;
+  }
+  const paint = PROP_DEBRIS_COLORS[entry.sourceKind];
+  return paint?.fill || group[0]?.color || "#6a7888";
+}
+
+/**
+ * Start the furnace cast for metal scraps (power crates / pipes / barrels…).
+ * Wood/plant still use the jigsaw reconquer path.
+ */
+export function beginMetalForgeCast(game, {
+  sourceId, sourceType, sourceKind, castX, castY, castW, castH, finalColor, restore, hideTarget = null
+}) {
+  game.forgeCasts ||= [];
+  const mouthX = castX - Math.max(36, castW) * 0.75;
+  const mouthY = castY - Math.max(28, castH) * 0.35;
+  const forge = {
+    sourceId,
+    sourceType,
+    sourceKind,
+    castX,
+    castY,
+    castW,
+    castH,
+    finalColor,
+    restore,
+    hideTarget,
+    phase: "arrive",
+    t: 0,
+    furnaceX: mouthX - 10,
+    furnaceY: mouthY + 18,
+    mouthX,
+    mouthY,
+    molten: 0,
+    cool: 0
+  };
+  game.forgeCasts.push(forge);
+  if (hideTarget) hideTarget.forgeHidden = true;
+
+  const group = piecesForSource(game, sourceId);
+  for (const piece of group) {
+    piece.despawnMode = "forge-ingest";
+    piece.despawnT = 0;
+    piece.grounded = false;
+    piece.homeX = mouthX;
+    piece.homeY = mouthY;
+    piece.scale = 1;
+    piece.alpha = 1;
+  }
+  return forge;
+}
+
 /**
  * Called when the match spawn system places (or is about to place) a new object.
  * Reconquer style only rebuilds then, at that spawn opportunity / a random slot.
+ * Metal → furnace cast; wood/plant → jigsaw assemble.
  * @returns {boolean} whether a reconquer consumed this spawn opportunity
  */
 export function tryReconquerAtSpawn(game, spot, options = {}) {
@@ -449,24 +521,36 @@ export function tryReconquerAtSpawn(game, spot, options = {}) {
 
   let homeX;
   let homeY;
+  let castW = 40;
+  let castH = 40;
   let restore = null;
+  let hideTarget = null;
+  let restoreProp = null;
 
   if (entry.sourceType === "powerCrate") {
     if (!spot) return false;
-    homeX = spot.x + (spot.w || 40) / 2;
-    homeY = (spot.y ?? (spot.yBottom - 40)) + 20;
-    // Caller still spawns the crate; we just animate debris home and clear.
-    restore = () => removeSourcePieces(game, entry.sourceId);
+    castW = spot.w || 40;
+    castH = spot.h || 40;
+    homeX = spot.x + castW / 2;
+    homeY = (spot.y ?? ((spot.yBottom || 0) - castH)) + castH / 2;
+    // Caller already spawned the crate; hide until the forge cools.
+    hideTarget = spot;
+    restore = () => {
+      hideTarget.forgeHidden = false;
+      removeSourcePieces(game, entry.sourceId);
+    };
   } else {
     const candidates = (game.props || []).filter(
       (prop) => prop.destroyed && prop.kind === entry.sourceKind
     );
     if (!candidates.length) return false;
-    const prop = candidates[Math.floor(Math.random() * candidates.length) % candidates.length];
-    homeX = prop.x + prop.w / 2;
-    homeY = prop.y + prop.h / 2;
+    restoreProp = candidates[Math.floor(Math.random() * candidates.length) % candidates.length];
+    castW = restoreProp.w;
+    castH = restoreProp.h;
+    homeX = restoreProp.x + castW / 2;
+    homeY = restoreProp.y + castH / 2;
     restore = () => {
-      restoreMapProp(prop);
+      restoreMapProp(restoreProp);
       removeSourcePieces(game, entry.sourceId);
     };
   }
@@ -477,20 +561,127 @@ export function tryReconquerAtSpawn(game, spot, options = {}) {
     return false;
   }
 
+  entry.ready = false;
+  entry.homing = true;
+
+  if (groupIsMetal(group)) {
+    const colorSpot = entry.sourceType === "powerCrate" ? spot : restoreProp;
+    beginMetalForgeCast(game, {
+      sourceId: entry.sourceId,
+      sourceType: entry.sourceType,
+      sourceKind: entry.sourceKind,
+      castX: homeX,
+      castY: homeY,
+      castW,
+      castH,
+      finalColor: finalMetalColor(entry, group, colorSpot),
+      restore,
+      hideTarget
+    });
+    return entry.sourceType === "prop";
+  }
+
   for (const piece of group) {
     piece.despawnMode = "reconquer-home";
     piece.despawnT = 0;
     piece.grounded = false;
     piece.scale = 1;
     piece.alpha = 1;
-    // Object center; each tile still offsets by its jigsaw homeLx/homeLy.
     piece.homeX = homeX;
     piece.homeY = homeY;
     piece.homeRestore = restore;
   }
-  entry.ready = false;
-  entry.homing = true;
   return entry.sourceType === "prop";
+}
+
+function advanceForgePhase(forge) {
+  const order = ["arrive", "ingest", "melt", "cast", "cool"];
+  const at = order.indexOf(forge.phase);
+  if (at < 0 || at >= order.length - 1) {
+    forge.phase = "done";
+    return;
+  }
+  forge.phase = order[at + 1];
+  forge.t = 0;
+}
+
+/** Tick furnace cast animations for metal reconquer. */
+export function tickForgeCasts(game, dt) {
+  const casts = game?.forgeCasts;
+  if (!casts?.length) return;
+  const keep = [];
+  for (const forge of casts) {
+    const dur = FORGE_PHASE_DURATIONS[forge.phase] || 0.5;
+    forge.t += dt;
+
+    if (forge.phase === "ingest") {
+      // Pieces are steered in tickGroundDebris; once time is up, swallow leftovers.
+      if (forge.t >= dur) {
+        for (const piece of piecesForSource(game, forge.sourceId)) {
+          piece.despawnMode = "gone";
+          piece.alpha = 0;
+        }
+        removeSourcePieces(game, forge.sourceId);
+        advanceForgePhase(forge);
+      }
+    } else if (forge.phase === "melt") {
+      if (forge.t >= dur) advanceForgePhase(forge);
+    } else if (forge.phase === "cast") {
+      forge.molten = Math.min(1, forge.t / dur);
+      if (forge.t >= dur) {
+        forge.molten = 1;
+        advanceForgePhase(forge);
+      }
+    } else if (forge.phase === "cool") {
+      forge.cool = Math.min(1, forge.t / dur);
+      if (forge.t >= dur) {
+        forge.cool = 1;
+        if (typeof forge.restore === "function") forge.restore();
+        forge.restore = null;
+        game.reconquerQueue = (game.reconquerQueue || []).filter(
+          (entry) => entry.sourceId !== forge.sourceId
+        );
+        forge.phase = "done";
+      }
+    } else if (forge.phase === "arrive") {
+      if (forge.t >= dur) advanceForgePhase(forge);
+    }
+
+    if (forge.phase !== "done") keep.push(forge);
+  }
+  game.forgeCasts = keep;
+}
+
+/** Mix neon molten orange into the final metal tint by cool progress 0→1. */
+export function forgeCastColor(forge) {
+  const cool = forge.cool || 0;
+  if (forge.phase === "cast" || (forge.phase === "cool" && cool < 0.02)) {
+    return MOLTEN_HOT;
+  }
+  if (forge.phase !== "cool") return MOLTEN_COLOR;
+  // Neon orange → hot amber → final metal.
+  if (cool < 0.45) {
+    return mixHex(MOLTEN_HOT, MOLTEN_COLOR, cool / 0.45);
+  }
+  return mixHex(MOLTEN_COLOR, forge.finalColor || "#6a7078", (cool - 0.45) / 0.55);
+}
+
+function mixHex(a, b, t) {
+  const pa = parseHex(a);
+  const pb = parseHex(b);
+  if (!pa || !pb) return b || a;
+  const u = Math.max(0, Math.min(1, t));
+  const r = Math.round(pa.r + (pb.r - pa.r) * u);
+  const g = Math.round(pa.g + (pb.g - pa.g) * u);
+  const bl = Math.round(pa.b + (pb.b - pa.b) * u);
+  return `#${[r, g, bl].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function parseHex(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
 function finishReconquerHome(game, piece) {
@@ -511,7 +702,11 @@ function finishReconquerHome(game, piece) {
 /** Integrate ground debris physics + despawn styles. */
 export function tickGroundDebris(game, dt) {
   const pieces = game?.groundDebris;
-  if (!pieces?.length) return;
+  if (!pieces?.length) {
+    // Forge casts can outlive their scraps (molten cool after ingest).
+    tickForgeCasts(game, dt);
+    return;
+  }
   const surfaces = debrisLandables(game);
   const style = despawnStyle(game);
   const keep = [];
@@ -531,6 +726,22 @@ export function tickGroundDebris(game, dt) {
       // Idle until a spawn opportunity claims this source.
       piece.alpha = 0.55 + Math.sin((game.elapsed || 0) * 4 + (piece.x || 0) * 0.01) * 0.2;
       piece.scale = 1;
+    } else if (piece.despawnMode === "forge-ingest") {
+      // Metal scraps get sucked into the furnace mouth.
+      const tx = piece.homeX;
+      const ty = piece.homeY;
+      piece.despawnT = Math.min(1, piece.despawnT + dt / FORGE_PHASE_DURATIONS.ingest);
+      piece.x += (tx - piece.x) * Math.min(1, dt * 7);
+      piece.y += (ty - piece.y) * Math.min(1, dt * 7);
+      piece.rot += piece.spin * dt;
+      piece.spin *= Math.max(0, 1 - dt * 3);
+      piece.scale = Math.max(0.2, 1 - piece.despawnT * 0.75);
+      piece.alpha = Math.max(0.15, 1 - piece.despawnT * 0.85);
+      if (Math.hypot(tx - piece.x, ty - piece.y) < 8 || piece.despawnT >= 1) {
+        continue; // swallowed
+      }
+      keep.push(piece);
+      continue;
     } else if (piece.despawnMode === "reconquer-home") {
       piece.despawnT = Math.min(1, piece.despawnT + dt / RECONQUER_DURATION);
       const t = piece.despawnT;
@@ -636,6 +847,7 @@ export function tickGroundDebris(game, dt) {
   }
 
   game.groundDebris = keep;
+  tickForgeCasts(game, dt);
 }
 
 /** @deprecated alias */

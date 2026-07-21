@@ -1,4 +1,5 @@
 import { CEILING, SIGHT, SIZE, WORLD } from "./config.js";
+import { FORGE_PHASE_DURATIONS, forgeCastColor } from "./debris.js";
 import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID } from "./equipment.js";
 import { normalizeModularMorphStyle } from "./settings.js";
 import { platformsOf } from "./maps.js";
@@ -630,6 +631,7 @@ export function createRenderer(canvas) {
     drawPlatforms(game, .28);
     drawProps(game, .35, false);
     drawGroundDebris(game, .35);
+    drawForgeCasts(game, .35);
     drawCeiling(game, .35);
     const player = game.fighters[0];
     const allies = game.fighters.filter((fighter) => !fighter.dead && fighter.team === player.team);
@@ -662,6 +664,7 @@ export function createRenderer(canvas) {
     drawPlatforms(game, 1);
     drawProps(game, 1, false);
     drawGroundDebris(game, 1);
+    drawForgeCasts(game, 1);
     drawPowerCrates(game, player);
     drawCeiling(game, 1);
     context.restore();
@@ -1116,10 +1119,110 @@ export function createRenderer(canvas) {
 
   function drawPowerCrates(game, player) {
     for (const crate of game.powerCrates || []) {
-      if (crate.destroyed) continue;
+      if (crate.destroyed || crate.forgeHidden) continue;
       if (!crateVisibleToTeam(game, player, crate)) continue;
       drawMetalPowerCrate(crate);
     }
+  }
+
+  /** Furnace arrives, ingests metal scraps, casts a molten square, then cools. */
+  function drawForgeCasts(game, fogAlpha = 1) {
+    for (const forge of game.forgeCasts || []) {
+      drawForgeCast(forge, fogAlpha);
+    }
+  }
+
+  function drawForgeCast(forge, fogAlpha) {
+    const arriveDur = FORGE_PHASE_DURATIONS.arrive;
+    const coolDur = FORGE_PHASE_DURATIONS.cool;
+    const arriveU = forge.phase === "arrive"
+      ? Math.min(1, forge.t / arriveDur)
+      : 1;
+    const easeIn = 1 - (1 - arriveU) * (1 - arriveU);
+    let furnaceAlpha = fogAlpha;
+    if (forge.phase === "arrive") furnaceAlpha *= easeIn;
+    if (forge.phase === "cool") {
+      const fade = Math.min(1, forge.t / coolDur);
+      furnaceAlpha *= Math.max(0, 1 - fade * 0.95);
+    }
+
+    const mouthX = forge.mouthX;
+    const mouthY = forge.mouthY;
+    const furnaceW = 52;
+    const furnaceH = 44;
+    const slide = (1 - easeIn) * 70;
+    const fx = forge.furnaceX - furnaceW - slide;
+    const fy = forge.furnaceY - furnaceH * 0.55;
+
+    context.save();
+    context.globalAlpha = Math.max(0, Math.min(1, furnaceAlpha));
+
+    // Furnace body
+    context.fillStyle = "#2a3038";
+    context.fillRect(fx, fy, furnaceW, furnaceH);
+    context.fillStyle = "#1a2028";
+    context.fillRect(fx + 4, fy + 6, furnaceW - 8, furnaceH - 12);
+    // Chimney stack
+    context.fillStyle = "#3a4450";
+    context.fillRect(fx + furnaceW - 16, fy - 16, 10, 18);
+    context.fillStyle = "#1e242c";
+    context.fillRect(fx + furnaceW - 14, fy - 14, 6, 10);
+    // Mouth
+    const glow = forge.phase === "ingest" || forge.phase === "melt" || forge.phase === "cast"
+      ? 1
+      : forge.phase === "cool" ? Math.max(0.2, 1 - (forge.cool || 0))
+        : 0.35 + easeIn * 0.35;
+    context.fillStyle = mixHexColors("#ff4a00", "#ffe14a", Math.min(1, glow));
+    context.globalAlpha = Math.max(0, Math.min(1, furnaceAlpha * (0.55 + glow * 0.45)));
+    context.fillRect(fx + furnaceW - 10, fy + 12, 14, 20);
+    context.globalAlpha = Math.max(0, Math.min(1, furnaceAlpha));
+    // Rivets
+    context.fillStyle = "#5a6670";
+    for (const [rx, ry] of [[6, 8], [furnaceW - 18, 8], [6, furnaceH - 12], [furnaceW - 18, furnaceH - 12]]) {
+      context.fillRect(fx + rx, fy + ry, 3, 3);
+    }
+
+    // Pour stream during melt / early cast
+    if (forge.phase === "melt" || (forge.phase === "cast" && (forge.molten || 0) < 0.55)) {
+      const pourT = forge.phase === "melt"
+        ? Math.min(1, forge.t / FORGE_PHASE_DURATIONS.melt)
+        : 1;
+      context.strokeStyle = "#ffe14a";
+      context.globalAlpha = Math.max(0, Math.min(1, furnaceAlpha * 0.85));
+      context.lineWidth = 3 + pourT * 2;
+      context.beginPath();
+      context.moveTo(mouthX, mouthY);
+      context.quadraticCurveTo(
+        mouthX + (forge.castX - mouthX) * 0.45,
+        mouthY - 18,
+        forge.castX,
+        forge.castY - forge.castH * 0.5 * Math.min(1, forge.molten || pourT)
+      );
+      context.stroke();
+    }
+
+    // Molten / cooling cast rectangle (crate / pipe / barrel silhouette)
+    if (forge.phase === "cast" || forge.phase === "cool") {
+      const fill = forge.phase === "cast" ? Math.max(0.12, forge.molten || 0) : 1;
+      const w = forge.castW * fill;
+      const h = forge.castH * fill;
+      const x = forge.castX - w / 2;
+      const y = forge.castY - h / 2;
+      const color = forgeCastColor(forge);
+      context.globalAlpha = Math.max(0, Math.min(1, fogAlpha));
+      context.fillStyle = color;
+      context.fillRect(x, y, w, h);
+      context.strokeStyle = mixHexColors(color, "#fff4c0", forge.phase === "cool" ? 0.15 : 0.45);
+      context.lineWidth = 2;
+      context.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      if (forge.phase === "cast" || (forge.cool || 0) < 0.55) {
+        context.strokeStyle = "rgba(255, 220, 80, 0.55)";
+        context.lineWidth = 1.5;
+        context.strokeRect(x + 4, y + 4, Math.max(0, w - 8), Math.max(0, h - 8));
+      }
+    }
+
+    context.restore();
   }
 
   function drawMetalPowerCrate(crate) {

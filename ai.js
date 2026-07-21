@@ -600,7 +600,7 @@ export function pickNearestVisibleCrate(game, fighter) {
   let best = null;
   let bestD = Infinity;
   for (const crate of game.powerCrates || []) {
-    if (crate.destroyed || !crateVisibleToTeam(game, fighter, crate)) continue;
+    if (crate.destroyed || crate.forgeHidden || !crateVisibleToTeam(game, fighter, crate)) continue;
     const d = dist(fighter, crate);
     if (d < bestD) {
       best = crate;
@@ -628,7 +628,7 @@ export function pickEscapeCrateHop(
   let best = null;
   let bestScore = Infinity;
   for (const crate of game.powerCrates || []) {
-    if (crate.destroyed || !crateVisibleToTeam(game, fighter, crate)) continue;
+    if (crate.destroyed || crate.forgeHidden || !crateVisibleToTeam(game, fighter, crate)) continue;
     const cx = crate.x + (crate.w || 0) / 2;
     const dx = cx - fx;
     const d = dist(fighter, crate);
