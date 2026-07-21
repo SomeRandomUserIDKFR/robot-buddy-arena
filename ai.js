@@ -3,7 +3,9 @@ import {
 } from "./config.js";
 import { platformsOf } from "./maps.js";
 import { directiveStrength } from "./coaching.js";
-import { beginModularMorph, isModularWeapon } from "./equipment.js";
+import {
+  beginModularMorph, beginRetractableMorph, hasRetractableArmor, isModularWeapon
+} from "./equipment.js";
 import {
   ensureLearningProfile, evidenceReliability, evidenceState, mimicBlendFactor,
   precisionAimErrorScale
@@ -424,6 +426,91 @@ export function updateAiShield(fighter, state, game, visible, target, aiId, styl
   fighter.shieldRaised = true;
   state.shieldHoldUntil = now + hold;
   state.attack = false;
+}
+
+/** Minimum seconds between AI retractable deploy/retract morphs. */
+export const RETRACTABLE_AI_COOLDOWN = .85;
+
+/**
+ * Decide whether plates should be deployed right now.
+ * Deploy under fire / when core is hurt in a fight; fold for speed when safe
+ * or escaping without hard pressure. Empty pools cannot deploy.
+ */
+export function wantRetractableDeployed(fighter, state, game, visible, target) {
+  if (!hasRetractableArmor(fighter) || fighter.dead) return false;
+  if ((fighter.retractableHp || 0) <= 0) return false;
+
+  const threatFoe = target && Array.isArray(visible) && visible.includes(target)
+    ? target
+    : null;
+  const shieldInfo = evaluateShieldThreat(fighter, threatFoe, game, visible || []);
+  const dodgeInfo = evaluateDodgeThreat(fighter, threatFoe, game, visible || []);
+  const underFire = dodgeInfo.severity >= 1
+    || shieldInfo.severity >= 1
+    || shieldInfo.incoming;
+  const hardPressure = dodgeInfo.severity >= 2 || shieldInfo.severity >= 2;
+  const escaping = !!state?.escape;
+
+  // Hard pressure or incoming shots: plates on.
+  if (hardPressure || underFire) return true;
+  // Escape wants mobility unless still taking heavy fire (handled above).
+  if (escaping) return false;
+  // No eyes on a foe and quiet: fold for speed.
+  if (!threatFoe) return false;
+
+  const coreMax = Math.max(1, fighter.coreMaxHp || fighter.maxHp || 1);
+  const coreRatio = Math.max(0, fighter.coreHp ?? fighter.hp ?? 0) / coreMax;
+  const armorRatio = (fighter.retractableHp || 0)
+    / Math.max(1, fighter.retractableMax || 1);
+
+  // Visible fight: deploy when core is dented or armor still has real buffer.
+  if (coreRatio < .72) return true;
+  if (armorRatio > .35 && coreRatio < .92) return true;
+  // Thin leftover pool while not shot at — prefer speed.
+  if (armorRatio < .2) return false;
+  return false;
+}
+
+/**
+ * Buddy/enemy retractable armor policy: deploy under threat, retract for speed
+ * when safe or escaping. Respects morph lockout and a short toggle cooldown.
+ * Green AIs sometimes forget to deploy or leave plates parked.
+ */
+export function updateAiRetractableArmor(fighter, state, game, visible, target, aiId) {
+  if (!hasRetractableArmor(fighter) || fighter.dead || fighter.retractableMorphing) {
+    return;
+  }
+  const now = game.elapsed || 0;
+  if ((state.retractableCooldownUntil || 0) > now) return;
+
+  let want = wantRetractableDeployed(fighter, state, game, visible, target);
+
+  // Untrained buddies and green enemies: miss mild deploys / park plates.
+  if (fighter.buddy) {
+    const skill = clamp(Number(state.shieldCompetence) || 0, 0, 1);
+    if (want && !fighter.retractableDeployed && Math.random() > lerp(.55, 1, skill)) {
+      want = false;
+    } else if (
+      !want && fighter.retractableDeployed && Math.random() > lerp(.5, 1, skill)
+    ) {
+      want = true;
+    }
+  } else if (isGreenEnemyAi(aiId)) {
+    const skill = aiId === "recruit"
+      ? ENEMY_GREEN.recruitShieldSkill
+      : ENEMY_GREEN.shieldSkill;
+    if (want && !fighter.retractableDeployed && Math.random() > lerp(.5, 1, skill)) {
+      want = false;
+    } else if (
+      !want && fighter.retractableDeployed && Math.random() > lerp(.45, 1, skill)
+    ) {
+      want = true;
+    }
+  }
+
+  if (!!want === !!fighter.retractableDeployed) return;
+  if (!beginRetractableMorph(fighter, want)) return;
+  state.retractableCooldownUntil = now + RETRACTABLE_AI_COOLDOWN;
 }
 
 /**
@@ -1209,6 +1296,9 @@ export function updateAI(fighter, dt, game, profile) {
   state.shieldStyleBias = shieldBias;
   state.shieldCompetence = fighter.buddy ? shieldKnowledge : 1;
   updateAiShield(fighter, state, game, visible, target, fighter.ai || "balanced", shieldBias);
+  updateAiRetractableArmor(
+    fighter, state, game, visible, target, fighter.ai || "balanced"
+  );
   stepAimSmoothing(fighter, dt, turnRate);
   return state;
 }
