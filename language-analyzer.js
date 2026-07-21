@@ -9,6 +9,12 @@ import {
   classifyBuddyMessage, loadGameFaqPack, matchGameFaq, getGameFaqPack, faqEntryCount,
   FAQ_TOPIC_CHIPS, topicChipPrompt
 } from "./game-faq.js";
+import {
+  detectForceCode, ensureKnowledgePacks, retrieveKnowledge
+} from "./knowledge-retrieve.js";
+import {
+  generateBuddyBlurb, generatorStatus, initializeLanguageGenerator
+} from "./language-generator.js";
 
 export const ANALYZER_STATES = Object.freeze({
   LOADING: "loading",
@@ -34,6 +40,7 @@ export function analyzerStatus() {
   const faqNote = faqReady
     ? (faqSemanticReady ? " · Q&A ready" : " · Q&A keywords")
     : "";
+  const coachNote = generatorStatus().labelNote || "";
   const base = state === ANALYZER_STATES.READY
     ? "Local language analyzer ready"
     : state === ANALYZER_STATES.LOADING
@@ -41,14 +48,15 @@ export function analyzerStatus() {
       : "Basic understanding active";
   return {
     state,
-    label: `${base}${faqNote}`,
+    label: `${base}${faqNote}${coachNote}`,
     modelId: state === ANALYZER_STATES.READY ? MODEL_ID : null,
     loadMs: lastLoadMs,
     inferenceMs: lastInferenceMs,
     error: lastError,
     faqReady,
     faqSemanticReady,
-    faqEntries: faqEntryCount()
+    faqEntries: faqEntryCount(),
+    generator: generatorStatus()
   };
 }
 
@@ -139,6 +147,9 @@ async function ensureFaqPack() {
  */
 export async function initializeLanguageAnalyzer({ forceBasic = false } = {}) {
   await ensureFaqPack();
+  await ensureKnowledgePacks();
+  // Optional Gemma probe — never blocks BASIC/MiniLM paths.
+  initializeLanguageGenerator().catch(() => {});
   if (forceBasic) {
     detachWorker("forced basic");
     state = ANALYZER_STATES.BASIC;
@@ -264,12 +275,35 @@ export async function analyzeBuddyMessage(text, learnedVocabulary = [], options 
 
   if (classification.route === "question") {
     const pack = getGameFaqPack();
+    await ensureKnowledgePacks();
     const semantic = await faqSemanticScoresFor(effectiveText);
-    const match = matchGameFaq(effectiveText, pack, semantic);
+    const forceCode = detectForceCode(effectiveText);
+    const retrieval = retrieveKnowledge(effectiveText, {
+      forceCode,
+      faqSemanticScores: semantic
+    });
+    const match = retrieval.faqMatch?.type === "match"
+      ? retrieval.faqMatch
+      : matchGameFaq(effectiveText, pack, semantic);
+    let generatedBlurb = null;
+    if (
+      retrieval.path === "deep"
+      || retrieval.path === "code"
+      || retrieval.path === "code-fallback"
+    ) {
+      generatedBlurb = await generateBuddyBlurb(
+        retrieval.query || effectiveText,
+        retrieval.hits,
+        { codePrefixed: retrieval.path !== "deep" }
+      );
+    }
     return {
       kind: "question",
       classification,
       match,
+      retrieval,
+      forceCode,
+      generatedBlurb,
       analyzer: state,
       semantic: Boolean(semantic),
       faqReady: Boolean(pack),

@@ -1,0 +1,857 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-21T22:18:09.140Z",
+  "allowlist": [
+    "config.js",
+    "equipment.js",
+    "powerups.js",
+    "conquest.js",
+    "maps.js",
+    "perks.js",
+    "power.js"
+  ],
+  "contentHash": "1d33c8b416edaab4",
+  "entries": [
+    {
+      "id": "code-config-ceiling",
+      "source": "config.js",
+      "name": "CEILING",
+      "topic": "jetpack",
+      "aliases": [
+        "ceiling"
+      ],
+      "text": "config.js: CEILING = 12"
+    },
+    {
+      "id": "code-config-jet_burn_time",
+      "source": "config.js",
+      "name": "JET_BURN_TIME",
+      "topic": "jetpack",
+      "aliases": [
+        "jet_burn_time",
+        "jet",
+        "burn",
+        "time",
+        "jet burn time"
+      ],
+      "text": "config.js: JET_BURN_TIME = 3"
+    },
+    {
+      "id": "code-config-jet_recharge_time",
+      "source": "config.js",
+      "name": "JET_RECHARGE_TIME",
+      "topic": "jetpack",
+      "aliases": [
+        "jet_recharge_time",
+        "jet",
+        "recharge",
+        "time",
+        "jet recharge time"
+      ],
+      "text": "config.js: JET_RECHARGE_TIME = 5"
+    },
+    {
+      "id": "code-config-jet_restart_fuel",
+      "source": "config.js",
+      "name": "JET_RESTART_FUEL",
+      "topic": "jetpack",
+      "aliases": [
+        "jet_restart_fuel",
+        "jet",
+        "restart",
+        "fuel",
+        "jet restart fuel"
+      ],
+      "text": "config.js: JET_RESTART_FUEL = .2"
+    },
+    {
+      "id": "code-config-jet_thrust",
+      "source": "config.js",
+      "name": "JET_THRUST",
+      "topic": "jetpack",
+      "aliases": [
+        "jet_thrust",
+        "jet",
+        "thrust",
+        "jet thrust"
+      ],
+      "text": "config.js: JET_THRUST = 4000"
+    },
+    {
+      "id": "code-config-mimic_blend",
+      "source": "config.js",
+      "name": "MIMIC_BLEND",
+      "topic": "mind",
+      "aliases": [
+        "mimic_blend",
+        "mimic",
+        "blend",
+        "mimic blend"
+      ],
+      "text": "config.js: MIMIC_BLEND = { slight: .25, quite: .55, full: .85 }"
+    },
+    {
+      "id": "code-config-sight",
+      "source": "config.js",
+      "name": "SIGHT",
+      "topic": "vision",
+      "aliases": [
+        "sight"
+      ],
+      "text": "config.js: SIGHT = 820"
+    },
+    {
+      "id": "code-config-storage_key",
+      "source": "config.js",
+      "name": "STORAGE_KEY",
+      "topic": "config",
+      "aliases": [
+        "storage_key",
+        "storage",
+        "key",
+        "storage key"
+      ],
+      "text": "config.js: STORAGE_KEY = \"robotBuddyArena.v1\""
+    },
+    {
+      "id": "code-conquest-league_bands",
+      "source": "conquest.js",
+      "name": "LEAGUE_BANDS",
+      "topic": "conquest",
+      "aliases": [
+        "league_bands",
+        "league",
+        "bands",
+        "league bands"
+      ],
+      "text": "conquest.js: LEAGUE_BANDS = Object.freeze([ { id: \"rookie\", name: \"Rookie\", min: 0, max: 150, rewardTier: \"rookie\", trainerAi: \"rookie\", followerAi: \"recruit\", training: \"Green\" }, { id: \"contender\", name: …"
+    },
+    {
+      "id": "code-conquest-leagues",
+      "source": "conquest.js",
+      "name": "LEAGUE_BANDS",
+      "topic": "conquest",
+      "aliases": [
+        "league",
+        "ranking",
+        "rookie",
+        "veteran",
+        "elite",
+        "apex"
+      ],
+      "text": "conquest.js: Ranking leagues are Rookie (0–150); Contender (150–300); Veteran (300–500); Challenger (500–750); Elite (750–1000); Apex (1000–∞)."
+    },
+    {
+      "id": "code-conquest-reroll_cyber_cost",
+      "source": "conquest.js",
+      "name": "REROLL_CYBER_COST",
+      "topic": "conquest",
+      "aliases": [
+        "reroll_cyber_cost",
+        "reroll",
+        "cyber",
+        "cost",
+        "reroll cyber cost"
+      ],
+      "text": "conquest.js: REROLL_CYBER_COST = 10"
+    },
+    {
+      "id": "code-equipment-conquest_rewards",
+      "source": "equipment.js",
+      "name": "CONQUEST_REWARDS",
+      "topic": "conquest",
+      "aliases": [
+        "conquest_rewards",
+        "conquest",
+        "rewards",
+        "conquest rewards"
+      ],
+      "text": "equipment.js: CONQUEST_REWARDS = { rookie: 35, veteran: 60, elite: 90 }"
+    },
+    {
+      "id": "code-equipment-starting_cyber",
+      "source": "equipment.js",
+      "name": "STARTING_CYBER",
+      "topic": "conquest",
+      "aliases": [
+        "starting_cyber",
+        "starting",
+        "cyber",
+        "starting cyber"
+      ],
+      "text": "equipment.js: STARTING_CYBER = 120"
+    },
+    {
+      "id": "code-maps-catalog",
+      "source": "maps.js",
+      "name": "MAPS",
+      "topic": "maps",
+      "aliases": [
+        "maps",
+        "arenas",
+        "layouts",
+        "battlefield",
+        "forest",
+        "desert"
+      ],
+      "text": "maps.js: themed arena catalog includes battlefield, city, desert, forest, yard, ruins, docks. Layouts are fixed (~3-screen width) with breakable props; not procedural."
+    },
+    {
+      "id": "code-perks-conquest_exp",
+      "source": "perks.js",
+      "name": "CONQUEST_EXP",
+      "topic": "perks",
+      "aliases": [
+        "conquest_exp",
+        "conquest",
+        "exp",
+        "conquest exp"
+      ],
+      "text": "perks.js: CONQUEST_EXP = Object.freeze({ rookie: 40, veteran: 70, elite: 110 })"
+    },
+    {
+      "id": "code-powerups-counter_slash_duration",
+      "source": "powerups.js",
+      "name": "COUNTER_SLASH_DURATION",
+      "topic": "powerups",
+      "aliases": [
+        "counter_slash_duration",
+        "counter",
+        "slash",
+        "duration",
+        "counter slash duration"
+      ],
+      "text": "powerups.js: COUNTER_SLASH_DURATION = 18"
+    },
+    {
+      "id": "code-powerups-fire_rate_duration",
+      "source": "powerups.js",
+      "name": "FIRE_RATE_DURATION",
+      "topic": "powerups",
+      "aliases": [
+        "fire_rate_duration",
+        "fire",
+        "rate",
+        "duration",
+        "fire rate duration"
+      ],
+      "text": "powerups.js: FIRE_RATE_DURATION = 15"
+    },
+    {
+      "id": "code-powerups-fire_rate_mult",
+      "source": "powerups.js",
+      "name": "FIRE_RATE_MULT",
+      "topic": "powerups",
+      "aliases": [
+        "fire_rate_mult",
+        "fire",
+        "rate",
+        "mult",
+        "fire rate mult"
+      ],
+      "text": "powerups.js: FIRE_RATE_MULT = 1.35"
+    },
+    {
+      "id": "code-powerups-heal_amount",
+      "source": "powerups.js",
+      "name": "HEAL_AMOUNT",
+      "topic": "powerups",
+      "aliases": [
+        "heal_amount",
+        "heal",
+        "amount",
+        "heal amount"
+      ],
+      "text": "powerups.js: HEAL_AMOUNT = 50"
+    },
+    {
+      "id": "code-powerups-jet_siphon_amount",
+      "source": "powerups.js",
+      "name": "JET_SIPHON_AMOUNT",
+      "topic": "powerups",
+      "aliases": [
+        "jet_siphon_amount",
+        "jet",
+        "siphon",
+        "amount",
+        "jet siphon amount"
+      ],
+      "text": "powerups.js: JET_SIPHON_AMOUNT = 0.45"
+    },
+    {
+      "id": "code-powerups-overcharge_bonus",
+      "source": "powerups.js",
+      "name": "OVERCHARGE_BONUS",
+      "topic": "powerups",
+      "aliases": [
+        "overcharge_bonus",
+        "overcharge",
+        "bonus",
+        "overcharge bonus"
+      ],
+      "text": "powerups.js: OVERCHARGE_BONUS = 1.4"
+    },
+    {
+      "id": "code-powerups-overcharge_hits",
+      "source": "powerups.js",
+      "name": "OVERCHARGE_HITS",
+      "topic": "powerups",
+      "aliases": [
+        "overcharge_hits",
+        "overcharge",
+        "hits",
+        "overcharge hits"
+      ],
+      "text": "powerups.js: OVERCHARGE_HITS = 2"
+    },
+    {
+      "id": "code-powerups-power_crate_hp",
+      "source": "powerups.js",
+      "name": "POWER_CRATE_HP",
+      "topic": "powerups",
+      "aliases": [
+        "power_crate_hp",
+        "power",
+        "crate",
+        "hp",
+        "power crate hp"
+      ],
+      "text": "powerups.js: POWER_CRATE_HP = 60"
+    },
+    {
+      "id": "code-powerups-power_crate_respawn",
+      "source": "powerups.js",
+      "name": "POWER_CRATE_RESPAWN",
+      "topic": "powerups",
+      "aliases": [
+        "power_crate_respawn",
+        "power",
+        "crate",
+        "respawn",
+        "power crate respawn"
+      ],
+      "text": "powerups.js: POWER_CRATE_RESPAWN = 20"
+    },
+    {
+      "id": "code-powerups-powerup_defs",
+      "source": "powerups.js",
+      "name": "POWERUP_DEFS",
+      "topic": "powerups",
+      "aliases": [
+        "powerup_defs",
+        "powerup",
+        "defs",
+        "powerup defs"
+      ],
+      "text": "powerups.js: POWERUP_DEFS = Object.freeze({ fireRate: { id: \"fireRate\", label: \"Fire Rate!\", short: \"RATE\", color: \"#ffb040\", timed: true, duration: FIRE_RATE_DURATION, meleeOnly: false }, heal:…"
+    },
+    {
+      "id": "code-powerups-regen_duration",
+      "source": "powerups.js",
+      "name": "REGEN_DURATION",
+      "topic": "powerups",
+      "aliases": [
+        "regen_duration",
+        "regen",
+        "duration",
+        "regen duration"
+      ],
+      "text": "powerups.js: REGEN_DURATION = 15"
+    },
+    {
+      "id": "code-powerups-regen_total",
+      "source": "powerups.js",
+      "name": "REGEN_TOTAL",
+      "topic": "powerups",
+      "aliases": [
+        "regen_total",
+        "regen",
+        "total",
+        "regen total"
+      ],
+      "text": "powerups.js: REGEN_TOTAL = 50"
+    },
+    {
+      "id": "code-powerups-shield_patch_amount",
+      "source": "powerups.js",
+      "name": "SHIELD_PATCH_AMOUNT",
+      "topic": "powerups",
+      "aliases": [
+        "shield_patch_amount",
+        "shield",
+        "patch",
+        "amount",
+        "shield patch amount"
+      ],
+      "text": "powerups.js: SHIELD_PATCH_AMOUNT = 40"
+    },
+    {
+      "id": "code-powerups-speed_surge_duration",
+      "source": "powerups.js",
+      "name": "SPEED_SURGE_DURATION",
+      "topic": "powerups",
+      "aliases": [
+        "speed_surge_duration",
+        "speed",
+        "surge",
+        "duration",
+        "speed surge duration"
+      ],
+      "text": "powerups.js: SPEED_SURGE_DURATION = 10"
+    },
+    {
+      "id": "code-powerups-speed_surge_mult",
+      "source": "powerups.js",
+      "name": "SPEED_SURGE_MULT",
+      "topic": "powerups",
+      "aliases": [
+        "speed_surge_mult",
+        "speed",
+        "surge",
+        "mult",
+        "speed surge mult"
+      ],
+      "text": "powerups.js: SPEED_SURGE_MULT = 1.18"
+    },
+    {
+      "id": "code-config-ai_presets",
+      "source": "config.js",
+      "name": "AI_PRESETS",
+      "topic": "mind",
+      "aliases": [
+        "ai_presets",
+        "ai",
+        "presets",
+        "ai presets"
+      ],
+      "text": "config.js: AI_PRESETS = { flash: { reaction: .10, aim: .16, prediction: .08, fuelCare: .22, change: .12, aimTurnRate: 60 }, balanced: { reaction: .25, aim: .10, prediction: .35, fuelCare: .58, change: .5, aimTurnRate: 40…"
+    },
+    {
+      "id": "code-config-default_profile",
+      "source": "config.js",
+      "name": "DEFAULT_PROFILE",
+      "topic": "config",
+      "aliases": [
+        "default_profile",
+        "default",
+        "profile",
+        "default profile"
+      ],
+      "text": "config.js: DEFAULT_PROFILE = { botName: \"Pixel\", matches: 0, cyber: 120, ranking: 100, level: 1, exp: 0, expToNext: 100, unlockedPerks: [], pendingPerkPicks: [], buddyPerkAutonomy: \"user\", perkSuggestion: nu…"
+    },
+    {
+      "id": "code-config-gravity",
+      "source": "config.js",
+      "name": "GRAVITY",
+      "topic": "config",
+      "aliases": [
+        "gravity"
+      ],
+      "text": "config.js: GRAVITY = 1850"
+    },
+    {
+      "id": "code-config-jet_max_rise",
+      "source": "config.js",
+      "name": "JET_MAX_RISE",
+      "topic": "jetpack",
+      "aliases": [
+        "jet_max_rise",
+        "jet",
+        "max",
+        "rise",
+        "jet max rise"
+      ],
+      "text": "config.js: JET_MAX_RISE = 460"
+    },
+    {
+      "id": "code-config-jump",
+      "source": "config.js",
+      "name": "JUMP",
+      "topic": "config",
+      "aliases": [
+        "jump"
+      ],
+      "text": "config.js: JUMP = 950"
+    },
+    {
+      "id": "code-config-size",
+      "source": "config.js",
+      "name": "SIZE",
+      "topic": "config",
+      "aliases": [
+        "size"
+      ],
+      "text": "config.js: SIZE = 46"
+    },
+    {
+      "id": "code-config-world",
+      "source": "config.js",
+      "name": "WORLD",
+      "topic": "vision",
+      "aliases": [
+        "world"
+      ],
+      "text": "config.js: WORLD = { w: 3600, h: 1600 }"
+    },
+    {
+      "id": "code-equipment-default_loadout",
+      "source": "equipment.js",
+      "name": "DEFAULT_LOADOUT",
+      "topic": "equipment",
+      "aliases": [
+        "default_loadout",
+        "default",
+        "loadout",
+        "default loadout"
+      ],
+      "text": "equipment.js: DEFAULT_LOADOUT = { body: \"field-frame\", helmet: \"survey-visor\", weapon: \"pulse-rifle\", jetpack: \"vector-pack\", shield: \"no-shield\" }"
+    },
+    {
+      "id": "code-equipment-gear",
+      "source": "equipment.js",
+      "name": "GEAR",
+      "topic": "equipment",
+      "aliases": [
+        "gear"
+      ],
+      "text": "equipment.js: GEAR = [ item(\"field-frame\", \"body\", \"Field Frame\", \"Balanced protection and mobility.\", {}), item(\"scout-frame\", \"body\", \"Scout Frame\", \"Faster, but lighter and more exposed.\", { hp: .88, speed: 1.1…"
+    },
+    {
+      "id": "code-equipment-gear_by_id",
+      "source": "equipment.js",
+      "name": "GEAR_BY_ID",
+      "topic": "equipment",
+      "aliases": [
+        "gear_by_id",
+        "gear",
+        "by",
+        "id",
+        "gear by id"
+      ],
+      "text": "equipment.js: GEAR_BY_ID = Object.fromEntries(GEAR.map((gear) => [gear.id, gear]))"
+    },
+    {
+      "id": "code-equipment-modular_mode_cooldown",
+      "source": "equipment.js",
+      "name": "MODULAR_MODE_COOLDOWN",
+      "topic": "equipment",
+      "aliases": [
+        "modular_mode_cooldown",
+        "modular",
+        "mode",
+        "cooldown",
+        "modular mode cooldown"
+      ],
+      "text": "equipment.js: MODULAR_MODE_COOLDOWN = 0.42"
+    },
+    {
+      "id": "code-equipment-modular_mode_order",
+      "source": "equipment.js",
+      "name": "MODULAR_MODE_ORDER",
+      "topic": "equipment",
+      "aliases": [
+        "modular_mode_order",
+        "modular",
+        "mode",
+        "order",
+        "modular mode order"
+      ],
+      "text": "equipment.js: MODULAR_MODE_ORDER = Object.freeze([\"sword\", \"shield\", \"rifle\"])"
+    },
+    {
+      "id": "code-equipment-modular_morph_duration",
+      "source": "equipment.js",
+      "name": "MODULAR_MORPH_DURATION",
+      "topic": "equipment",
+      "aliases": [
+        "modular_morph_duration",
+        "modular",
+        "morph",
+        "duration",
+        "modular morph duration"
+      ],
+      "text": "equipment.js: MODULAR_MORPH_DURATION = 0.32"
+    },
+    {
+      "id": "code-equipment-modular_weapon_id",
+      "source": "equipment.js",
+      "name": "MODULAR_WEAPON_ID",
+      "topic": "equipment",
+      "aliases": [
+        "modular_weapon_id",
+        "modular",
+        "weapon",
+        "id",
+        "modular weapon id"
+      ],
+      "text": "equipment.js: MODULAR_WEAPON_ID = \"mechanical-modularity\""
+    },
+    {
+      "id": "code-equipment-ranking_floor",
+      "source": "equipment.js",
+      "name": "RANKING_FLOOR",
+      "topic": "equipment",
+      "aliases": [
+        "ranking_floor",
+        "ranking",
+        "floor",
+        "ranking floor"
+      ],
+      "text": "equipment.js: RANKING_FLOOR = 0"
+    },
+    {
+      "id": "code-equipment-retractable_armor_speed",
+      "source": "equipment.js",
+      "name": "RETRACTABLE_ARMOR_SPEED",
+      "topic": "equipment",
+      "aliases": [
+        "retractable_armor_speed",
+        "retractable",
+        "armor",
+        "speed",
+        "retractable armor speed"
+      ],
+      "text": "equipment.js: RETRACTABLE_ARMOR_SPEED = 0.9"
+    },
+    {
+      "id": "code-equipment-retractable_morph_duration",
+      "source": "equipment.js",
+      "name": "RETRACTABLE_MORPH_DURATION",
+      "topic": "equipment",
+      "aliases": [
+        "retractable_morph_duration",
+        "retractable",
+        "morph",
+        "duration",
+        "retractable morph duration"
+      ],
+      "text": "equipment.js: RETRACTABLE_MORPH_DURATION = 0.32"
+    },
+    {
+      "id": "code-equipment-slot_labels",
+      "source": "equipment.js",
+      "name": "SLOT_LABELS",
+      "topic": "equipment",
+      "aliases": [
+        "slot_labels",
+        "slot",
+        "labels",
+        "slot labels"
+      ],
+      "text": "equipment.js: SLOT_LABELS = { body: \"Main Armor\", helmet: \"Helmet\", weapon: \"Weapon\", jetpack: \"Jetpack\", shield: \"Shield\" }"
+    },
+    {
+      "id": "code-equipment-slot_order",
+      "source": "equipment.js",
+      "name": "SLOT_ORDER",
+      "topic": "equipment",
+      "aliases": [
+        "slot_order",
+        "slot",
+        "order",
+        "slot order"
+      ],
+      "text": "equipment.js: SLOT_ORDER = [\"body\", \"helmet\", \"weapon\", \"jetpack\", \"shield\"]"
+    },
+    {
+      "id": "code-equipment-starter_gear",
+      "source": "equipment.js",
+      "name": "STARTER_GEAR",
+      "topic": "equipment",
+      "aliases": [
+        "starter_gear",
+        "starter",
+        "gear",
+        "starter gear"
+      ],
+      "text": "equipment.js: STARTER_GEAR = [ \"field-frame\", \"scout-frame\", \"survey-visor\", \"wideband-array\", \"pulse-rifle\", \"arc-saber\", \"vector-pack\", \"sprinter-pack\", \"no-shield\", \"light-buckler\" ]"
+    },
+    {
+      "id": "code-equipment-starting_ranking",
+      "source": "equipment.js",
+      "name": "STARTING_RANKING",
+      "topic": "equipment",
+      "aliases": [
+        "starting_ranking",
+        "starting",
+        "ranking",
+        "starting ranking"
+      ],
+      "text": "equipment.js: STARTING_RANKING = 100"
+    },
+    {
+      "id": "code-maps-map_by_id",
+      "source": "maps.js",
+      "name": "MAP_BY_ID",
+      "topic": "maps",
+      "aliases": [
+        "map_by_id",
+        "map",
+        "by",
+        "id",
+        "map by id"
+      ],
+      "text": "maps.js: MAP_BY_ID = Object.freeze( Object.fromEntries(MAPS.map((map) => [map.id, map])) )"
+    },
+    {
+      "id": "code-maps-platforms",
+      "source": "maps.js",
+      "name": "PLATFORMS",
+      "topic": "maps",
+      "aliases": [
+        "platforms"
+      ],
+      "text": "maps.js: PLATFORMS = BATTLEFIELD_PLATFORMS"
+    },
+    {
+      "id": "code-perks-exp_base",
+      "source": "perks.js",
+      "name": "EXP_BASE",
+      "topic": "perks",
+      "aliases": [
+        "exp_base",
+        "exp",
+        "base",
+        "exp base"
+      ],
+      "text": "perks.js: EXP_BASE = 100"
+    },
+    {
+      "id": "code-perks-exp_scale",
+      "source": "perks.js",
+      "name": "EXP_SCALE",
+      "topic": "perks",
+      "aliases": [
+        "exp_scale",
+        "exp",
+        "scale",
+        "exp scale"
+      ],
+      "text": "perks.js: EXP_SCALE = 1.3"
+    },
+    {
+      "id": "code-perks-perk_autonomy_modes",
+      "source": "perks.js",
+      "name": "PERK_AUTONOMY_MODES",
+      "topic": "perks",
+      "aliases": [
+        "perk_autonomy_modes",
+        "perk",
+        "autonomy",
+        "modes",
+        "perk autonomy modes"
+      ],
+      "text": "perks.js: PERK_AUTONOMY_MODES = Object.freeze([\"user\", \"suggested\", \"choice\"])"
+    },
+    {
+      "id": "code-perks-perks",
+      "source": "perks.js",
+      "name": "PERKS",
+      "topic": "perks",
+      "aliases": [
+        "perks"
+      ],
+      "text": "perks.js: PERKS = [ perk(\"glass-sprint\", \"Glass Sprint\", \"Faster move, lower max HP.\", { speed: 1.12, hp: .88 }), perk(\"bastion-brace\", \"Bastion Brace\", \"More shield durability, slower while raised.\", …"
+    },
+    {
+      "id": "code-perks-perks_by_id",
+      "source": "perks.js",
+      "name": "PERKS_BY_ID",
+      "topic": "perks",
+      "aliases": [
+        "perks_by_id",
+        "perks",
+        "by",
+        "id",
+        "perks by id"
+      ],
+      "text": "perks.js: PERKS_BY_ID = Object.fromEntries(PERKS.map((entry) => [entry.id, entry]))"
+    },
+    {
+      "id": "code-powerups-counter_slash_blade_weight",
+      "source": "powerups.js",
+      "name": "COUNTER_SLASH_BLADE_WEIGHT",
+      "topic": "powerups",
+      "aliases": [
+        "counter_slash_blade_weight",
+        "counter",
+        "slash",
+        "blade",
+        "weight",
+        "counter slash blade weight"
+      ],
+      "text": "powerups.js: COUNTER_SLASH_BLADE_WEIGHT = 2.5"
+    },
+    {
+      "id": "code-powerups-counter_slash_cooldown",
+      "source": "powerups.js",
+      "name": "COUNTER_SLASH_COOLDOWN",
+      "topic": "powerups",
+      "aliases": [
+        "counter_slash_cooldown",
+        "counter",
+        "slash",
+        "cooldown",
+        "counter slash cooldown"
+      ],
+      "text": "powerups.js: COUNTER_SLASH_COOLDOWN = 0.75"
+    },
+    {
+      "id": "code-powerups-counter_slash_dagger_weight",
+      "source": "powerups.js",
+      "name": "COUNTER_SLASH_DAGGER_WEIGHT",
+      "topic": "powerups",
+      "aliases": [
+        "counter_slash_dagger_weight",
+        "counter",
+        "slash",
+        "dagger",
+        "weight",
+        "counter slash dagger weight"
+      ],
+      "text": "powerups.js: COUNTER_SLASH_DAGGER_WEIGHT = 0.85"
+    },
+    {
+      "id": "code-powerups-power_crate_size",
+      "source": "powerups.js",
+      "name": "POWER_CRATE_SIZE",
+      "topic": "powerups",
+      "aliases": [
+        "power_crate_size",
+        "power",
+        "crate",
+        "size",
+        "power crate size"
+      ],
+      "text": "powerups.js: POWER_CRATE_SIZE = 40"
+    },
+    {
+      "id": "code-powerups-powerup_base_weight",
+      "source": "powerups.js",
+      "name": "POWERUP_BASE_WEIGHT",
+      "topic": "powerups",
+      "aliases": [
+        "powerup_base_weight",
+        "powerup",
+        "base",
+        "weight",
+        "powerup base weight"
+      ],
+      "text": "powerups.js: POWERUP_BASE_WEIGHT = 1"
+    },
+    {
+      "id": "code-powerups-shield_patch_heal",
+      "source": "powerups.js",
+      "name": "SHIELD_PATCH_HEAL",
+      "topic": "powerups",
+      "aliases": [
+        "shield_patch_heal",
+        "shield",
+        "patch",
+        "heal",
+        "shield patch heal"
+      ],
+      "text": "powerups.js: SHIELD_PATCH_HEAL = 25"
+    }
+  ]
+}

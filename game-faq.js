@@ -66,7 +66,8 @@ const GAME_TOPIC_TERMS = new Set([
   "locked", "gattler", "laser", "hitscan", "beam", "perk", "perks", "level",
   "exp", "experience", "milestone", "tradeoff", "map", "maps", "battlefield",
   "desert", "forest", "city", "docks", "ruins", "yard", "cover", "breakable",
-  "cactus", "tree", "crate", "powerup", "power-up", "buff", "loot"
+  "cactus", "tree", "crate", "powerup", "power-up", "buff", "loot",
+  "code", "source", "constant", "gemma", "manual", "snippet", "deep"
 ]);
 
 let packCache = null;
@@ -139,9 +140,27 @@ export function faqEntryCount(pack = packCache) {
  * Route player text: question about the game vs coaching command vs ambiguous.
  * Approval/denial/empty stay on the coaching path (handled by coachingReply).
  */
+const CODE_FORCE_CUES = [
+  "code based answer",
+  "code-based answer",
+  "from the code",
+  "check the source",
+  "dig into the code",
+  "search the code",
+  "look in the code",
+  "code facts",
+  "based on the code",
+  "from source"
+];
+
 export function classifyBuddyMessage(text) {
   const clean = normalizeFaqText(text);
   if (!clean) return { route: "empty", normalized: clean };
+
+  // Explicit code-dig requests are always game Q&A, never practice directives.
+  if (CODE_FORCE_CUES.some((cue) => clean.includes(cue))) {
+    return { route: "question", normalized: clean, reason: "code-force" };
+  }
 
   const hasQuestionMark = /\?/.test(String(text || ""));
   const questionCue = QUESTION_CUES.some((cue) => {

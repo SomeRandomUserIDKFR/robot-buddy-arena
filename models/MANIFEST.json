@@ -20,5 +20,20 @@
     "allowRemoteModels": false,
     "connectSrc": "self",
     "runtimeDownload": false
+  },
+  "generator": {
+    "id": "gemma-3-270m-it",
+    "sourceRepo": "onnx-community/gemma-3-270m-it-ONNX",
+    "license": "Gemma Terms of Use",
+    "optional": true,
+    "vendored": false,
+    "vendoredAt": "2026-07-21T22:18:11.658Z",
+    "diskBytes": 0,
+    "files": [],
+    "offlineContract": {
+      "allowRemoteModels": false,
+      "connectSrc": "self",
+      "runtimeDownload": false
+    }
   }
 }

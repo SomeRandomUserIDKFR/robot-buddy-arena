@@ -3,6 +3,8 @@ import {
   composeAmbiguousRouteReply, composeFaqReply, faqQuickReplies, getGameFaqPack,
   matchGameFaq, topicChipPrompt, FAQ_TOPIC_CHIPS
 } from "./game-faq.js";
+import { composeDeepReply } from "./buddy-reply.js";
+import { detectForceCode, retrieveKnowledge } from "./knowledge-retrieve.js";
 
 export const DIRECTIVES = {
   rush: {
@@ -1184,17 +1186,36 @@ export function buddyChatReply(profile, text, weapon, analysis = null, options =
   if (analysis?.kind === "question") {
     addHistory(profile, "player", text);
     const pack = getGameFaqPack();
-    const reply = composeFaqReply(analysis.match, pack, coaching);
+    const retrieval = analysis.retrieval || retrieveKnowledge(text, {
+      forceCode: analysis.forceCode || detectForceCode(text),
+      faqPack: pack
+    });
+    const deep = composeDeepReply(retrieval, coaching, {
+      generatedBlurb: analysis.generatedBlurb || null
+    });
+    // Preserve legacy FAQ-only analyses (tests passing match without retrieval).
+    const reply = analysis.retrieval || analysis.forceCode
+      ? deep.reply
+      : (analysis.match
+        ? composeFaqReply(analysis.match, pack, coaching)
+        : deep.reply);
+    const kind = analysis.retrieval || analysis.forceCode
+      ? (deep.kind === "faq" ? "faq" : deep.kind)
+      : "faq";
+    const faqId = deep.faqId || analysis.match?.entry?.id || null;
     addHistory(profile, "buddy", reply, {
-      kind: "faq",
-      faqId: analysis.match?.entry?.id || null,
-      confidence: analysis.match?.confidence || 0
+      kind,
+      faqId,
+      path: deep.path || retrieval.path,
+      confidence: retrieval.confidence || analysis.match?.confidence || 0
     });
     return {
       reply,
-      quickReplies: faqQuickReplies(analysis.match),
-      kind: "faq",
-      faqId: analysis.match?.entry?.id || null
+      quickReplies: faqQuickReplies(analysis.match || retrieval.faqMatch),
+      kind: kind === "faq-unknown" || kind === "code-miss" ? "faq" : kind,
+      faqId,
+      path: deep.path || retrieval.path,
+      hits: deep.hits || retrieval.hits || []
     };
   }
 
@@ -1202,7 +1223,7 @@ export function buddyChatReply(profile, text, weapon, analysis = null, options =
   const clean = normalizeCoachingText(text);
   if (/^asking about the game$/.test(clean)) {
     addHistory(profile, "player", text);
-    const reply = "Ask me about controls, learning, vision, the shop, jetpack, weapons, or match rules. I only answer from the local FAQ.";
+    const reply = "Ask me about controls, learning, vision, the shop, jetpack, weapons, or match rules. I answer from the local FAQ, manual chunks, or code-facts. Say you want a code based answer to force the code dig.";
     addHistory(profile, "buddy", reply, { kind: "faq" });
     return { reply, quickReplies: FAQ_TOPIC_CHIPS.slice(), kind: "faq" };
   }

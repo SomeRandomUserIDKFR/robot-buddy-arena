@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "chunks": [
+    {
+      "id": "manual-controls",
+      "topic": "controls",
+      "aliases": ["keys", "hotkeys", "keyboard", "input", "buttons"],
+      "text": "Player controls: A/D move, W or Space jump (hold airborne to jet), Shift jetpack thrust, C dodge/dash with brief invulnerability, Q raise/lower shield, F deploy/retract Retractable Armor or Shell, E cycle Mechanical Modularity modes (Sword → Shield → Pulse Rifle), mouse aim, left click fire/swing, G ping buddy, Escape pause."
+    },
+    {
+      "id": "manual-jetpack",
+      "topic": "jetpack",
+      "aliases": ["fuel", "thrust", "exhausted", "ceiling", "boost"],
+      "text": "Jetpack: about 3 seconds continuous thrust from a full tank, about 5 seconds to recharge from empty while idle. Running dry engages exhausted lockout (HUD shows EXHAUSTED): thrust disabled until thrust input is fully released and fuel rebuilds to 20% restart reserve. Arena hard ceiling at y=12 world units; fighters clamp and projectiles leaving bounds are removed."
+    },
+    {
+      "id": "manual-shields",
+      "topic": "shield",
+      "aliases": ["block", "buckler", "bulwark", "durability", "q"],
+      "text": "Shields are a separate equipment slot. Durability is a per-match block HP pool that does not recharge mid-match. Q raises the shield toward aim; only frontal cone attacks (~±70–80°) are blocked, spending durability equal to damage that would have been dealt. Cannot fire while raised. Depleted shields stay as dead weight with a stronger speed penalty until the next match."
+    },
+    {
+      "id": "manual-learning",
+      "topic": "learning",
+      "aliases": ["evidence", "readiness", "habits", "spar", "lock"],
+      "text": "Learning is evidence-based with no automatic per-match XP for habits. Records change only when a relevant situation occurs, the buddy predicts or counters, and the result can be judged. Gun and saber profiles track engagement range, rush, dodge timing, jetpack use, and low-HP behavior separately. Learning Lock / Spar only stops Training from writing learning evidence; coaching goals can still be saved after a spar."
+    },
+    {
+      "id": "manual-coaching",
+      "topic": "coaching",
+      "aliases": ["practice", "directives", "post-match", "confirm"],
+      "text": "After Training, free-text coaching proposes practice goals. The buddy confirms interpretation before saving. Confirmed goals stay needs-practice until judged attempts support them. After Conquest the panel is Q&A only—no new practice goals. Deep answers still come only from local FAQ, manual chunks, or code-facts; the buddy never invents mechanics."
+    },
+    {
+      "id": "manual-conquest",
+      "topic": "conquest",
+      "aliases": ["ranking", "league", "reroll", "cyber", "exp"],
+      "text": "Conquest opens opponent select from Ranking league (Rookie through Apex). First reroll per visit is free; further rerolls cost 10¢ Cyber. Wins pay Cyber and Conquest EXP by reward tier (Rookie/Veteran/Elite); Ranking changes separately. Training and Spar pay no Cyber, Conquest EXP, or Ranking. Defeats remove no Cyber or EXP."
+    },
+    {
+      "id": "manual-equipment",
+      "topic": "equipment",
+      "aliases": ["shop", "loadout", "armor", "helmet", "weapon", "slots"],
+      "text": "Equipment bay has five slots: body armor, helmet, weapon, jetpack, shield. Starter items are free; Shop unlocks purchases with Cyber for either teammate. Buddy gear autonomy: User Picked, AI Suggested, or AI's Choice. Perks unlock from Conquest EXP level-ups; each side equips at most one unlocked perk."
+    },
+    {
+      "id": "manual-maps",
+      "topic": "maps",
+      "aliases": ["arena", "cover", "battlefield", "forest", "desert", "city", "docks", "ruins", "yard"],
+      "text": "Arenas are fixed themed layouts (~3-screen width): Battlefield, City, Desert, Forest, Yard, Ruins, Docks. Breakable props have HP; intact soft cover blocks projectiles. Forest trunks are not solid for movement and do not hard-block vision. Props reset every match. Training can pick a map or Random; Conquest assigns mapId on encounter select."
+    },
+    {
+      "id": "manual-powerups",
+      "topic": "powerups",
+      "aliases": ["crates", "buffs", "loot", "metal crates"],
+      "text": "Metal power-up crates are separate from wooden cover. The fighter who deals the killing blow gets the buff. Unseen crates are fog-hidden and not AI targets. Destroyed crates respawn after about 20s preferring unseen spots. Types include Fire Rate, Heal, Regen, Counter Slash, Speed Surge, Shield Patch, Jet Siphon, and Overcharge."
+    },
+    {
+      "id": "manual-minds",
+      "topic": "mind",
+      "aliases": ["flash", "balanced", "thinker", "mimic", "ai mode"],
+      "text": "Flash, Balanced, and Thinker set mind ceilings for reaction tempo, aim turn rate, and risk style. Evidence earns anticipation up toward those ceilings. Mimic unlocks from readiness and copies learned player style with intensity Slight (~25%), Quite a bit (~55%), or Full (~85%). Conquest soft teammate-safety blend still limits mirror-suicide."
+    },
+    {
+      "id": "manual-vision",
+      "topic": "vision",
+      "aliases": ["fog", "sight", "arrows", "outline", "los"],
+      "text": "Fog of war hides unseen enemies. Shared team vision and LOS rules apply. Cyan arrows cue off-screen threats; buddy outline helps track your partner. Soft cover and solid walls can block projectiles or sight depending on prop/map rules."
+    },
+    {
+      "id": "manual-deep-qa",
+      "topic": "analyzer",
+      "aliases": ["minilm", "gemma", "code based", "deep answer", "offline"],
+      "text": "Language help is offline. MiniLM ranks local FAQ, manual, and code-fact snippets. Optional Gemma 3 270M may rewrite deep answers as a short blurb from those snippets only. Say you want a code based answer to force the code-facts pack. Nothing is downloaded at runtime and answers never invent combat rules outside local knowledge."
+    }
+  ]
+}

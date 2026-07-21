@@ -58,6 +58,10 @@ npm run smoke:analyzer
 - `learning.js` — training observation and profile updates
 - `coaching.js` — constrained coaching language, confirmations, and directive memory
 - `game-faq.js` / `knowledge/game-faq.json` — offline game Q&A routing + curated FAQ pack
+- `knowledge/game-manual.json` — denser mechanic chunks for mid/deep answers
+- `knowledge/code-facts.json` — allowlisted extracted code facts (`npm run extract-code-facts`)
+- `knowledge-retrieve.js` / `buddy-reply.js` — multi-pack retrieval, force-code flag, deep stitcher
+- `language-generator.js` / `language-generator-worker.js` — optional Gemma 3 270M short blurbs
 - `language-analyzer.js` / `language-analyzer-worker.js` — local MiniLM ranking + status UI
 - `models/` / `vendor/` — vendored encoder and offline runtime (see above)
 - `rendering.js` / `vision.js` — canvas drawing, themed backdrops, and shared sight / LOS rules
@@ -177,17 +181,36 @@ After every Training match, the results screen includes a persistent conversatio
 
 After Conquest, the same panel stays open for **game Q&A only** (no new practice goals). Topic chips cover Controls, Learning, Vision, Shop, and Jetpack.
 
-### Game Q&A (local FAQ)
+### Game Q&A (closed-world deep answers)
 
 Player messages are routed before coaching:
 
 1. Detect **question about the game** vs **coaching command** (ambiguous lines ask which you meant).
-2. Questions match a curated in-repo FAQ (`knowledge/game-faq.json`) via keyword overlap, with MiniLM cosine ranking when the worker is ready.
-3. Replies use the humble template composer; MiniLM never free-generates answers or invents mechanics.
-4. Low confidence admits unknown and suggests rephrasing or topic prompts.
-5. Coaching commands still use the hybrid intent pipeline (directives, confirmation, practice gates).
+2. Questions retrieve against local packs only:
+   - `knowledge/game-faq.json` — curated short answers (high confidence → direct FAQ reply)
+   - `knowledge/game-manual.json` — denser mechanic chunks for mid/deep questions
+   - `knowledge/code-facts.json` — allowlisted extracted constants/tables from gameplay modules
+3. **High-confidence FAQ** uses the humble template composer.
+4. **Mid/deep** questions stitch top snippets into a short blurb. Optional offline **Gemma 3 270M** (if vendored) may rewrite that blurb; it never invents mechanics outside the snippets.
+5. **Code dig fallback** runs when FAQ/manual confidence is weak but code-facts still match.
+6. Say **“code based answer”** / **“from the code”** / **“check the source”** / **“dig into the code”** to force the code-facts path (`From the code facts: …`).
+7. Low confidence admits unknown. Coaching commands still use the hybrid intent pipeline (directives, confirmation, practice gates). Gemma never saves practice goals.
 
-The FAQ covers controls, Training vs Conquest, Conquest leagues / opponent select / reroll / maps, themed arenas and breakable cover, learning lock / spar-only Training, learning/readiness/coaching, mind modes (including Mimic), fog/shared vision/arrows/buddy outline, jetpack fuel/lockout/ceiling, equipment/shop/Cyber, Conquest Ranking, shields, weapon families, team-wipe wins, and offline analyzer status.
+Refresh code facts after gameplay constant changes:
+
+```bash
+npm run extract-code-facts
+```
+
+Optional coach-voice model (large; not required):
+
+```bash
+npm run vendor-gemma
+```
+
+If Gemma weights are missing, deep Q&A keeps using the snippet stitcher. Runtime never downloads models.
+
+The FAQ/manual cover controls, Training vs Conquest, Conquest leagues / opponent select / reroll / maps, themed arenas and breakable cover, learning lock / spar-only Training, learning/readiness/coaching, mind modes (including Mimic), fog/shared vision/arrows/buddy outline, jetpack fuel/lockout/ceiling, equipment/shop/Cyber, Conquest Ranking, shields, weapon families, power-ups, team-wipe wins, and offline analyzer status.
 
 ### Local language analyzer (MiniLM)
 
@@ -201,13 +224,15 @@ Hybrid scoring:
 2. MiniLM similarities blend into intent totals when the worker is ready.
 3. Deterministic guards re-apply after the blend, so negation, contrast, approval,
    denial, confirmation, conflicts, and safety stay authoritative.
-4. FAQ answers come only from curated local entries; the model never controls combat,
-   progression, rewards, equipment, or freeform dialogue.
+4. Answers come only from curated local FAQ / manual / code-facts; the model never controls combat,
+   progression, rewards, equipment, or freeform world knowledge.
 
 Status near the coaching input:
 
 - `Loading local analyzer…` while the worker starts (typing still works)
 - `Local language analyzer ready · Q&A ready` when MiniLM ranking is active and the FAQ pack loaded
+- `… · Coach voice ready` when optional Gemma is vendored and loaded
+- `… · Coach voice basic` / no coach note when Gemma is missing (stitcher still works)
 - `Basic understanding active · Q&A keywords` when the FAQ pack is present without the model
 - `Basic understanding active` if assets are missing or load fails
 
@@ -216,14 +241,16 @@ Status near the coaching input:
 - `env.allowRemoteModels = false`, local `models/` path only, local ORT WASM path
 - CSP `connect-src 'self'` / `worker-src 'self'`
 - Fetch interception in tests and smoke fails on Hugging Face / CDN / mirror URLs
-- Missing assets → basic parser + keyword FAQ; **no** runtime download attempt
-- FAQ JSON lives under `knowledge/` and is never fetched remotely
+- Missing MiniLM → basic parser + keyword FAQ/manual/code-facts; **no** runtime download attempt
+- Missing Gemma → deep stitcher only; **no** runtime download attempt
+- Knowledge JSON lives under `knowledge/` and is never fetched remotely
 
 `coaching.test.js` includes 47 evaluation utterances (100% in the current suite)
 covering intermediate English, paraphrases, typos, negation, contrast, conditions,
 compound requests, approval/denial, and ambiguity, plus hybrid semantic-assist cases.
 The suite requires at least 85% structured accuracy. `game-faq.test.js` covers
-question-vs-coaching routing and FAQ topic matches. `npm run smoke:analyzer`
+question-vs-coaching routing and FAQ topic matches. `buddy-reply.test.js` covers
+force-code answers, code-facts digs, and refuse-to-invent cases. `npm run smoke:analyzer`
 verifies load + first inference + a sample Q&A turn with zero remote fetches.
 
 The original `robotBuddyArena.v1` browser `localStorage` key is retained. Old duration, match-count, percentage, and competence-style values are never converted into evidence. Useful old habit summaries are retained as `legacyHabits` context, conversations and vocabulary are preserved, and all new evidence records start conservatively empty. Clearing this site's browser storage resets the profile.
