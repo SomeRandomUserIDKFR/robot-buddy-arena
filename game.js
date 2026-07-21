@@ -5,7 +5,8 @@ import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
   acceptSuggestion, applyLoadout, awardConquest, cycleModularMode, equipOwned, purchaseGear,
-  setBuddyMode, toggleRetractableArmor, toggleShieldRaise, trainerLoadout, weaponKind
+  setBuddyMode, tickArmorDebris, toggleRetractableArmor, toggleShieldRaise, trainerLoadout,
+  weaponKind
 } from "./equipment.js";
 import {
   getPendingEncounter, rerollEncounter, setPendingEncounter
@@ -128,6 +129,7 @@ function makeGame(mode) {
     fighters,
     bullets: [],
     effects: [],
+    armorDebris: [],
     beamReveals: [],
     pings: [],
     camera: { x: 0, y: 0 },
@@ -272,6 +274,7 @@ function update(dt) {
       game.stats.fuelSuccesses++;
     }
   }
+  tickArmorDebris(game, dt);
   for (const effect of game.effects) effect.life -= dt;
   for (const ping of game.pings) ping.life -= dt;
   for (const sample of game.beamReveals || []) sample.life -= dt;

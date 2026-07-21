@@ -689,6 +689,7 @@ export function createRenderer(canvas) {
         context.fill();
       }
     }
+    drawArmorDebris(game);
     drawEffects(game);
     drawBullets(game);
     for (const fighter of game.fighters) {
@@ -1237,6 +1238,54 @@ export function createRenderer(canvas) {
     context.restore();
   }
 
+  function drawArmorDebrisPiece(piece) {
+    const color = piece.color || "#8aa4b0";
+    const edge = mixHexColors(color, "#061018", 0.4);
+    const highlight = mixHexColors(color, "#ffffff", 0.18);
+    const settle = piece.grounded ? 0.72 + (piece.settle || 0) * 0.28 : 0.9;
+    context.save();
+    context.translate(piece.x, piece.y);
+    context.rotate(piece.rot || 0);
+    context.globalAlpha = settle;
+    context.fillStyle = color;
+    if (piece.kind === "helmet" || piece.kind === "breast") {
+      context.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      context.fillStyle = highlight;
+      context.fillRect(-piece.w / 2 + 3, -piece.h / 2 + 1, piece.w - 6, 2);
+      context.strokeStyle = edge;
+      context.lineWidth = 1;
+      context.strokeRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+    } else if (piece.kind === "chin") {
+      context.beginPath();
+      context.moveTo(-piece.w / 2, -piece.h / 2);
+      context.lineTo(-piece.w / 3, piece.h / 2);
+      context.lineTo(piece.w / 3, piece.h / 2);
+      context.lineTo(piece.w / 2, -piece.h / 2);
+      context.closePath();
+      context.fill();
+    } else if (piece.kind === "crest") {
+      context.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      context.fillStyle = highlight;
+      context.fillRect(-2, -piece.h / 2 - 1, 4, piece.h + 2);
+    } else {
+      // Cheeks, shoulders, ab plate — simple plate shards.
+      context.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      context.strokeStyle = edge;
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(-piece.w / 2 + 2, 0);
+      context.lineTo(piece.w / 2 - 2, 0);
+      context.stroke();
+    }
+    context.restore();
+  }
+
+  /** Broken retractable armor plates/helmet left on the ground for the match. */
+  function drawArmorDebris(game) {
+    const pieces = game.armorDebris || [];
+    for (const piece of pieces) drawArmorDebrisPiece(piece);
+  }
+
   function drawBullets(game) {
     for (const bullet of game.bullets) {
       const hose = bullet.tracer && (bullet.owner?.weaponId === "gattler" || bullet.owner?.weaponStats?.shieldDamageMult);
@@ -1331,7 +1380,9 @@ export function createRenderer(canvas) {
           ? "#4a6838"
           : effect.kind === "powerCrate"
             ? "#9aa8b8"
-            : "#8a7a68";
+            : effect.kind === "armor"
+              ? "#9aadb8"
+              : "#8a7a68";
         for (let i = 0; i < 6; i++) {
           const ang = i * 1.1;
           const r = 12 + t * 40;

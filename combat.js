@@ -138,7 +138,7 @@ function hit(target, source, damage, angle, game, extras = {}) {
       return;
     }
   }
-  applyHpDamage(target, dealt);
+  applyHpDamage(target, dealt, game);
   target.hitFlash = .12;
   target.hitFace = .35;
   target.lastHitAt = game.elapsed;
