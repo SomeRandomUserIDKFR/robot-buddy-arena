@@ -4,6 +4,7 @@
  */
 
 import { SIZE, SIGHT } from "./config.js";
+import { healFighter } from "./equipment.js";
 import { POWER_CRATE_MAP, POWER_CRATE_SPAWNS } from "./maps.js";
 import { inBeamReveal, inDirectionalSight, hasLineOfSight } from "./vision.js";
 import { clamp, dist } from "./utils.js";
@@ -353,7 +354,7 @@ export function awardPowerup(fighter, typeId, game) {
   const buffs = ensureBuffBag(fighter);
 
   if (def.id === "heal") {
-    fighter.hp = Math.min(fighter.maxHp, fighter.hp + HEAL_AMOUNT);
+    healFighter(fighter, HEAL_AMOUNT);
   } else if (def.id === "shieldPatch") {
     if ((fighter.shieldMaxDurability || 0) > 0) {
       fighter.shieldDurability = Math.min(
@@ -362,7 +363,7 @@ export function awardPowerup(fighter, typeId, game) {
       );
       if (fighter.shieldDurability > 0) fighter.shieldBroken = false;
     } else {
-      fighter.hp = Math.min(fighter.maxHp, fighter.hp + SHIELD_PATCH_HEAL);
+      healFighter(fighter, SHIELD_PATCH_HEAL);
     }
   } else if (def.id === "jetSiphon") {
     fighter.fuel = Math.min(1, (fighter.fuel || 0) + JET_SIPHON_AMOUNT);
@@ -501,7 +502,7 @@ export function tickFighterPowerBuffs(fighter, dt) {
 
   if (buffs.regen) {
     const heal = buffs.regen.rate * dt;
-    fighter.hp = Math.min(fighter.maxHp, fighter.hp + heal);
+    healFighter(fighter, heal);
     buffs.regen.remaining -= dt;
     if (buffs.regen.remaining <= 0) delete buffs.regen;
   }

@@ -68,6 +68,11 @@ export const DEFAULT_PROFILE = {
   // Buddy mind + Mimic dial (persisted; migrated for older saves).
   aiMode: "balanced",
   mimicIntensity: "quite",
+  settings: {
+    visual: {
+      modularMorphStyle: "fold"
+    }
+  },
   rewardedConquests: [],
   equipment: {
     owned: [

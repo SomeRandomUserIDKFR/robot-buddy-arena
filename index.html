@@ -49,6 +49,7 @@
               <small id="mimicLockReason"></small>
             </div>
           </label>
+          <button type="button" id="settingsBtn" class="settings-open-btn">Settings</button>
         </div>
       </header>
       <nav class="bay-tabs" aria-label="Equipment Bay sections">
@@ -111,7 +112,7 @@
         <button id="trainingBtn" class="primary">Training <span>1v1</span></button>
         <button id="conquestBtn">Conquest <span>2v2</span></button>
       </div>
-      <p class="controls-hint">A/D move · W/Space jump · Shift jetpack · C dodge · Q shield · E morph (Mechanical Modularity) · Mouse aim/fire · G ping · Esc pause</p>
+      <p class="controls-hint">A/D move · W/Space jump · Shift jetpack · C dodge · Q shield · F retractable armor · E morph (Mechanical Modularity) · Mouse aim/fire · G ping · Esc pause</p>
       </div>
       <section id="shopPanel" class="shop-panel hidden" aria-labelledby="shopTitle">
         <div class="shop-heading">
@@ -151,6 +152,53 @@
         <h2 id="perkModalTitle">Choose a perk</h2>
         <p class="lede">Unlock one permanent tradeoff. You and your buddy each equip one at a time.</p>
         <div id="perkChoices" class="perk-choices"></div>
+      </div>
+    </div>
+
+    <div id="settingsModal" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="settings-modal-card">
+        <div class="eyebrow">OPTIONS</div>
+        <h2 id="settingsTitle">Settings</h2>
+        <nav class="settings-tabs" aria-label="Settings sections">
+          <button type="button" class="active" data-settings-tab="visual" aria-selected="true">Visual</button>
+        </nav>
+        <section id="settingsVisualPanel" class="settings-tab-panel" aria-labelledby="settingsVisualHeading">
+          <h3 id="settingsVisualHeading">Visual</h3>
+          <fieldset class="settings-fieldset">
+            <legend>Morph style</legend>
+            <label class="settings-choice">
+              <input type="radio" name="modularMorphStyle" value="smooth">
+              <span class="settings-choice-copy">
+                <strong>Smooth blend</strong>
+                <small>Classic single-shape crossfade between modes.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="modularMorphStyle" value="fold" checked>
+              <span class="settings-choice-copy">
+                <strong>Panel fold</strong>
+                <small>Plates slide and tuck in, then slide back out in the new shape.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="modularMorphStyle" value="fly">
+              <span class="settings-choice-copy">
+                <strong>Flying rearrangement</strong>
+                <small>Pieces scatter apart mid-morph, then rebuild the new silhouette.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="modularMorphStyle" value="nanotech">
+              <span class="settings-choice-copy">
+                <strong>Nanotech</strong>
+                <small>Dissolves into a nano swarm and reforms the new shape (Mark-85 style).</small>
+              </span>
+            </label>
+          </fieldset>
+        </section>
+        <div class="button-row settings-actions">
+          <button type="button" id="settingsCloseBtn" class="primary">Done</button>
+        </div>
       </div>
     </div>
 
@@ -201,6 +249,7 @@
       </div>
       <div class="player-status">
         <div id="fuelMeter" class="meter"><span id="fuelLabel">FUEL</span><i id="fuelFill"></i></div>
+        <div id="armorMeter" class="meter armor hidden"><span id="armorLabel">ARMOR</span><i id="armorFill"></i></div>
         <div id="shieldMeter" class="meter shield hidden"><span id="shieldLabel">SHIELD</span><i id="shieldFill"></i></div>
         <div class="meter dodge"><span>DODGE</span><i id="dodgeFill"></i></div>
         <div id="buffRow" class="buff-row"></div>

@@ -7,6 +7,7 @@ import {
   ensureLearningProfile, mimicUnlockLevel, normalizeAiMode, normalizeMimicIntensity
 } from "./learning.js";
 import { ensureProgressionProfile, setBuddyPerkAutonomy } from "./perks.js";
+import { ensureSettingsProfile } from "./settings.js";
 
 function freshDefaults() {
   return structuredClone(DEFAULT_PROFILE);
@@ -46,6 +47,7 @@ export function migrateProfile(saved) {
   ensureEquipmentProfile(loaded, saved || {});
   ensureEconomyProfile(loaded, saved || {});
   ensureProgressionProfile(loaded, saved || {});
+  ensureSettingsProfile(loaded, saved || {});
   if (loaded.equipment.buddyMode !== "user") {
     setBuddyMode(loaded, loaded.equipment.buddyMode);
   }

@@ -22,6 +22,7 @@ import {
   ensureProgressionProfile, getPerk, perkTradeoffLines
 } from "./perks.js";
 import { escapeHtml, formatTime } from "./utils.js";
+import { ensureSettingsProfile } from "./settings.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -56,6 +57,9 @@ export const ui = {
   fuel: $("#fuelFill"),
   fuelMeter: $("#fuelMeter"),
   fuelLabel: $("#fuelLabel"),
+  armor: $("#armorFill"),
+  armorMeter: $("#armorMeter"),
+  armorLabel: $("#armorLabel"),
   shield: $("#shieldFill"),
   shieldMeter: $("#shieldMeter"),
   shieldLabel: $("#shieldLabel"),
@@ -103,7 +107,12 @@ export const ui = {
   shopFeedback: $("#shopFeedback"),
   perkModal: $("#perkModal"),
   perkChoices: $("#perkChoices"),
-  perkModalTitle: $("#perkModalTitle")
+  perkModalTitle: $("#perkModalTitle"),
+  settingsModal: $("#settingsModal"),
+  settingsBtn: $("#settingsBtn"),
+  settingsCloseBtn: $("#settingsCloseBtn"),
+  settingsVisualPanel: $("#settingsVisualPanel"),
+  modularMorphStyleInputs: [...document.querySelectorAll('input[name="modularMorphStyle"]')]
 };
 
 let coachingWeapon = "gun";
@@ -188,6 +197,7 @@ export function refreshMenu(profile) {
   renderEquipment(profile);
   renderShop(profile);
   renderPerkModal(profile);
+  refreshSettings(profile);
 }
 
 function refreshLearningLock(profile) {
@@ -256,6 +266,7 @@ export function showGame(mode, profile, mapName = "") {
   ui.results.classList.add("hidden");
   ui.pause.classList.add("hidden");
   ui.perkModal?.classList.add("hidden");
+  showSettings(false);
   ui.hud.classList.remove("hidden");
   const lockedSpar = mode === "training" && isLearningLocked(profile);
   const mapTag = mapName ? ` · ${mapName}` : "";
@@ -284,6 +295,26 @@ export function updateHud(game) {
   ui.fuel.style.width = `${player.fuel * 100}%`;
   ui.fuelMeter.classList.toggle("exhausted", !!player.jetLocked);
   ui.fuelLabel.textContent = player.jetLocked ? "EXHAUSTED" : "FUEL";
+  const hasArmor = (player.retractableMax || 0) > 0;
+  if (ui.armorMeter) {
+    ui.armorMeter.classList.toggle("hidden", !hasArmor);
+    if (hasArmor) {
+      const armorPct = player.retractableMax > 0
+        ? (player.retractableHp / player.retractableMax) * 100
+        : 0;
+      ui.armor.style.width = `${armorPct}%`;
+      ui.armorMeter.classList.toggle("deployed", !!player.retractableDeployed && !player.retractableMorphing);
+      ui.armorMeter.classList.toggle("morphing", !!player.retractableMorphing);
+      ui.armorMeter.classList.toggle("empty", player.retractableHp <= 0);
+      ui.armorLabel.textContent = player.retractableMorphing
+        ? "ARMOR…"
+        : player.retractableHp <= 0
+          ? "ARMOR EMPTY"
+          : player.retractableDeployed
+            ? "ARMOR ON"
+            : "ARMOR OFF";
+    }
+  }
   const hasShield = (player.shieldMaxDurability || 0) > 0;
   ui.shieldMeter.classList.toggle("hidden", !hasShield);
   if (hasShield) {
@@ -442,7 +473,20 @@ export function showMenu(fromResults = false, profile = null) {
   ui.hud.classList.add("hidden");
   ui.conquestSelect?.classList.add("hidden");
   ui.menu.classList.remove("hidden");
+  showSettings(false);
   if (profile) renderPerkModal(profile);
+}
+
+export function refreshSettings(profile) {
+  ensureSettingsProfile(profile);
+  const style = profile.settings.visual.modularMorphStyle;
+  for (const input of ui.modularMorphStyleInputs) {
+    input.checked = input.value === style;
+  }
+}
+
+export function showSettings(open) {
+  ui.settingsModal?.classList.toggle("hidden", !open);
 }
 
 function statMarkup(loadout, powerInfo = null) {
@@ -459,6 +503,17 @@ function statMarkup(loadout, powerInfo = null) {
     <span><b>${stats.fuel}s</b> FUEL</span>
     <span><b>${stats.dps}</b> DPS</span>
     ${shield.durability > 0 ? `<span><b>${shield.durability}</b> SHIELD</span>` : ""}
+    ${(() => {
+      const body = GEAR_BY_ID[loadout.body];
+      const shell = GEAR_BY_ID[loadout.shield];
+      const armorHp = Math.max(
+        body?.retractableArmor?.hp || 0,
+        shell?.retractableArmor?.hp || 0
+      );
+      return armorHp > 0
+        ? `<span><b>${armorHp}</b> ARMOR (F)</span>`
+        : "";
+    })()}
     ${perk ? `<span><b>PERK</b> ${escapeHtml(perk.name)}</span>` : ""}`;
 }
 
@@ -557,10 +612,7 @@ export function renderEquipment(profile) {
   ui.buddySlots.innerHTML = slotsMarkup(profile, "buddy");
   if (ui.playerPerkSlot) ui.playerPerkSlot.innerHTML = perkSlotMarkup(profile, "player");
   if (ui.buddyPerkSlot) ui.buddyPerkSlot.innerHTML = perkSlotMarkup(profile, "buddy");
-  requestAnimationFrame(() => {
-    syncScrollRows(ui.playerSlots);
-    syncScrollRows(ui.buddySlots);
-  });
+  refreshBayScrollRows();
   ui.playerStats.innerHTML = statMarkup(equipment.player, powers.playerDetail);
   ui.buddyStats.innerHTML = statMarkup(equipment.buddy, powers.buddyDetail);
   for (const button of ui.buddyMode.querySelectorAll("[data-mode]")) {
@@ -624,6 +676,13 @@ export function renderEquipment(profile) {
 }
 
 function modifierMarkup(gear) {
+  if (gear.retractableArmor?.hp) {
+    return [
+      `<span class="stat-up">+${gear.retractableArmor.hp} armor HP (F)</span>`,
+      "<span class=\"stat-down\">~10% slower while deployed</span>",
+      "<span>Separate pool · no mid-match recharge</span>"
+    ].join("");
+  }
   if (gear.slot === "weapon") {
     if (gear.id === "mechanical-modularity") {
       return [
@@ -707,7 +766,7 @@ export function renderShop(profile) {
         <button type="button" class="scroll-arrow next" data-scroll-dir="1" aria-label="Next shop items">›</button>
       </div>
     </section>`).join("");
-  requestAnimationFrame(() => syncScrollRows(ui.shopCategories));
+  requestAnimationFrame(() => refreshBayScrollRows());
 }
 
 function syncScrollArrows(row) {
@@ -730,19 +789,45 @@ function syncScrollArrows(row) {
   }
 }
 
+let scrollResizeObserver;
+
+function ensureScrollResizeObserver() {
+  if (scrollResizeObserver) return;
+  scrollResizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.target.classList.contains("hidden-scroll-row")) {
+        syncScrollArrows(entry.target);
+      }
+    }
+  });
+}
+
 function syncScrollRows(root = document) {
+  ensureScrollResizeObserver();
   for (const row of root.querySelectorAll(".hidden-scroll-row")) {
     if (!row.dataset.scrollSynced) {
       row.dataset.scrollSynced = "1";
       row.addEventListener("scroll", () => syncScrollArrows(row), { passive: true });
+      scrollResizeObserver.observe(row);
     }
     syncScrollArrows(row);
   }
 }
 
+function refreshBayScrollRows() {
+  requestAnimationFrame(() => {
+    syncScrollRows(ui.playerSlots);
+    syncScrollRows(ui.buddySlots);
+    syncScrollRows(ui.shopCategories);
+  });
+}
+
 function scrollRow(row, direction) {
   row.scrollBy({ left: direction * row.clientWidth * .75, behavior: "smooth" });
-  requestAnimationFrame(() => syncScrollArrows(row));
+  const sync = () => syncScrollArrows(row);
+  requestAnimationFrame(sync);
+  row.addEventListener("scrollend", sync, { once: true });
+  window.setTimeout(sync, 350);
 }
 
 function fighterCardMarkup(fighter, fighterPower = null) {
@@ -897,6 +982,7 @@ export function bindUi(handlers) {
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", String(active));
       }
+      refreshBayScrollRows();
     }
     if (buy) handlers.purchase(buy.dataset.buy);
     if (arrow) {
@@ -909,6 +995,28 @@ export function bindUi(handlers) {
     if (choice) {
       handlers.choosePerk?.(choice.dataset.pickId, choice.dataset.unlockPerk);
     }
+  });
+  ui.settingsBtn?.addEventListener("click", () => {
+    handlers.refreshSettings?.();
+    showSettings(true);
+  });
+  ui.settingsCloseBtn?.addEventListener("click", () => showSettings(false));
+  ui.settingsModal?.addEventListener("click", (event) => {
+    if (event.target === ui.settingsModal) showSettings(false);
+    const tab = event.target.closest("[data-settings-tab]");
+    if (!tab) return;
+    for (const button of ui.settingsModal.querySelectorAll("[data-settings-tab]")) {
+      const active = button === tab;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
+    }
+    const visual = tab.dataset.settingsTab === "visual";
+    ui.settingsVisualPanel?.classList.toggle("hidden", !visual);
+  });
+  ui.settingsModal?.addEventListener("change", (event) => {
+    const input = event.target.closest('input[name="modularMorphStyle"]');
+    if (!input) return;
+    handlers.settingsChange?.({ modularMorphStyle: input.value });
   });
   $("#menu").addEventListener("keydown", (event) => {
     const row = event.target.closest(".hidden-scroll-row");

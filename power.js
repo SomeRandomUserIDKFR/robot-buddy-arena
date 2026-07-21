@@ -12,7 +12,7 @@
  */
 
 import {
-  effectiveStats, GEAR_BY_ID, shieldStats, SLOT_ORDER, weaponKind
+  effectiveStats, GEAR_BY_ID, resolveRetractableArmor, shieldStats, SLOT_ORDER, weaponKind
 } from "./equipment.js";
 import {
   CAPABILITY_DOMAINS, evidenceReliability, ensureLearningProfile, HABIT_DOMAINS,
@@ -106,7 +106,8 @@ export function gearStatBonus(loadout) {
   if (!loadout) return 0;
   const stats = effectiveStats(loadout);
   const shield = shieldStats(loadout.shield);
-  const hpTerm = (stats.hp || 0) / POWER_WEIGHTS.GEAR_HP_REF;
+  const retractable = resolveRetractableArmor(loadout);
+  const hpTerm = ((stats.hp || 0) + (retractable?.hp || 0) * 0.55) / POWER_WEIGHTS.GEAR_HP_REF;
   const dpsTerm = (stats.dps || 0) / POWER_WEIGHTS.GEAR_DPS_REF;
   const shieldTerm = (shield.durability || 0) / POWER_WEIGHTS.GEAR_SHIELD_REF;
   // Damage-taken below 100 (percent-ish) is survivability.

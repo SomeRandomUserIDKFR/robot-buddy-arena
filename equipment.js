@@ -72,6 +72,15 @@ export const GEAR = [
     { hp: 1.18, speed: .86, damageTaken: .92 }, { price: 110 }),
   item("reactive-frame", "body", "Reactive Frame", "Deflects hits, but sacrifices integrity.",
     { hp: .9, speed: 1.04, damageTaken: .84 }, { price: 145 }),
+  // F deploys/retracts a separate HP pool (+120). Deployed: ~10% slower. Visual uses modular plates.
+  item(
+    "retractable-armor",
+    "body",
+    "Retractable Armor",
+    "F deploys folding plates: +120 armor HP while on, ~10% slower. Pool is separate and does not recharge mid-match.",
+    {},
+    { price: 130, retractableArmor: { hp: 120 } }
+  ),
 
   item("survey-visor", "helmet", "Survey Visor", "Balanced armor and sensor range.", {}),
   item("wideband-array", "helmet", "Wideband Array", "More awareness, slightly less integrity.",
@@ -190,8 +199,28 @@ export const GEAR = [
   }, 95),
   shield("bastion-bulwark", "Bastion Bulwark", "500 block HP; heavy; slows hard when raised or broken.", {
     durability: 500, blockHalfAngle: 1.22, raisedSpeed: .82, brokenSpeed: .7
-  }, 155)
+  }, 155),
+  // Shield-slot retractable: no frontal block cone — F toggles the same armor system as body retractable.
+  item(
+    "retractable-shell",
+    "shield",
+    "Retractable Shell",
+    "F deploys folding plates: +100 armor HP while on, ~10% slower. Not a block shield — armor HP only. Can pair with Retractable Armor (one toggle, uses the higher pool).",
+    {},
+    {
+      price: 115,
+      durability: 0,
+      blockHalfAngle: 0,
+      raisedSpeed: 1,
+      brokenSpeed: 1,
+      retractableArmor: { hp: 100 }
+    }
+  )
 ];
+
+/** Deployed retractable armor move-speed multiplier. */
+export const RETRACTABLE_ARMOR_SPEED = 0.9;
+export const RETRACTABLE_MORPH_DURATION = 0.32;
 
 export const GEAR_BY_ID = Object.fromEntries(GEAR.map((gear) => [gear.id, gear]));
 export const STARTER_GEAR = [
@@ -519,6 +548,138 @@ export function toggleShieldRaise(fighter) {
   return true;
 }
 
+/** Resolve retractable armor pool from body and/or shield slots (higher HP wins — one toggle). */
+export function resolveRetractableArmor(loadout) {
+  let best = 0;
+  let source = null;
+  for (const slot of ["body", "shield"]) {
+    const gear = GEAR_BY_ID[loadout?.[slot]];
+    const pool = gear?.retractableArmor?.hp || 0;
+    if (pool > best) {
+      best = pool;
+      source = gear.id;
+    }
+  }
+  return best > 0 ? { hp: best, sourceId: source } : null;
+}
+
+export function hasRetractableArmor(fighter) {
+  return (fighter?.retractableMax || 0) > 0;
+}
+
+export function syncRetractableDisplayedHp(fighter) {
+  if (!fighter) return;
+  if (!(fighter.retractableMax > 0)) {
+    fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
+    fighter.coreHp = fighter.coreHp ?? fighter.hp;
+    return;
+  }
+  fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
+  fighter.coreHp = Math.max(0, Math.min(fighter.coreMaxHp, fighter.coreHp ?? fighter.hp));
+  fighter.retractableHp = Math.max(
+    0,
+    Math.min(fighter.retractableMax, fighter.retractableHp ?? fighter.retractableMax)
+  );
+  if (fighter.retractableDeployed) {
+    fighter.maxHp = fighter.coreMaxHp + fighter.retractableMax;
+    fighter.hp = fighter.coreHp + fighter.retractableHp;
+  } else {
+    fighter.maxHp = fighter.coreMaxHp;
+    fighter.hp = fighter.coreHp;
+  }
+}
+
+export function retractableSpeedMultiplier(fighter) {
+  if (!hasRetractableArmor(fighter)) return 1;
+  if (fighter.retractableDeployed || fighter.retractableMorphing) {
+    return RETRACTABLE_ARMOR_SPEED;
+  }
+  return 1;
+}
+
+export function beginRetractableMorph(fighter, deploy) {
+  if (!hasRetractableArmor(fighter) || fighter.dead) return false;
+  if (fighter.retractableMorphing) return false;
+  if (!!fighter.retractableDeployed === !!deploy) return false;
+  if (deploy && fighter.retractableHp <= 0) return false;
+  fighter.retractableMorphFrom = fighter.retractableDeployed ? "on" : "off";
+  fighter.retractableMorphTo = deploy ? "on" : "off";
+  fighter.retractableMorphT = 0;
+  fighter.retractableMorphing = true;
+  return true;
+}
+
+export function toggleRetractableArmor(fighter) {
+  if (!hasRetractableArmor(fighter) || fighter.dead) return false;
+  if (fighter.retractableMorphing) return false;
+  return beginRetractableMorph(fighter, !fighter.retractableDeployed);
+}
+
+function finishRetractableMorph(fighter) {
+  const toOn = fighter.retractableMorphTo === "on";
+  fighter.retractableDeployed = toOn;
+  fighter.retractableMorphing = false;
+  fighter.retractableMorphT = 1;
+  syncRetractableDisplayedHp(fighter);
+}
+
+export function tickRetractableArmor(fighter, dt) {
+  if (!hasRetractableArmor(fighter)) return;
+  if (!fighter.retractableMorphing) return;
+  fighter.retractableMorphT = Math.min(
+    1,
+    (fighter.retractableMorphT || 0) + dt / RETRACTABLE_MORPH_DURATION
+  );
+  if (fighter.retractableMorphT >= 1) finishRetractableMorph(fighter);
+}
+
+/** Damage after shield block: armor pool first while deployed, then core HP. */
+export function applyHpDamage(fighter, dealt) {
+  let left = Math.max(0, dealt);
+  if (left <= 0) {
+    syncRetractableDisplayedHp(fighter);
+    return 0;
+  }
+  if (!(fighter.retractableMax > 0)) {
+    fighter.hp = Math.max(0, fighter.hp - left);
+    fighter.coreHp = fighter.hp;
+    fighter.coreMaxHp = fighter.maxHp;
+    return left;
+  }
+  if (fighter.retractableDeployed && fighter.retractableHp > 0) {
+    const absorb = Math.min(fighter.retractableHp, left);
+    fighter.retractableHp -= absorb;
+    left -= absorb;
+  }
+  if (left > 0) {
+    fighter.coreHp = Math.max(0, fighter.coreHp - left);
+  }
+  if (fighter.retractableDeployed && fighter.retractableHp <= 0 && !fighter.retractableMorphing) {
+    beginRetractableMorph(fighter, false);
+  }
+  syncRetractableDisplayedHp(fighter);
+  return dealt;
+}
+
+export function healFighter(fighter, amount) {
+  let left = Math.max(0, amount);
+  if (!(fighter.retractableMax > 0)) {
+    fighter.hp = Math.min(fighter.maxHp, fighter.hp + left);
+    fighter.coreHp = fighter.hp;
+    fighter.coreMaxHp = fighter.maxHp;
+    return;
+  }
+  const coreRoom = Math.max(0, fighter.coreMaxHp - fighter.coreHp);
+  const toCore = Math.min(left, coreRoom);
+  fighter.coreHp += toCore;
+  left -= toCore;
+  if (fighter.retractableDeployed && left > 0) {
+    const armorRoom = Math.max(0, fighter.retractableMax - fighter.retractableHp);
+    fighter.retractableHp += Math.min(left, armorRoom);
+  }
+  syncRetractableDisplayedHp(fighter);
+}
+
 function legacyWeapon(value) {
   if (value === "saber" || value === "arc-saber") return "arc-saber";
   return "pulse-rifle";
@@ -684,7 +845,7 @@ export function suggestBuddyLoadout(profile) {
   const style = evidenceStyle(profile, equipment.player);
   const preferences = style === "ranged"
     ? {
-      body: ["field-frame", "bulwark-frame", "scout-frame"],
+      body: ["field-frame", "bulwark-frame", "scout-frame", "retractable-armor"],
       helmet: ["wideband-array", "survey-visor", "guard-helm"],
       weapon: [
         "laser", "quick-fire-sniper", "classic-sniper", "strong-sniper",
@@ -692,11 +853,13 @@ export function suggestBuddyLoadout(profile) {
         "mechanical-modularity", "arc-saber", "duelist-blade"
       ],
       jetpack: ["endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack"],
-      shield: ["light-buckler", "kinetic-targe", "no-shield", "bastion-bulwark"]
+      shield: [
+        "light-buckler", "kinetic-targe", "retractable-shell", "no-shield", "bastion-bulwark"
+      ]
     }
     : style === "rusher"
       ? {
-        body: ["scout-frame", "field-frame", "bulwark-frame"],
+        body: ["scout-frame", "field-frame", "bulwark-frame", "retractable-armor"],
         helmet: ["survey-visor", "wideband-array", "guard-helm"],
         weapon: [
           "daggers", "heavy-saber", "arc-saber", "duelist-blade",
@@ -704,10 +867,10 @@ export function suggestBuddyLoadout(profile) {
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
         jetpack: ["sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack"],
-        shield: ["no-shield", "light-buckler", "kinetic-targe", "bastion-bulwark"]
+        shield: ["no-shield", "light-buckler", "retractable-shell", "kinetic-targe", "bastion-bulwark"]
       }
       : {
-        body: ["field-frame", "scout-frame", "bulwark-frame"],
+        body: ["field-frame", "scout-frame", "bulwark-frame", "retractable-armor"],
         helmet: ["survey-visor", "wideband-array", "guard-helm"],
         weapon: [
           "pulse-rifle", "arc-saber", "mechanical-modularity", "burst-carbine",
@@ -716,7 +879,9 @@ export function suggestBuddyLoadout(profile) {
           "quick-fire-sniper", "classic-sniper", "strong-sniper", "daggers"
         ],
         jetpack: ["vector-pack", "sprinter-pack", "endurance-pack", "recycler-pack"],
-        shield: ["light-buckler", "no-shield", "kinetic-targe", "bastion-bulwark"]
+        shield: [
+          "light-buckler", "no-shield", "retractable-shell", "kinetic-targe", "bastion-bulwark"
+        ]
       };
   const loadout = Object.fromEntries(
     SLOT_ORDER.map((slot) => [slot, pickOwned(equipment, slot, preferences[slot])])
@@ -789,10 +954,33 @@ export function applyLoadout(fighter, loadout) {
   fighter.weaponId = weapon.id;
   fighter.weapon = weaponKind(weapon);
   fighter.weaponStats = { ...weaponStats(weapon) };
+  fighter.coreMaxHp = stats.hp;
+  fighter.coreHp = stats.hp;
   fighter.maxHp = stats.hp;
   fighter.hp = stats.hp;
   fighter.moveSpeed = stats.speed;
   fighter.acceleration = 1800 * (stats.speed / 520);
+  const retractable = resolveRetractableArmor(loadout);
+  if (retractable) {
+    fighter.retractableMax = retractable.hp;
+    fighter.retractableHp = retractable.hp;
+    fighter.retractableSourceId = retractable.sourceId;
+    fighter.retractableDeployed = false;
+    fighter.retractableMorphing = false;
+    fighter.retractableMorphT = 1;
+    fighter.retractableMorphFrom = "off";
+    fighter.retractableMorphTo = "off";
+    fighter._retractableBaseMoveSpeed = stats.speed;
+  } else {
+    fighter.retractableMax = 0;
+    fighter.retractableHp = 0;
+    fighter.retractableSourceId = null;
+    fighter.retractableDeployed = false;
+    fighter.retractableMorphing = false;
+    fighter.retractableMorphT = 1;
+    fighter._retractableBaseMoveSpeed = null;
+  }
+  syncRetractableDisplayedHp(fighter);
   fighter.damageTaken = stats.damageTaken / 100;
   fighter.sight = stats.sight;
   fighter.jetFuelCapacity = stats.fuel / 3;

@@ -4,7 +4,8 @@ import {
 } from "./config.js";
 import { updateAI } from "./ai.js";
 import {
-  modularAttackLocked, shieldBlocksAttack, shieldSpeedMultiplier, tickModularWeapon
+  applyHpDamage, modularAttackLocked, retractableSpeedMultiplier, shieldBlocksAttack,
+  shieldSpeedMultiplier, tickModularWeapon, tickRetractableArmor
 } from "./equipment.js";
 import {
   damageProp, platformsOf, projectileBlockers, solidProps
@@ -132,7 +133,7 @@ function hit(target, source, damage, angle, game, extras = {}) {
       return;
     }
   }
-  target.hp = Math.max(0, target.hp - dealt);
+  applyHpDamage(target, dealt);
   target.hitFlash = .12;
   target.hitFace = .35;
   target.lastHitAt = game.elapsed;
@@ -158,8 +159,10 @@ function hit(target, source, damage, angle, game, extras = {}) {
   if (counterEligible && (shieldBlocked || dealt > 0)) {
     tryCounterSlash(target, source, game, { requireShield: false });
   }
-  if (target.hp <= 0) {
+  if ((target.coreHp ?? target.hp) <= 0) {
     target.dead = true;
+    target.hp = 0;
+    target.coreHp = 0;
     target.vx = 0;
     target.vy = 0;
   }
@@ -398,6 +401,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   fighter.spotted -= dt;
   fighter.shieldFlash -= dt;
   tickModularWeapon(fighter, dt);
+  tickRetractableArmor(fighter, dt);
   if (
     fighter.modularWeapon
     && fighter.modularMode === "shield"
@@ -419,6 +423,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
     intent.dodge = false;
   }
   const speedCap = fighter.moveSpeed * shieldSpeedMultiplier(fighter)
+    * retractableSpeedMultiplier(fighter)
     * moveSpeedBuffMult(fighter);
   if (Math.abs(fighter.vx) < speedCap * 1.25) {
     fighter.vx += intent.mx * fighter.acceleration * dt;

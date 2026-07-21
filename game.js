@@ -5,7 +5,7 @@ import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
   acceptSuggestion, applyLoadout, awardConquest, cycleModularMode, equipOwned, purchaseGear,
-  setBuddyMode, toggleShieldRaise, trainerLoadout, weaponKind
+  setBuddyMode, toggleRetractableArmor, toggleShieldRaise, trainerLoadout, weaponKind
 } from "./equipment.js";
 import {
   getPendingEncounter, rerollEncounter, setPendingEncounter
@@ -26,9 +26,10 @@ import {
 } from "./learning.js";
 import { createRenderer } from "./rendering.js";
 import { profile, saveProfile } from "./storage.js";
+import { cloneSettings, ensureSettingsProfile, normalizeModularMorphStyle } from "./settings.js";
 import {
-  bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, showConquestSelect,
-  showGame, showMenu, showPause, showResults, ui, updateHud
+  bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, refreshSettings, showConquestSelect,
+  showGame, showMenu, showPause, showResults, showSettings, ui, updateHud
 } from "./ui.js";
 import { capitalize, clamp, formatTime, thoughtReason } from "./utils.js";
 
@@ -104,6 +105,7 @@ function makeGame(mode) {
   const difficulty = mode === "conquest"
     ? (getPendingEncounter()?.rewardTier || "veteran")
     : "veteran";
+  ensureSettingsProfile(profile);
   return {
     id: `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`,
     mode,
@@ -122,6 +124,7 @@ function makeGame(mode) {
     groundStyle: map.groundStyle,
     backdrop: map.backdrop,
     learningLocked: !!profile.learningLocked,
+    settings: cloneSettings(profile.settings),
     fighters,
     bullets: [],
     effects: [],
@@ -322,6 +325,9 @@ function handleKeyDown(event) {
   if (event.code === "KeyQ" && !event.repeat) {
     toggleShieldRaise(game.fighters[0]);
   }
+  if (event.code === "KeyF" && !event.repeat) {
+    toggleRetractableArmor(game.fighters[0]);
+  }
   if (event.code === "KeyE" && !event.repeat) {
     cycleModularMode(game.fighters[0]);
   }
@@ -339,7 +345,7 @@ function handleKeyDown(event) {
     game.paused = !game.paused;
     showPause(game.paused);
   }
-  if (["Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE"].includes(event.code)) {
+  if (["Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE", "KeyF"].includes(event.code)) {
     event.preventDefault();
   }
 }
@@ -463,6 +469,16 @@ bindUi({
     profile.buddyPerkAutonomy = "user";
     saveProfile();
     refreshMenu(profile);
+  },
+  refreshSettings() {
+    refreshSettings(profile);
+  },
+  settingsChange({ modularMorphStyle }) {
+    ensureSettingsProfile(profile);
+    profile.settings.visual.modularMorphStyle = normalizeModularMorphStyle(modularMorphStyle);
+    saveProfile();
+    refreshSettings(profile);
+    if (game) game.settings = cloneSettings(profile.settings);
   },
   coaching: async (text, weapon) => {
     ensureCoaching(profile);

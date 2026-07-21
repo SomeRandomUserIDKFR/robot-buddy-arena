@@ -35,7 +35,20 @@
         "keyboard controls",
         "what buttons do I use"
       ],
-      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. E cycles Mechanical Modularity modes when that weapon is equipped. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
+      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped. E cycles Mechanical Modularity modes when that weapon is equipped. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
+    },
+    {
+      "id": "controls-retractable-armor",
+      "tags": ["controls", "armor", "retractable", "f"],
+      "questions": [
+        "what does F do",
+        "how do I use retractable armor",
+        "retractable armor",
+        "retractable shell",
+        "how does folding armor work",
+        "armor deploy key"
+      ],
+      "answer": "F deploys or retracts Retractable Armor (Main Armor) or Retractable Shell (Shield slot). While deployed you gain a separate armor HP pool added to your max and current HP, and move about 10% slower. Damage hits the armor pool first. It does not recharge mid-match; when emptied the plates fold away. You can equip both items, but there is one F toggle and the larger pool is used. Morph style matches Settings → Visual (Panel fold / Flying rearrangement / Nanotech)."
     },
     {
       "id": "controls-shield",

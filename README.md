@@ -66,6 +66,7 @@ npm run smoke:analyzer
 - **Shift** — jetpack
 - **C** — dodge/dash with brief invulnerability
 - **Q** — raise/lower equipped shield (blocks frontal attacks; cannot fire while raised). With **Mechanical Modularity** in shield mode, Q raises the modular plate the same way.
+- **F** — deploy/retract **Retractable Armor** or **Retractable Shell** (separate armor HP pool; ~10% slower while on; morph style follows Settings → Visual)
 - **E** — cycle **Mechanical Modularity** modes (Sword → Shield → Pulse Rifle) with a short morph animation; cannot attack mid-morph
 - **Mouse** — aim
 - **Left mouse button** — fire gun / swing saber

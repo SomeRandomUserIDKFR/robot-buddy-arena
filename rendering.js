@@ -1,5 +1,6 @@
 import { CEILING, SIGHT, SIZE, WORLD } from "./config.js";
-import { MODULAR_MODE_DEFS } from "./equipment.js";
+import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID } from "./equipment.js";
+import { normalizeModularMorphStyle } from "./settings.js";
 import { platformsOf } from "./maps.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
 import { clamp, dist } from "./utils.js";
@@ -81,7 +82,9 @@ export function weaponVisual(weaponId, holder = {}) {
       : 1;
     // Ease-out so the last morph snap reads as a settle.
     const u = 1 - (1 - t) * (1 - t);
-    let color = mixHexColors(from[faction], to[faction], u);
+    const fromColor = from[faction];
+    const toColor = to[faction];
+    let color = mixHexColors(fromColor, toColor, u);
     if (holder.color && faction === "enemy") {
       color = mixHexColors(color, holder.color, 0.62);
     }
@@ -90,7 +93,24 @@ export function weaponVisual(weaponId, holder = {}) {
       width: from.width + (to.width - from.width) * u,
       gripOffset: from.gripOffset + (to.gripOffset - from.gripOffset) * u,
       color,
-      morphing: !!holder.modularMorphing
+      morphing: !!holder.modularMorphing,
+      morphU: u,
+      fromShape: {
+        length: from.length,
+        width: from.width,
+        gripOffset: from.gripOffset,
+        color: holder.color && faction === "enemy"
+          ? mixHexColors(fromColor, holder.color, 0.62)
+          : fromColor
+      },
+      toShape: {
+        length: to.length,
+        width: to.width,
+        gripOffset: to.gripOffset,
+        color: holder.color && faction === "enemy"
+          ? mixHexColors(toColor, holder.color, 0.62)
+          : toColor
+      }
     };
   }
 
@@ -105,6 +125,482 @@ export function weaponVisual(weaponId, holder = {}) {
     gripOffset: base.gripOffset,
     color
   };
+}
+
+function morphEase(t) {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+function drawFlyingRearrangementMorph(context, visual, alpha) {
+  const u = visual.morphU ?? 0;
+  const spread = Math.sin(u * Math.PI);
+  const segments = 5;
+  const from = visual.fromShape;
+  const to = visual.toShape;
+  if (!from || !to) return;
+
+  for (let i = 0; i < segments; i++) {
+    const t0 = i / segments;
+    const fromX = from.gripOffset + from.length * t0;
+    const fromW = from.length / segments;
+    const toX = to.gripOffset + to.length * t0;
+    const toW = to.length / segments;
+    const lane = i - (segments - 1) / 2;
+
+    let x = fromX + (toX - fromX) * u;
+    const w = fromW + (toW - fromW) * u;
+    const h = from.width + (to.width - from.width) * u;
+    const y = lane * (5 + spread * 16)
+      + Math.sin(u * Math.PI * 2 + i * 1.35) * spread * 5;
+    x += spread * Math.sin(i * 2.05 + u * 6.2) * 11;
+    const rot = spread * lane * 0.24;
+    const shrink = 1 - spread * 0.1;
+    const color = mixHexColors(from.color, to.color, u);
+
+    context.save();
+    context.globalAlpha = alpha * (0.86 + 0.14 * (1 - spread));
+    context.translate(x + w * 0.5, y);
+    context.rotate(rot);
+    context.fillStyle = color;
+    context.fillRect(-w * 0.5 * shrink, -h * 0.5 * shrink, w * shrink, h * shrink);
+    if (spread > 0.12) {
+      context.strokeStyle = mixHexColors(color, "#ffffff", 0.28);
+      context.lineWidth = 1;
+      context.strokeRect(-w * 0.5 * shrink, -h * 0.5 * shrink, w * shrink, h * shrink);
+    }
+    context.restore();
+  }
+
+  if (spread > 0.45) {
+    const coreX = from.gripOffset + from.length * 0.35
+      + (to.gripOffset + to.length * 0.35 - (from.gripOffset + from.length * 0.35)) * u;
+    context.save();
+    context.globalAlpha = alpha * (spread - 0.35);
+    context.fillStyle = visual.color;
+    context.beginPath();
+    context.arc(coreX, 0, 3 + spread * 6, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+  }
+}
+
+function drawNanotechMorph(context, visual, alpha) {
+  const u = visual.morphU ?? 0;
+  const from = visual.fromShape;
+  const to = visual.toShape;
+  if (!from || !to) return;
+
+  const dissolve = morphEase(clamp(u / 0.42, 0, 1));
+  const reform = morphEase(clamp((u - 0.38) / 0.62, 0, 1));
+  const swarm = Math.sin(clamp(u, 0, 1) * Math.PI);
+  const midX = (from.gripOffset + from.length * 0.5 + to.gripOffset + to.length * 0.5) * 0.5;
+  const color = mixHexColors(from.color, to.color, u);
+  const glow = mixHexColors(color, "#ffffff", 0.35);
+
+  // Fading silhouette of the old shape (dissolving into nano dust).
+  if (dissolve < 0.98) {
+    context.save();
+    context.globalAlpha = alpha * (1 - dissolve) * 0.9;
+    context.fillStyle = from.color;
+    context.fillRect(
+      from.gripOffset,
+      -from.width / 2 * (1 - dissolve * 0.35),
+      from.length * (1 - dissolve * 0.55),
+      from.width * (1 - dissolve * 0.35)
+    );
+    context.restore();
+  }
+
+  // Nano swarm: deterministic particle cloud streaming toward the new silhouette.
+  const particles = 28;
+  for (let i = 0; i < particles; i++) {
+    const seed = i * 12.9898;
+    const frac = i / (particles - 1);
+    const fromX = from.gripOffset + from.length * frac;
+    const toX = to.gripOffset + to.length * frac;
+    const orbit = Math.sin(seed + u * 9.4) * swarm * (10 + (i % 5) * 2.2);
+    const drift = Math.cos(seed * 0.7 + u * 7.1) * swarm * 7;
+    const along = dissolve * (1 - reform * 0.35);
+    let x = fromX + (toX - fromX) * morphEase(along) + orbit * 0.35;
+    let y = drift + Math.sin(frac * Math.PI * 2 + u * 6) * swarm * 5;
+    // Pull toward a mid swarm cloud early, then lock onto the new outline.
+    const cloudPull = swarm * (1 - reform);
+    x = x * (1 - cloudPull * 0.35) + (midX + Math.sin(seed) * 14) * cloudPull * 0.35;
+    y = y * (1 - cloudPull * 0.2);
+
+    const size = 1.2 + (i % 3) * 0.7 + swarm * 1.1;
+    context.save();
+    context.globalAlpha = alpha * (0.35 + swarm * 0.55);
+    context.fillStyle = i % 4 === 0 ? glow : color;
+    context.beginPath();
+    context.arc(x, y, size, 0, Math.PI * 2);
+    context.fill();
+    if (swarm > 0.35 && i % 3 === 0) {
+      context.globalAlpha = alpha * swarm * 0.25;
+      context.strokeStyle = glow;
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(x - orbit * 0.2, y - 2);
+      context.lineTo(x + orbit * 0.15, y + 2);
+      context.stroke();
+    }
+    context.restore();
+  }
+
+  // Soft energy sheath while the swarm is densest.
+  if (swarm > 0.2) {
+    context.save();
+    context.globalAlpha = alpha * swarm * 0.22;
+    context.strokeStyle = glow;
+    context.lineWidth = 2 + swarm * 3;
+    context.beginPath();
+    context.ellipse(
+      midX,
+      0,
+      10 + swarm * 16 + Math.abs(to.length - from.length) * 0.08,
+      6 + swarm * 10,
+      0,
+      0,
+      Math.PI * 2
+    );
+    context.stroke();
+    context.restore();
+  }
+
+  // Coalescing new shape.
+  if (reform > 0.02) {
+    context.save();
+    context.globalAlpha = alpha * (0.35 + reform * 0.65);
+    context.fillStyle = to.color;
+    const w = to.length * (0.4 + reform * 0.6);
+    const h = to.width * (0.45 + reform * 0.55);
+    context.fillRect(
+      to.gripOffset + (to.length - w) * 0.5,
+      -h / 2,
+      w,
+      h
+    );
+    if (reform < 0.85) {
+      context.globalAlpha = alpha * (1 - reform) * 0.55;
+      context.strokeStyle = glow;
+      context.lineWidth = 1.5;
+      context.strokeRect(
+        to.gripOffset + (to.length - w) * 0.5,
+        -h / 2,
+        w,
+        h
+      );
+    }
+    context.restore();
+  }
+}
+
+/**
+ * Helmet (open visor) + chestplate for retractable armor.
+ * Face window stays clear so eyes/mouth text remain readable.
+ * `u` 0→1 assemble progress; `scatter` spreads pieces during fly/nanotech mid-morph.
+ */
+function drawHelmetAndChestplate(context, color, bodyAlpha, u, scatter = 0) {
+  if (u <= 0.02) return;
+  const edge = mixHexColors(color, "#061018", 0.4);
+  const highlight = mixHexColors(color, "#ffffff", 0.22);
+  const half = SIZE / 2;
+  const a = bodyAlpha * (0.55 + u * 0.45);
+
+  // --- Helmet: crown, cheeks, chin — open center for face ---
+  const helmetRise = (1 - u) * 14 + scatter * 10;
+  const cheekOut = scatter * 8;
+  context.save();
+  context.globalAlpha = a;
+  context.translate(0, -helmetRise);
+
+  // Crown / brow plate (above eyes)
+  context.fillStyle = color;
+  context.fillRect(-half + 2, -half - 3, SIZE - 4, 11);
+  context.fillStyle = highlight;
+  context.fillRect(-half + 6, -half - 1, SIZE - 12, 3);
+  // Small crest ridge
+  context.fillStyle = color;
+  context.fillRect(-5, -half - 7, 10, 5);
+
+  // Left cheek / temple (outside the face window)
+  context.fillStyle = color;
+  context.fillRect(-half - 1 - cheekOut, -half + 6, 10, 18);
+  context.fillRect(-half + 2 - cheekOut * 0.4, -half + 8, 7, 14);
+  // Right cheek
+  context.fillRect(half - 9 + cheekOut, -half + 6, 10, 18);
+  context.fillRect(half - 9 + cheekOut * 0.4, -half + 8, 7, 14);
+
+  // Chin / jaw under the mouth (below face center)
+  context.fillStyle = color;
+  context.beginPath();
+  context.moveTo(-12, 6);
+  context.lineTo(-8, 12);
+  context.lineTo(8, 12);
+  context.lineTo(12, 6);
+  context.lineTo(7, 4);
+  context.lineTo(-7, 4);
+  context.closePath();
+  context.fill();
+
+  // Visor rim (outline of open face window — does not fill over eyes/mouth)
+  context.strokeStyle = edge;
+  context.lineWidth = 1.5;
+  context.strokeRect(-11, -half + 7, 22, 14);
+  context.strokeStyle = highlight;
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(-half + 3, -half + 7);
+  context.lineTo(half - 3, -half + 7);
+  context.stroke();
+  context.restore();
+
+  // --- Chestplate: shoulders + breastplate on lower torso ---
+  const chestDrop = (1 - u) * 16 + scatter * 8;
+  context.save();
+  context.globalAlpha = a;
+  context.translate(0, chestDrop);
+
+  // Shoulder pads
+  context.fillStyle = color;
+  context.fillRect(-half - 3 - scatter * 4, 2, 14, 9);
+  context.fillRect(half - 11 + scatter * 4, 2, 14, 9);
+  context.fillStyle = highlight;
+  context.fillRect(-half - 1 - scatter * 4, 3, 10, 2);
+  context.fillRect(half - 9 + scatter * 4, 3, 10, 2);
+
+  // Main breastplate
+  context.fillStyle = color;
+  context.beginPath();
+  context.moveTo(-half + 4, 8);
+  context.lineTo(half - 4, 8);
+  context.lineTo(half - 6, half + 1);
+  context.lineTo(-half + 6, half + 1);
+  context.closePath();
+  context.fill();
+
+  // Center keel / seams
+  context.strokeStyle = edge;
+  context.lineWidth = 1.2;
+  context.beginPath();
+  context.moveTo(0, 9);
+  context.lineTo(0, half);
+  context.moveTo(-half + 8, 14);
+  context.lineTo(half - 8, 14);
+  context.stroke();
+  context.strokeStyle = highlight;
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(-6, 10);
+  context.lineTo(-6, half - 2);
+  context.moveTo(6, 10);
+  context.lineTo(6, half - 2);
+  context.stroke();
+
+  // Ab plate row
+  context.fillStyle = mixHexColors(color, "#061018", 0.15);
+  context.fillRect(-half + 8, half - 8, SIZE - 16, 6);
+  context.restore();
+}
+
+function drawNanotechArmorSuit(context, color, glow, half, u, bodyAlpha, morphing) {
+  const swarm = morphing ? Math.sin(u * Math.PI) : 0;
+  const reform = morphing ? morphEase(clamp((u - 0.28) / 0.72, 0, 1)) : 1;
+  const particles = 24;
+
+  for (let i = 0; i < particles; i++) {
+    const seed = i * 9.17;
+    // Bias particles toward helmet (upper) and chest (lower) zones.
+    const zone = i % 2 === 0 ? -1 : 1;
+    const ang = (i / particles) * Math.PI * 2 + u * 1.8;
+    const radius = half * (0.25 + reform * 0.7)
+      + Math.sin(seed + u * 8) * swarm * 10;
+    const x = Math.cos(ang) * radius * 0.85;
+    const y = Math.sin(ang) * radius * 0.55 + zone * half * (0.35 + reform * 0.25);
+    const size = 1.1 + (i % 3) * 0.6 + swarm * 1.3;
+    context.save();
+    context.globalAlpha = bodyAlpha * (0.28 + swarm * 0.5 + reform * 0.22);
+    context.fillStyle = i % 3 === 0 ? glow : color;
+    context.beginPath();
+    context.arc(x, y, size, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+  }
+
+  if (swarm > 0.18) {
+    context.save();
+    context.globalAlpha = bodyAlpha * swarm * 0.22;
+    context.strokeStyle = glow;
+    context.lineWidth = 2 + swarm * 2;
+    context.beginPath();
+    context.ellipse(0, -half * 0.35, half * 0.55, half * 0.4, 0, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.ellipse(0, half * 0.35, half * 0.65, half * 0.45, 0, 0, Math.PI * 2);
+    context.stroke();
+    context.restore();
+  }
+
+  const suitU = morphing ? reform : u;
+  if (suitU > 0.12) {
+    drawHelmetAndChestplate(context, color, bodyAlpha, suitU, swarm * 0.35 * (1 - reform));
+  }
+}
+
+function drawPanelFoldMorph(context, visual, alpha) {
+  const u = visual.morphU ?? 0;
+  const from = visual.fromShape;
+  const to = visual.toShape;
+  if (!from || !to) return;
+
+  const segments = 4;
+  const foldMid = 0.5;
+  const gripX = from.gripOffset + (to.gripOffset - from.gripOffset) * u;
+
+  for (let i = 0; i < segments; i++) {
+    const tStart = i / segments;
+    const fromX = from.gripOffset + from.length * tStart;
+    const fromW = Math.max(2, from.length / segments);
+    const toX = to.gripOffset + to.length * tStart;
+    const toW = Math.max(2, to.length / segments);
+    const lane = i - (segments - 1) / 2;
+    const stagger = i * 0.055;
+
+    let x;
+    let w;
+    let h;
+    let y = 0;
+    let color;
+    let panelAlpha = alpha;
+    let drawSeam = false;
+
+    if (u < foldMid) {
+      const local = clamp((u - stagger * 0.35) / Math.max(0.001, foldMid - stagger * 0.35), 0, 1);
+      const e = morphEase(local);
+      const tuck = 1 - e;
+      w = fromW * tuck;
+      x = fromX + (gripX - fromX) * e * 0.92;
+      h = from.width * (0.55 + 0.45 * tuck);
+      y = lane * from.width * 0.22 * e;
+      color = from.color;
+      panelAlpha *= 0.92 - e * 0.18;
+      drawSeam = e > 0.08 && e < 0.92;
+    } else {
+      const local = clamp((u - foldMid - stagger * 0.35) / Math.max(0.001, 1 - foldMid - stagger * 0.35), 0, 1);
+      const e = morphEase(local);
+      w = toW * e;
+      x = gripX + (toX - gripX) * e;
+      h = to.width * (0.55 + 0.45 * e);
+      y = lane * to.width * 0.18 * (1 - e);
+      color = mixHexColors(from.color, to.color, e);
+      panelAlpha *= 0.72 + e * 0.28;
+      drawSeam = e > 0.08 && e < 0.95;
+    }
+
+    if (w < 1.2) continue;
+
+    context.save();
+    context.globalAlpha = panelAlpha;
+    context.fillStyle = color;
+    context.fillRect(x, y - h / 2, w, h);
+    if (drawSeam) {
+      context.strokeStyle = mixHexColors(color, "#061018", 0.45);
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(x + w, y - h / 2);
+      context.lineTo(x + w, y + h / 2);
+      context.stroke();
+      context.strokeStyle = mixHexColors(color, "#ffffff", 0.16);
+      context.beginPath();
+      context.moveTo(x, y - h / 2);
+      context.lineTo(x, y + h / 2);
+      context.stroke();
+    }
+    context.restore();
+  }
+}
+
+/** Retractable armor: open-face helmet + chestplate (morph styles: fold / fly / smooth / nanotech). */
+function drawRetractableArmorPlates(context, game, fighter, centerX, centerY, bodyAlpha) {
+  if (!(fighter.retractableMax > 0)) return;
+  const morphing = !!fighter.retractableMorphing;
+  const deployed = !!fighter.retractableDeployed;
+  if (!morphing && !deployed) return;
+
+  const style = normalizeModularMorphStyle(game.settings?.visual?.modularMorphStyle);
+  const faction = fighter.buddy ? "buddy" : fighter.team ? "enemy" : "ally";
+  const plate = MODULAR_MODE_DEFS.shield.visual;
+  let color = plate[faction] || "#8aa4b0";
+  if (fighter.color && faction === "enemy") {
+    color = mixHexColors(color, fighter.color, 0.45);
+  }
+
+  let u = deployed && !morphing ? 1 : 0;
+  if (morphing) {
+    const t = Math.max(0, Math.min(1, fighter.retractableMorphT ?? 0));
+    const eased = 1 - (1 - t) * (1 - t);
+    u = fighter.retractableMorphTo === "on" ? eased : 1 - eased;
+  }
+  if (u <= 0.02) return;
+
+  const half = SIZE / 2 + 4;
+  context.save();
+  context.translate(centerX, centerY);
+
+  if (style === "nanotech") {
+    const glow = mixHexColors(color, "#ffffff", 0.35);
+    drawNanotechArmorSuit(context, color, glow, half, u, bodyAlpha, morphing);
+    context.restore();
+    return;
+  }
+
+  if (style === "fly" && morphing) {
+    const scatter = Math.sin(u * Math.PI);
+    drawHelmetAndChestplate(context, color, bodyAlpha, u, scatter);
+  } else if (style === "smooth") {
+    drawHelmetAndChestplate(context, color, bodyAlpha * (0.7 + u * 0.3), u, 0);
+  } else {
+    // Panel fold: helmet drops from above, chest rises from below (scatter encodes offset).
+    const foldScatter = (1 - u) * 0.85;
+    drawHelmetAndChestplate(context, color, bodyAlpha, u, foldScatter);
+  }
+
+  context.restore();
+}
+
+function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
+  const alpha = bodyAlpha * (shieldUp ? .38 : 1);
+  const morphStyle = normalizeModularMorphStyle(game.settings?.visual?.modularMorphStyle);
+  const canMorph = fighter.weaponId === MODULAR_WEAPON_ID
+    && visual.morphing
+    && visual.fromShape
+    && visual.toShape;
+
+  if (canMorph && morphStyle === "fly") {
+    drawFlyingRearrangementMorph(context, visual, alpha);
+    return;
+  }
+  if (canMorph && morphStyle === "fold") {
+    drawPanelFoldMorph(context, visual, alpha);
+    return;
+  }
+  if (canMorph && morphStyle === "nanotech") {
+    drawNanotechMorph(context, visual, alpha);
+    return;
+  }
+
+  context.globalAlpha = alpha;
+  context.fillStyle = visual.color;
+  context.fillRect(visual.gripOffset, -visual.width / 2, visual.length, visual.width);
+  if (visual.morphing && morphStyle === "smooth") {
+    context.globalAlpha = alpha * 0.45;
+    context.fillRect(
+      visual.gripOffset + visual.length * 0.15,
+      -visual.width * 0.35,
+      visual.length * 0.55,
+      visual.width * 0.7
+    );
+  }
 }
 
 export function createRenderer(canvas) {
@@ -486,6 +982,9 @@ export function createRenderer(canvas) {
     context.fillStyle = fighter.hitFlash > 0 ? "#fff" : fighter.color;
     context.fillRect(fighter.x, fighter.y, SIZE, SIZE);
     context.shadowBlur = 0;
+    drawRetractableArmorPlates(
+      context, game, fighter, centerX, centerY, fighter.dead ? .45 : 1
+    );
     context.fillStyle = "#071016";
     context.textAlign = "center";
     context.textBaseline = "middle";
@@ -504,20 +1003,7 @@ export function createRenderer(canvas) {
     const visual = weaponVisual(fighter.weaponId || fighter.weapon, fighter);
     const bodyAlpha = fighter.dead ? .45 : 1;
     const shieldUp = fighter.shieldRaised && !fighter.shieldBroken;
-    // Dim the gun/blade while the shield is up so the block reads first.
-    context.globalAlpha = bodyAlpha * (shieldUp ? .38 : 1);
-    context.fillStyle = visual.color;
-    context.fillRect(visual.gripOffset, -visual.width / 2, visual.length, visual.width);
-    // Morphing: second segment hint for the transforming silhouette.
-    if (visual.morphing) {
-      context.globalAlpha = bodyAlpha * 0.45;
-      context.fillRect(
-        visual.gripOffset + visual.length * 0.15,
-        -visual.width * 0.35,
-        visual.length * 0.55,
-        visual.width * 0.7
-      );
-    }
+    drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp);
     context.globalAlpha = bodyAlpha;
     if ((fighter.shieldMaxDurability || 0) > 0 && (fighter.shieldRaised || fighter.shieldBroken)) {
       const half = fighter.shieldBlockHalfAngle || 1.2;
