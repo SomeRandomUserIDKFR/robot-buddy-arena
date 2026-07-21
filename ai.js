@@ -429,12 +429,15 @@ export function updateAiShield(fighter, state, game, visible, target, aiId, styl
 }
 
 /** Minimum seconds between AI retractable deploy/retract morphs. */
-export const RETRACTABLE_AI_COOLDOWN = .85;
+export const RETRACTABLE_AI_COOLDOWN = .7;
+/** Keep plates out at least this long once deployed (readable fight use). */
+export const RETRACTABLE_AI_MIN_HOLD = 1.75;
 
 /**
  * Decide whether plates should be deployed right now.
- * Deploy under fire / when core is hurt in a fight; fold for speed when safe
- * or escaping without hard pressure. Empty pools cannot deploy.
+ * Default fight posture: plates ON whenever a foe is visible.
+ * Fold for speed when searching/idle, or escaping without hard pressure.
+ * Empty pools cannot deploy.
  */
 export function wantRetractableDeployed(fighter, state, game, visible, target) {
   if (!hasRetractableArmor(fighter) || fighter.dead) return false;
@@ -451,30 +454,20 @@ export function wantRetractableDeployed(fighter, state, game, visible, target) {
   const hardPressure = dodgeInfo.severity >= 2 || shieldInfo.severity >= 2;
   const escaping = !!state?.escape;
 
-  // Hard pressure or incoming shots: plates on.
+  // Incoming / melee pressure always wants plates.
   if (hardPressure || underFire) return true;
   // Escape wants mobility unless still taking heavy fire (handled above).
   if (escaping) return false;
-  // No eyes on a foe and quiet: fold for speed.
-  if (!threatFoe) return false;
-
-  const coreMax = Math.max(1, fighter.coreMaxHp || fighter.maxHp || 1);
-  const coreRatio = Math.max(0, fighter.coreHp ?? fighter.hp ?? 0) / coreMax;
-  const armorRatio = (fighter.retractableHp || 0)
-    / Math.max(1, fighter.retractableMax || 1);
-
-  // Visible fight: deploy when core is dented or armor still has real buffer.
-  if (coreRatio < .72) return true;
-  if (armorRatio > .35 && coreRatio < .92) return true;
-  // Thin leftover pool while not shot at — prefer speed.
-  if (armorRatio < .2) return false;
+  // Active fight: keep plates out whenever eyes are on a foe.
+  if (threatFoe) return true;
+  // Searching / idle: fold for speed.
   return false;
 }
 
 /**
- * Buddy/enemy retractable armor policy: deploy under threat, retract for speed
- * when safe or escaping. Respects morph lockout and a short toggle cooldown.
- * Green AIs sometimes forget to deploy or leave plates parked.
+ * Buddy/enemy retractable armor policy: plates on in fights, off when safe or
+ * escaping. Min-hold keeps deploys readable. Green enemies sometimes fumble;
+ * player buddies deploy reliably (this is a loadout verb, not a timing skill).
  */
 export function updateAiRetractableArmor(fighter, state, game, visible, target, aiId) {
   if (!hasRetractableArmor(fighter) || fighter.dead || fighter.retractableMorphing) {
@@ -485,24 +478,26 @@ export function updateAiRetractableArmor(fighter, state, game, visible, target, 
 
   let want = wantRetractableDeployed(fighter, state, game, visible, target);
 
-  // Untrained buddies and green enemies: miss mild deploys / park plates.
-  if (fighter.buddy) {
-    const skill = clamp(Number(state.shieldCompetence) || 0, 0, 1);
-    if (want && !fighter.retractableDeployed && Math.random() > lerp(.55, 1, skill)) {
-      want = false;
-    } else if (
-      !want && fighter.retractableDeployed && Math.random() > lerp(.5, 1, skill)
-    ) {
-      want = true;
-    }
-  } else if (isGreenEnemyAi(aiId)) {
+  // Honor min-hold so plates don't blink off between shots.
+  if (
+    fighter.retractableDeployed
+    && !want
+    && (fighter.retractableHp || 0) > 0
+    && (state.retractableHoldUntil || 0) > now
+  ) {
+    want = true;
+  }
+
+  // Only green Conquest enemies fumble retractable use. Buddies should clearly
+  // use the gear the player equipped for them.
+  if (isGreenEnemyAi(aiId) && !fighter.buddy) {
     const skill = aiId === "recruit"
       ? ENEMY_GREEN.recruitShieldSkill
       : ENEMY_GREEN.shieldSkill;
-    if (want && !fighter.retractableDeployed && Math.random() > lerp(.5, 1, skill)) {
+    if (want && !fighter.retractableDeployed && Math.random() > lerp(.62, 1, skill)) {
       want = false;
     } else if (
-      !want && fighter.retractableDeployed && Math.random() > lerp(.45, 1, skill)
+      !want && fighter.retractableDeployed && Math.random() > lerp(.55, 1, skill)
     ) {
       want = true;
     }
@@ -511,6 +506,7 @@ export function updateAiRetractableArmor(fighter, state, game, visible, target, 
   if (!!want === !!fighter.retractableDeployed) return;
   if (!beginRetractableMorph(fighter, want)) return;
   state.retractableCooldownUntil = now + RETRACTABLE_AI_COOLDOWN;
+  if (want) state.retractableHoldUntil = now + RETRACTABLE_AI_MIN_HOLD;
 }
 
 /**
