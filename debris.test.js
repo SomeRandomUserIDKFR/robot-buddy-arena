@@ -1,13 +1,35 @@
 import assert from "node:assert/strict";
 import {
-  NON_ARMOR_DEBRIS_LIFE, restoreMapProp, spawnPropDebris, tickGroundDebris,
-  tryReconquerAtSpawn
+  buildPropJigsaw, NON_ARMOR_DEBRIS_LIFE, PROP_DEBRIS_COLORS, restoreMapProp,
+  spawnPropDebris, tickGroundDebris, tryReconquerAtSpawn
 } from "./debris.js";
 import { createMapRuntime, damageProp } from "./maps.js";
 import { normalizeDebrisDespawnStyle } from "./settings.js";
 
 assert.equal(normalizeDebrisDespawnStyle("decimate"), "decimate");
 assert.equal(normalizeDebrisDespawnStyle("nope"), "fade");
+
+// Jigsaw uses exact prop colors and full fragment coverage.
+{
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate");
+  const tiles = buildPropJigsaw(crate);
+  assert.equal(tiles.length, 16, "4x4 crate jigsaw");
+  assert.ok(tiles.every((t) => t.color === PROP_DEBRIS_COLORS.crate.fill));
+  assert.ok(tiles.every((t) => t.material === "wood"), "map crates are wood, not metal");
+  const area = tiles.reduce((sum, t) => sum + t.w * t.h, 0);
+  assert.ok(Math.abs(area - crate.w * crate.h) < 1, "tiles cover 100% of crate area");
+}
+
+{
+  const forest = createMapRuntime("forest");
+  const tree = forest.props.find((p) => p.kind === "tree");
+  const tiles = buildPropJigsaw(tree);
+  assert.ok(tiles.length >= 16, "trunk + canopy fragments");
+  assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.tree.fill));
+  assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.treeCanopy.fill
+    || t.color === PROP_DEBRIS_COLORS.treeCanopy.fill2));
+}
 
 // Fade despawn removes non-armor debris after lifetime + animation.
 {
@@ -23,8 +45,10 @@ assert.equal(normalizeDebrisDespawnStyle("nope"), "fade");
     reconquerQueue: []
   };
   damageProp(crate, crate.hp, game, crate.x + 5, crate.y + 5);
-  assert.ok(game.groundDebris.length >= 6);
-  assert.ok(game.groundDebris.every((p) => p.material === "metal" && !p.immortal));
+  assert.equal(game.groundDebris.length, 16);
+  assert.ok(game.groundDebris.every((p) => p.material === "wood" && !p.immortal));
+  assert.ok(game.groundDebris.every((p) => p.color === PROP_DEBRIS_COLORS.crate.fill));
+  assert.ok(game.groundDebris.every((p) => Number.isFinite(p.homeLx) && Number.isFinite(p.homeLy)));
 
   for (let i = 0; i < Math.ceil(NON_ARMOR_DEBRIS_LIFE * 60) + 5; i++) {
     game.elapsed += 1 / 60;
@@ -52,6 +76,7 @@ assert.equal(normalizeDebrisDespawnStyle("nope"), "fade");
     reconquerQueue: []
   };
   spawnPropDebris(game, tree, tree.x + 10, tree.y + 40);
+  assert.ok(game.groundDebris.length >= 16);
   for (const piece of game.groundDebris) piece.life = 0.01;
   tickGroundDebris(game, 0.02);
   assert.ok(game.groundDebris.every((p) => p.despawnMode === "decimate"));
@@ -60,7 +85,7 @@ assert.equal(normalizeDebrisDespawnStyle("nope"), "fade");
   assert.equal(game.groundDebris.length, 0);
 }
 
-// Reconquer waits for a spawn opportunity, then restores a destroyed prop.
+// Reconquer jigsaw: tiles home to their slots, then the prop rebuilds.
 {
   const yard = createMapRuntime("yard");
   const crate = yard.props.find((p) => p.kind === "crate");
@@ -76,16 +101,17 @@ assert.equal(normalizeDebrisDespawnStyle("nope"), "fade");
   };
   damageProp(crate, crate.hp, game, crate.x + 5, crate.y + 5);
   assert.equal(crate.destroyed, true);
+  const slots = game.groundDebris.map((p) => `${p.homeLx},${p.homeLy}`);
+  assert.equal(new Set(slots).size, slots.length, "unique jigsaw slots");
   for (const piece of game.groundDebris) piece.life = 0.01;
   tickGroundDebris(game, 0.02);
   assert.ok(game.reconquerQueue.length >= 1);
-  assert.ok(game.groundDebris.every((p) => p.despawnMode === "reconquer-wait"));
 
   const fakeSpawn = { x: 800, y: 1200, w: 40, h: 40 };
   const used = tryReconquerAtSpawn(game, fakeSpawn, { preferPowerCrate: false });
   assert.equal(used, true);
   assert.ok(game.groundDebris.every((p) => p.despawnMode === "reconquer-home"));
-  for (let i = 0; i < 90; i++) tickGroundDebris(game, 1 / 60);
+  for (let i = 0; i < 120; i++) tickGroundDebris(game, 1 / 60);
   assert.equal(crate.destroyed, false, "crate rebuilt");
   assert.ok(crate.hp > 0);
   assert.equal(game.groundDebris.length, 0);

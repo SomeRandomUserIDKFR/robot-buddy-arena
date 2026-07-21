@@ -1241,12 +1241,13 @@ export function createRenderer(canvas) {
 
   function drawGroundDebrisPiece(piece, fogAlpha = 1) {
     const color = piece.color || "#8aa4b0";
-    const edge = mixHexColors(color, "#061018", 0.4);
-    const highlight = mixHexColors(color, "#ffffff", 0.18);
-    const settle = piece.grounded ? 0.72 + (piece.settle || 0) * 0.28 : 0.9;
-    const material = piece.material || "armor";
+    const edge = piece.edge || mixHexColors(color, "#061018", 0.4);
+    const highlight = mixHexColors(color, "#ffffff", 0.16);
+    const settle = piece.grounded ? 0.78 + (piece.settle || 0) * 0.22 : 0.95;
     const scale = Math.max(0.02, piece.scale ?? 1);
     const pieceAlpha = Math.max(0, Math.min(1, piece.alpha ?? 1));
+    const hw = piece.w / 2;
+    const hh = piece.h / 2;
     context.save();
     context.translate(piece.x, piece.y);
     context.rotate(piece.rot || 0);
@@ -1255,86 +1256,68 @@ export function createRenderer(canvas) {
     context.globalAlpha = settle * fogAlpha * pieceAlpha;
     context.fillStyle = color;
 
-    if (material === "wood") {
-      // Logs / planks / chips with a grain line.
-      context.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
-      context.strokeStyle = mixHexColors(color, "#2a1808", 0.35);
-      context.lineWidth = 1;
-      context.beginPath();
-      context.moveTo(-piece.w / 2 + 2, -1);
-      context.lineTo(piece.w / 2 - 2, 1);
-      context.stroke();
-      context.strokeStyle = highlight;
-      context.beginPath();
-      context.moveTo(-piece.w / 2 + 3, piece.h / 4);
-      context.lineTo(piece.w / 2 - 4, piece.h / 4);
-      context.stroke();
-    } else if (material === "metal") {
-      // Angular metal fragments with a bright edge.
-      context.beginPath();
-      if (piece.kind === "corner") {
-        context.moveTo(-piece.w / 2, -piece.h / 2);
-        context.lineTo(piece.w / 2, -piece.h / 2);
-        context.lineTo(piece.w / 2, 0);
-        context.lineTo(0, piece.h / 2);
-        context.lineTo(-piece.w / 2, piece.h / 2);
-      } else if (piece.kind === "strip") {
-        context.rect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+    // Jigsaw prop tiles (and armor scraps) — keep silhouette accurate for reconquer.
+    if (piece.material !== "armor" && (piece.kind === "tile" || piece.homeLx != null)) {
+      if (piece.shape === "ellipse") {
+        context.beginPath();
+        context.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2);
+        context.fill();
       } else {
-        context.moveTo(-piece.w / 2, -piece.h / 2 + 2);
-        context.lineTo(-piece.w / 4, -piece.h / 2);
-        context.lineTo(piece.w / 2, -piece.h / 3);
-        context.lineTo(piece.w / 2 - 2, piece.h / 2);
-        context.lineTo(-piece.w / 3, piece.h / 2);
-        context.lineTo(-piece.w / 2, 0);
+        context.fillRect(-hw, -hh, piece.w, piece.h);
       }
-      context.closePath();
-      context.fill();
-      context.strokeStyle = highlight;
-      context.lineWidth = 1.2;
-      context.beginPath();
-      context.moveTo(-piece.w / 2 + 1, -piece.h / 4);
-      context.lineTo(piece.w / 2 - 2, -piece.h / 5);
-      context.stroke();
       context.strokeStyle = edge;
-      context.strokeRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
-    } else if (material === "plant") {
-      context.beginPath();
-      context.ellipse(0, 0, piece.w / 2, piece.h / 2, 0, 0, Math.PI * 2);
-      context.fill();
-      context.strokeStyle = mixHexColors(color, "#102010", 0.4);
       context.lineWidth = 1;
-      context.beginPath();
-      context.moveTo(0, -piece.h / 2 + 1);
-      context.lineTo(0, piece.h / 2 - 1);
-      context.stroke();
-    } else if (piece.kind === "helmet" || piece.kind === "breast") {
-      context.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      context.strokeRect(-hw + 0.5, -hh + 0.5, piece.w - 1, piece.h - 1);
+      if (piece.detail === "crate") {
+        context.beginPath();
+        context.moveTo(-hw + 1, -hh + 1);
+        context.lineTo(hw - 1, hh - 1);
+        context.stroke();
+      } else if (piece.detail === "barrel") {
+        context.beginPath();
+        context.moveTo(-hw + 1, 0);
+        context.lineTo(hw - 1, 0);
+        context.stroke();
+      } else if (piece.detail === "powerCrate") {
+        context.strokeStyle = highlight;
+        context.strokeRect(-hw + 2, -hh + 2, piece.w - 4, piece.h - 4);
+      } else if (piece.material === "wood") {
+        context.strokeStyle = highlight;
+        context.beginPath();
+        context.moveTo(-hw + 2, -hh * 0.2);
+        context.lineTo(hw - 2, -hh * 0.1);
+        context.stroke();
+      }
+      context.restore();
+      return;
+    }
+
+    if (piece.kind === "helmet" || piece.kind === "breast") {
+      context.fillRect(-hw, -hh, piece.w, piece.h);
       context.fillStyle = highlight;
-      context.fillRect(-piece.w / 2 + 3, -piece.h / 2 + 1, piece.w - 6, 2);
+      context.fillRect(-hw + 3, -hh + 1, piece.w - 6, 2);
       context.strokeStyle = edge;
       context.lineWidth = 1;
-      context.strokeRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      context.strokeRect(-hw, -hh, piece.w, piece.h);
     } else if (piece.kind === "chin") {
       context.beginPath();
-      context.moveTo(-piece.w / 2, -piece.h / 2);
-      context.lineTo(-piece.w / 3, piece.h / 2);
-      context.lineTo(piece.w / 3, piece.h / 2);
-      context.lineTo(piece.w / 2, -piece.h / 2);
+      context.moveTo(-hw, -hh);
+      context.lineTo(-piece.w / 3, hh);
+      context.lineTo(piece.w / 3, hh);
+      context.lineTo(hw, -hh);
       context.closePath();
       context.fill();
     } else if (piece.kind === "crest") {
-      context.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      context.fillRect(-hw, -hh, piece.w, piece.h);
       context.fillStyle = highlight;
-      context.fillRect(-2, -piece.h / 2 - 1, 4, piece.h + 2);
+      context.fillRect(-2, -hh - 1, 4, piece.h + 2);
     } else {
-      // Armor cheeks/shoulders/ab — simple plate shards.
-      context.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
+      context.fillRect(-hw, -hh, piece.w, piece.h);
       context.strokeStyle = edge;
       context.lineWidth = 1;
       context.beginPath();
-      context.moveTo(-piece.w / 2 + 2, 0);
-      context.lineTo(piece.w / 2 - 2, 0);
+      context.moveTo(-hw + 2, 0);
+      context.lineTo(hw - 2, 0);
       context.stroke();
     }
     context.restore();

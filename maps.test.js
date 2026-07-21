@@ -48,7 +48,7 @@ import { generateEncounter, resetConquestSelectSession } from "./conquest.js";
   assert.ok(game.groundDebris.some((p) => p.material === "plant"));
 }
 
-// Trees leave wood debris; crates leave metal fragments for the match.
+// Trees leave wood + canopy scraps; map crates leave wood jigsaw; pipes leave metal.
 {
   const forest = createMapRuntime("forest");
   const tree = forest.props.find((p) => p.kind === "tree");
@@ -58,7 +58,8 @@ import { generateEncounter, resetConquestSelectSession } from "./conquest.js";
   };
   damageProp(tree, tree.hp, treeGame, tree.x + 10, tree.y + 40);
   assert.equal(tree.destroyed, true);
-  assert.ok(treeGame.groundDebris.filter((p) => p.material === "wood").length >= 6);
+  assert.ok(treeGame.groundDebris.filter((p) => p.material === "wood").length >= 8);
+  assert.ok(treeGame.groundDebris.filter((p) => p.material === "plant").length >= 6);
 
   const yard = createMapRuntime("yard");
   const crate = yard.props.find((p) => p.kind === "crate");
@@ -68,9 +69,19 @@ import { generateEncounter, resetConquestSelectSession } from "./conquest.js";
   };
   damageProp(crate, crate.hp, crateGame, crate.x + 10, crate.y + 10);
   assert.equal(crate.destroyed, true);
-  const metal = crateGame.groundDebris.filter((p) => p.material === "metal");
-  assert.ok(metal.length >= 6, "crates drop metal fragments");
-  assert.ok(metal.some((p) => p.kind === "panel" || p.kind === "shard"));
+  const wood = crateGame.groundDebris.filter((p) => p.material === "wood");
+  assert.equal(wood.length, 16, "full 4x4 wood crate jigsaw");
+  assert.ok(wood.every((p) => p.kind === "tile"));
+
+  const pipe = yard.props.find((p) => p.kind === "pipe")
+    || createMapRuntime("battlefield").props.find((p) => p.kind === "pipe");
+  if (pipe) {
+    const pipeGame = {
+      effects: [], props: [pipe], groundDebris: [], platforms: yard.platforms
+    };
+    damageProp(pipe, pipe.hp, pipeGame, pipe.x + 10, pipe.y + 5);
+    assert.ok(pipeGame.groundDebris.every((p) => p.material === "metal"));
+  }
 }
 
 // Debris settled on a breakable falls again when that support is destroyed.

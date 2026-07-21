@@ -8,6 +8,7 @@ import { clamp } from "./utils.js";
 
 export const NON_ARMOR_DEBRIS_LIFE = 14;
 export const DEBRIS_DESPAWN_DURATION = 1.05;
+export const RECONQUER_DURATION = 1.45;
 
 function debrisLandables(game) {
   const platforms = game?.platforms?.length ? game.platforms : [];
@@ -32,9 +33,10 @@ function nextSourceId(game) {
 
 function burstPiece(game, {
   material, kind, x, y, w, h, color, vx = 0, vy = 0, facing = 0, index = 0,
-  sourceType = null, sourceKind = null, sourceId = null, sourceProp = null
+  sourceType = null, sourceKind = null, sourceId = null, sourceProp = null,
+  homeLx = 0, homeLy = 0, shape = "rect", detail = null, edge = null
 }) {
-  const burst = 120 + (index % 4) * 30;
+  const burst = 100 + (index % 5) * 28;
   const ang = (-Math.PI / 2) + (Math.random() - 0.5) * 1.5 + facing * 0.12;
   const armor = material === "armor";
   pushPiece(game, {
@@ -51,6 +53,12 @@ function burstPiece(game, {
     baseW: w,
     baseH: h,
     color,
+    edge: edge || null,
+    shape: shape || "rect",
+    detail: detail || null,
+    // Jigsaw slot relative to object center — reconquer flies each tile home.
+    homeLx,
+    homeLy,
     grounded: false,
     settle: 0,
     // Armor never despawns mid-match; everything else ages out.
@@ -79,81 +87,179 @@ function armorDebrisColor(fighter) {
   return "#8aa4b0";
 }
 
-/** Material + colors for breakable map props. */
-export function propDebrisProfile(kind) {
-  switch (kind) {
-    case "tree":
-      return {
-        material: "wood",
-        colors: ["#6b4a28", "#8a6234", "#5a3a1c", "#a07440"],
-        specs: [
-          { kind: "log", w: 22, h: 10 },
-          { kind: "log", w: 18, h: 8 },
-          { kind: "plank", w: 16, h: 6 },
-          { kind: "plank", w: 14, h: 5 },
-          { kind: "chip", w: 9, h: 7 },
-          { kind: "chip", w: 8, h: 6 },
-          { kind: "branch", w: 20, h: 5 },
-          { kind: "branch", w: 12, h: 4 }
-        ]
-      };
-    case "cactus":
-      return {
-        material: "plant",
-        colors: ["#3d6a38", "#4a783f", "#2f552c"],
-        specs: [
-          { kind: "chunk", w: 12, h: 10 },
-          { kind: "chunk", w: 10, h: 8 },
-          { kind: "spine", w: 8, h: 14 },
-          { kind: "spine", w: 7, h: 12 },
-          { kind: "chip", w: 6, h: 6 }
-        ]
-      };
-    case "bush":
-      return {
-        material: "plant",
-        colors: ["#3a5c30", "#4a6e38", "#2c4824"],
-        specs: [
-          { kind: "tuft", w: 14, h: 8 },
-          { kind: "tuft", w: 12, h: 7 },
-          { kind: "chip", w: 7, h: 6 },
-          { kind: "chip", w: 6, h: 5 }
-        ]
-      };
-    case "crate":
-    case "pipe":
-    case "pillar":
-    case "barrel":
-    case "powerCrate":
-      return {
-        material: "metal",
-        colors: kind === "powerCrate"
-          ? ["#9aa8b8", "#b0bcc8", "#7a8898", "#c4ced8"]
-          : kind === "barrel"
-            ? ["#8a7060", "#a88870", "#6e5848", "#b89878"]
-            : ["#8a949e", "#a8b0b8", "#6e787f", "#c0c8d0"],
-        specs: [
-          { kind: "panel", w: 16, h: 10 },
-          { kind: "panel", w: 14, h: 9 },
-          { kind: "shard", w: 11, h: 8 },
-          { kind: "shard", w: 10, h: 7 },
-          { kind: "rivet", w: 7, h: 6 },
-          { kind: "strip", w: 18, h: 5 },
-          { kind: "strip", w: 12, h: 4 },
-          { kind: "corner", w: 9, h: 9 }
-        ]
-      };
-    default:
-      return {
-        material: "scrap",
-        colors: ["#7a7060", "#908070"],
-        specs: [
-          { kind: "chip", w: 10, h: 7 },
-          { kind: "chip", w: 8, h: 6 },
-          { kind: "chip", w: 7, h: 5 }
-        ]
-      };
+/** Exact prop paint colors (match rendering.js drawPropBody / power crates). */
+export const PROP_DEBRIS_COLORS = Object.freeze({
+  cactus: { fill: "#3d8a4a", edge: "#2a5e32", material: "plant" },
+  bush: { fill: "#6a5838", edge: "#3a3018", material: "plant" },
+  tree: { fill: "#3a2818", edge: "#241810", material: "wood" },
+  treeCanopy: { fill: "#1a3a24", fill2: "#2d5a3c", edge: "#0e2416", material: "plant" },
+  crate: { fill: "#8a6a3a", edge: "#4a3818", material: "wood" },
+  pipe: { fill: "#6a7888", fill2: "#3a4858", edge: "#2a343e", material: "metal" },
+  pillar: { fill: "#7a6a72", fill2: "#4a3e48", edge: "#2e262c", material: "stone" },
+  barrel: { fill: "#8a5030", edge: "#3a2010", material: "metal" },
+  powerCrate: { fill: "#6a7078", rim: "#2a3038", edge: "#1a2028", material: "metal" }
+});
+
+function gridRect(localX, localY, w, h, cols, rows, paint) {
+  const tiles = [];
+  const tw = w / cols;
+  const th = h / rows;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const useAlt = paint.fill2 && ((c + r) % 2 === 1);
+      tiles.push({
+        kind: "tile",
+        homeLx: localX + tw * (c + 0.5),
+        homeLy: localY + th * (r + 0.5),
+        w: tw,
+        h: th,
+        color: useAlt ? paint.fill2 : paint.fill,
+        edge: paint.edge,
+        shape: "rect",
+        detail: paint.detail || null,
+        material: paint.material
+      });
+    }
   }
+  return tiles;
+}
+
+function ellipseTiles(cx, cy, rw, rh, cols, rows, paint) {
+  const tiles = [];
+  const tw = (rw * 2) / cols;
+  const th = (rh * 2) / rows;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      // Offset from ellipse center (not prop center) for the containment test.
+      const ox = -rw + tw * (c + 0.5);
+      const oy = -rh + th * (r + 0.5);
+      if ((ox * ox) / (rw * rw) + (oy * oy) / (rh * rh) > 1.08) continue;
+      const useAlt = paint.fill2 && ((c + r) % 2 === 1);
+      tiles.push({
+        kind: "tile",
+        homeLx: cx + ox,
+        homeLy: cy + oy,
+        w: tw,
+        h: th,
+        color: useAlt ? paint.fill2 : paint.fill,
+        edge: paint.edge,
+        shape: "rect",
+        detail: null,
+        material: paint.material
+      });
+    }
+  }
+  return tiles;
+}
+
+/**
+ * Full jigsaw of a prop's drawn geometry — every fragment, accurate colors.
+ * Coordinates are relative to the prop/crate center.
+ */
+export function buildPropJigsaw(prop, kind = prop.kind) {
+  const tiles = [];
+  if (kind === "cactus") {
+    const paint = PROP_DEBRIS_COLORS.cactus;
+    // Match drawPropBody cactus rectangles (local to prop top-left → center).
+    const parts = [
+      { x: 8, y: 0, w: 12, h: prop.h, cols: 1, rows: 5 },
+      { x: 0, y: prop.h * 0.35, w: 28, h: 12, cols: 3, rows: 1 },
+      { x: 4, y: prop.h * 0.55, w: 10, h: 28, cols: 1, rows: 2 }
+    ];
+    for (const part of parts) {
+      tiles.push(...gridRect(
+        part.x - prop.w / 2,
+        part.y - prop.h / 2,
+        part.w,
+        part.h,
+        part.cols,
+        part.rows,
+        paint
+      ));
+    }
+    return tiles;
+  }
+  if (kind === "bush") {
+    return ellipseTiles(0, prop.h * 0.05, prop.w / 2, prop.h / 2, 4, 3, PROP_DEBRIS_COLORS.bush);
+  }
+  if (kind === "tree") {
+    // Trunk (full drawn rect) + canopy jigsaw.
+    const trunkW = prop.w * 0.44;
+    const trunkX = prop.w * 0.28 - prop.w / 2;
+    tiles.push(...gridRect(
+      trunkX, -prop.h / 2, trunkW, prop.h, 2, 8, PROP_DEBRIS_COLORS.tree
+    ));
+    if (prop.canopy) {
+      const c = prop.canopy;
+      const cx = (c.x + c.w / 2) - (prop.x + prop.w / 2);
+      const cy = (c.y + c.h / 2) - (prop.y + prop.h / 2);
+      tiles.push(...ellipseTiles(
+        cx, cy, c.w / 2, c.h / 2, 5, 4, PROP_DEBRIS_COLORS.treeCanopy
+      ));
+    }
+    return tiles;
+  }
+  if (kind === "crate") {
+    return gridRect(
+      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 4, 4,
+      { ...PROP_DEBRIS_COLORS.crate, detail: "crate" }
+    );
+  }
+  if (kind === "pipe") {
+    const outer = gridRect(
+      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 5, 2, PROP_DEBRIS_COLORS.pipe
+    );
+    // Hollow look: mark center-row tiles with darker fill already via fill2 checker.
+    return outer;
+  }
+  if (kind === "pillar") {
+    const body = gridRect(
+      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 2, 6, PROP_DEBRIS_COLORS.pillar
+    );
+    const cap = PROP_DEBRIS_COLORS.pillar;
+    tiles.push(...body);
+    // Cap fragments matching the wider top/bottom bands.
+    tiles.push(...gridRect(-prop.w / 2 - 4, -prop.h / 2, prop.w + 8, 14, 3, 1, {
+      fill: cap.fill2, edge: cap.edge, material: cap.material
+    }));
+    tiles.push(...gridRect(-prop.w / 2 - 4, prop.h / 2 - 14, prop.w + 8, 14, 3, 1, {
+      fill: cap.fill2, edge: cap.edge, material: cap.material
+    }));
+    return tiles;
+  }
+  if (kind === "barrel") {
+    return gridRect(
+      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 3, 4,
+      { ...PROP_DEBRIS_COLORS.barrel, detail: "barrel" }
+    );
+  }
+  if (kind === "powerCrate") {
+    const look = prop.look || PROP_DEBRIS_COLORS.powerCrate;
+    return gridRect(
+      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 4, 4,
+      {
+        fill: look.metal || PROP_DEBRIS_COLORS.powerCrate.fill,
+        fill2: look.rim || PROP_DEBRIS_COLORS.powerCrate.rim,
+        edge: PROP_DEBRIS_COLORS.powerCrate.edge,
+        material: "metal",
+        detail: "powerCrate"
+      }
+    );
+  }
+  return gridRect(
+    -prop.w / 2, -prop.h / 2, prop.w, prop.h, 3, 3,
+    { fill: "#668", edge: "#334", material: "scrap" }
+  );
+}
+
+/** @deprecated — use buildPropJigsaw for accurate full-coverage fragments. */
+export function propDebrisProfile(kind) {
+  const paint = PROP_DEBRIS_COLORS[kind] || PROP_DEBRIS_COLORS.crate;
+  return {
+    material: paint.material,
+    colors: [paint.fill, paint.fill2 || paint.fill].filter(Boolean),
+    specs: []
+  };
 }
 
 function despawnStyle(game) {
@@ -213,33 +319,35 @@ export function spawnBrokenArmorDebris(game, fighter) {
   });
 }
 
-/** Lasting rubble when a breakable map prop is destroyed. */
+/** Lasting rubble when a breakable map prop is destroyed — full jigsaw, exact colors. */
 export function spawnPropDebris(game, prop, impactX, impactY, options = {}) {
   if (!game || !prop || prop.groundDebrisDropped) return;
   prop.groundDebrisDropped = true;
 
   const kind = options.forceKind || prop.kind;
-  const profile = propDebrisProfile(kind);
-  const cx = impactX ?? prop.x + prop.w / 2;
-  const cy = impactY ?? prop.y + prop.h / 2;
+  const tiles = buildPropJigsaw(prop, kind);
+  const cx = prop.x + prop.w / 2;
+  const cy = prop.y + prop.h / 2;
   const sourceId = nextSourceId(game);
   const sourceType = options.sourceType
     || (kind === "powerCrate" || prop.powerCrate ? "powerCrate" : "prop");
-  const count = profile.specs.length;
 
-  for (let i = 0; i < count; i++) {
-    const spec = profile.specs[i];
-    const color = profile.colors[i % profile.colors.length];
-    const spreadX = (Math.random() - 0.5) * prop.w * 0.7;
-    const spreadY = (Math.random() - 0.5) * Math.min(prop.h, 60) * 0.5;
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[i];
+    // Spawn from the tile's true place on the object, then burst outward.
     burstPiece(game, {
-      material: profile.material,
-      kind: spec.kind,
-      x: cx + spreadX,
-      y: cy + spreadY,
-      w: spec.w,
-      h: spec.h,
-      color,
+      material: tile.material,
+      kind: tile.kind,
+      x: cx + tile.homeLx,
+      y: cy + tile.homeLy,
+      w: tile.w,
+      h: tile.h,
+      color: tile.color,
+      edge: tile.edge,
+      shape: tile.shape,
+      detail: tile.detail,
+      homeLx: tile.homeLx,
+      homeLy: tile.homeLy,
       index: i,
       sourceType,
       sourceKind: kind,
@@ -373,6 +481,9 @@ export function tryReconquerAtSpawn(game, spot, options = {}) {
     piece.despawnMode = "reconquer-home";
     piece.despawnT = 0;
     piece.grounded = false;
+    piece.scale = 1;
+    piece.alpha = 1;
+    // Object center; each tile still offsets by its jigsaw homeLx/homeLy.
     piece.homeX = homeX;
     piece.homeY = homeY;
     piece.homeRestore = restore;
@@ -421,16 +532,23 @@ export function tickGroundDebris(game, dt) {
       piece.alpha = 0.55 + Math.sin((game.elapsed || 0) * 4 + (piece.x || 0) * 0.01) * 0.2;
       piece.scale = 1;
     } else if (piece.despawnMode === "reconquer-home") {
-      piece.despawnT = Math.min(1, piece.despawnT + dt / DEBRIS_DESPAWN_DURATION);
-      const tx = piece.homeX;
-      const ty = piece.homeY;
-      piece.x += (tx - piece.x) * Math.min(1, dt * 6);
-      piece.y += (ty - piece.y) * Math.min(1, dt * 6);
-      piece.scale = 1 - piece.despawnT * 0.35;
-      piece.alpha = 1 - piece.despawnT * 0.15;
-      piece.spin *= Math.max(0, 1 - dt * 4);
-      piece.rot += piece.spin * dt;
-      if (piece.despawnT >= 1 || Math.hypot(tx - piece.x, ty - piece.y) < 10) {
+      piece.despawnT = Math.min(1, piece.despawnT + dt / RECONQUER_DURATION);
+      const t = piece.despawnT;
+      // Ease into the jigsaw slot: position + upright rotation.
+      const tx = (piece.homeX || 0) + (piece.homeLx || 0);
+      const ty = (piece.homeY || 0) + (piece.homeLy || 0);
+      const ease = 1 - (1 - t) * (1 - t);
+      piece.x += (tx - piece.x) * Math.min(1, dt * (4 + ease * 5));
+      piece.y += (ty - piece.y) * Math.min(1, dt * (4 + ease * 5));
+      piece.rot += (0 - piece.rot) * Math.min(1, dt * 6);
+      piece.spin *= Math.max(0, 1 - dt * 8);
+      piece.scale = 1;
+      piece.alpha = 1;
+      const dist = Math.hypot(tx - piece.x, ty - piece.y);
+      if (t >= 1 || (dist < 3 && Math.abs(piece.rot) < 0.08)) {
+        piece.x = tx;
+        piece.y = ty;
+        piece.rot = 0;
         finishReconquerHome(game, piece);
         continue;
       }
