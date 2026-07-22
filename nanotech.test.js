@@ -3,10 +3,10 @@ import { attack, Fighter } from "./combat.js";
 import {
   applyHpDamage, applyLoadout, applyNanotechSlashBotLoss, beginNanotechWeaponAbsorb,
   canNanotechAttack, DEFAULT_LOADOUT, GEAR_BY_ID, hasNanotechChestplate, nanotechArmorHp,
-  nanotechArmorMaxHp, nanotechCostOf, nanotechFormCostOf, nanotechFormPct, nanotechPoolCapacity,
-  NANOTECH_ARMOR_BOT_CAP, NANOTECH_ARMOR_PRESS, NANOTECH_BOTS_PER_HP, NANOTECH_CHANNEL_RATE,
-  NANOTECH_REGEN_HIT_DELAY, NANOTECH_SLOW_REGEN, PRECISION_AIM_WEAPONS, pulseNanotechArmor,
-  setNanotechChanneling, STARTER_GEAR, tickNanotech, tryFormNanotechWeapon,
+  nanotechArmorMaxHp, nanotechCostOf, nanotechFormCostOf, nanotechAmmoBonusOf, nanotechFormPct,
+  nanotechPoolCapacity, NANOTECH_ARMOR_BOT_CAP, NANOTECH_ARMOR_PRESS, NANOTECH_BOTS_PER_HP,
+  NANOTECH_CHANNEL_RATE, NANOTECH_REGEN_HIT_DELAY, NANOTECH_SLOW_REGEN, PRECISION_AIM_WEAPONS,
+  pulseNanotechArmor, setNanotechChanneling, STARTER_GEAR, tickNanotech, tryFormNanotechWeapon,
   tryNanotechWeaponAction, weaponStats
 } from "./equipment.js";
 
@@ -50,6 +50,9 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(nanotechFormCostOf("nanotech-rifle"), 150);
   assert.equal(nanotechFormCostOf("nanotech-sniper"), 175);
   assert.equal(nanotechFormCostOf("nanotech-sword"), 100);
+  assert.equal(nanotechAmmoBonusOf("nanotech-rifle"), 30);
+  assert.equal(nanotechAmmoBonusOf("nanotech-sniper"), 20);
+  assert.equal(nanotechAmmoBonusOf("nanotech-sword"), 0);
   assert.equal(
     nanotechPoolCapacity(loadout({
       body: "nanotech-chestplate",
@@ -138,6 +141,8 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(game.bullets.length, 1);
   assert.equal(fighter.nanobotWeapon, 150, "gun body unchanged by shots");
   assert.equal(fighter.nanobotFree, 1028, "ammo pulled from free reserve");
+  assert.equal(fighter.nanotechAmmoBonus, 30);
+  assert.equal(fighter.nanotechAmmoDebt, 2);
 
   fighter.nanobotFree = 1;
   fighter.attackCd = 0;
@@ -182,30 +187,42 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(sniper.nanotechWeaponAbsorbing, false);
   assert.ok(sniper.nanobotFree + 1e-6 >= freeBefore - 20 + 175);
 
-  // Slow regen blocked while holding fire (wantFire), on attackCd, or recently hit.
+  // Ammo-bonus bots regen even while hit; shooting still blocks. General pool needs hit clear.
   fighter.nanobotArmor = 40;
   fighter.nanobotFree = 100;
   fighter.nanobotWeapon = 100;
-  fighter.nanotechHitCooldown = 0;
+  fighter.nanotechAmmoBonus = 30;
+  fighter.nanotechAmmoDebt = 20;
+  fighter.nanotechHitCooldown = NANOTECH_REGEN_HIT_DELAY;
   fighter.attackCd = 0;
   fighter.nanotechWantFire = true;
   const blockedBefore = fighter.nanobotFree;
   tickNanotech(fighter, 0.4);
-  assert.equal(fighter.nanobotFree, blockedBefore, "no regen while holding fire");
+  assert.equal(fighter.nanobotFree, blockedBefore, "no ammo regen while holding fire");
+  assert.equal(fighter.nanotechAmmoDebt, 20);
 
   fighter.nanotechWantFire = false;
   fighter.attackCd = 0.5;
   tickNanotech(fighter, 0.4);
-  assert.equal(fighter.nanobotFree, blockedBefore, "no regen while attackCd active");
+  assert.equal(fighter.nanobotFree, blockedBefore, "no ammo regen while attackCd active");
 
   fighter.attackCd = 0;
+  tickNanotech(fighter, 0.2);
+  assert.ok(fighter.nanobotFree > blockedBefore, "ammo debt refills despite hit lockout");
+  assert.ok(fighter.nanotechAmmoDebt < 20);
+  const afterAmmo = fighter.nanobotFree;
+  const debtLeft = fighter.nanotechAmmoDebt;
+  // Pay off remaining ammo debt so general regen path is tested alone.
+  fighter.nanotechAmmoDebt = 0;
+  fighter.nanobotFree = afterAmmo;
   fighter.nanotechHitCooldown = NANOTECH_REGEN_HIT_DELAY;
   tickNanotech(fighter, 1);
-  assert.equal(fighter.nanobotFree, blockedBefore, "no regen during hit lockout");
+  assert.equal(fighter.nanobotFree, afterAmmo, "general pool still locked by hit");
   tickNanotech(fighter, 1.05);
-  assert.ok(fighter.nanobotFree > blockedBefore, "regen when idle + 2s clear");
+  assert.ok(fighter.nanobotFree > afterAmmo, "general regen after 2s clear");
   assert.equal(fighter.nanobotArmor, 40);
-  assert.equal(fighter.nanobotWeapon, 100, "formed gun does not block regen");
+  assert.equal(fighter.nanobotWeapon, 100);
+  assert.ok(debtLeft >= 0);
 }
 
 // Incomplete sword slash bleeds 2% of full bot cost.

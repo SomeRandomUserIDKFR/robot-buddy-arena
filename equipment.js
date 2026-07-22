@@ -697,8 +697,24 @@ export function consumeNanotechShot(fighter) {
   const free = fighter.nanobotFree || 0;
   if (free < shot) return 0;
   fighter.nanobotFree = free - shot;
+  const bonus = Math.max(0, fighter.nanotechAmmoBonus || 0);
+  if (bonus > 0) {
+    fighter.nanotechAmmoDebt = Math.min(
+      bonus,
+      (fighter.nanotechAmmoDebt || 0) + shot
+    );
+  }
   clampNanotechPool(fighter);
   return shot;
+}
+
+/** Extra pool bots a gun brings for ammo (pool cost − form/absorb cost). */
+export function nanotechAmmoBonusOf(gearOrId) {
+  const gear = typeof gearOrId === "string" ? GEAR_BY_ID[gearOrId] : gearOrId;
+  if (!gear?.nanotech) return 0;
+  const pool = nanotechCostOf(gear);
+  const form = nanotechFormCostOf(gear);
+  return Math.max(0, pool - form);
 }
 
 /** 0–1 how fully the nanotech weapon is formed. */
@@ -924,14 +940,27 @@ export function tickNanotech(fighter, dt) {
     armor -= flow;
     free += flow;
   } else if (free + armor + weapon < max) {
-    // Rebuild destroyed bots only while not trying to shoot and out of combat.
-    const canRegen = (fighter.nanotechHitCooldown || 0) <= 0
-      && !fighter.nanotechWantFire
-      && (fighter.attackCd || 0) <= 0;
-    if (canRegen) {
+    // Shooting blocks all regen. Ammo-bonus bots refill even while hit;
+    // the rest of the pool still needs the 2s hit clear.
+    const shooting = !!fighter.nanotechWantFire || (fighter.attackCd || 0) > 0;
+    if (!shooting) {
       const room = Math.max(0, max - free - armor - weapon);
-      const gain = Math.min(room, NANOTECH_SLOW_REGEN * dt);
-      free += gain;
+      let gainBudget = NANOTECH_SLOW_REGEN * dt;
+      const debt = Math.max(0, fighter.nanotechAmmoDebt || 0);
+      if (debt > 0 && room > 0 && gainBudget > 0) {
+        const ammoGain = Math.min(room, debt, gainBudget);
+        free += ammoGain;
+        fighter.nanotechAmmoDebt = debt - ammoGain;
+        gainBudget -= ammoGain;
+      }
+      const roomLeft = Math.max(0, max - free - armor - weapon);
+      if (
+        (fighter.nanotechHitCooldown || 0) <= 0
+        && roomLeft > 0
+        && gainBudget > 0
+      ) {
+        free += Math.min(roomLeft, gainBudget);
+      }
     }
   }
 
@@ -1482,6 +1511,8 @@ export function applyLoadout(fighter, loadout) {
   fighter.nanotechSwordDissolveT = 0;
   fighter.nanotechWeaponCost = weapon.nanotech ? nanotechFormCostOf(weapon) : 0;
   fighter.nanobotShotCost = weapon.nanotech ? Math.max(0, Number(weapon.nanobotShotCost) || 0) : 0;
+  fighter.nanotechAmmoBonus = weapon.nanotech ? nanotechAmmoBonusOf(weapon) : 0;
+  fighter.nanotechAmmoDebt = 0;
   fighter.hasNanotechChestplate = fighter.loadout.body === "nanotech-chestplate";
   fighter.forceNanotechMorph = SLOT_ORDER.some((slot) => {
     const gear = GEAR_BY_ID[fighter.loadout[slot]];
