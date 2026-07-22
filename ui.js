@@ -59,6 +59,7 @@ export const ui = {
   modeLabel: $("#modeLabel"),
   readinessLabel: $("#readinessLabel"),
   trapHud: $("#trapHud"),
+  trapHudKicker: $("#trapHudKicker"),
   trapHudType: $("#trapHudType"),
   fuel: $("#fuelFill"),
   fuelMeter: $("#fuelMeter"),
@@ -331,22 +332,41 @@ export function updateHud(game) {
   const player = game.fighters[0];
   if (ui.trapHud) {
     const showTrap = !!player?.trapper && !player.dead;
-    ui.trapHud.classList.toggle("hidden", !showTrap);
-    if (showTrap) {
+    const showIllu = !!player?.illusionist && !player.dead;
+    ui.trapHud.classList.toggle("hidden", !showTrap && !showIllu);
+    ui.trapHud.classList.toggle("illusion", showIllu);
+    if (showIllu) {
+      const t = player.illusionistType === "prop"
+        ? "prop"
+        : player.illusionistType === "platform"
+          ? "plat"
+          : "fighter";
+      ui.trapHud.classList.toggle("fake", false);
+      ui.trapHud.classList.toggle("bear", false);
+      if (ui.trapHudKicker) ui.trapHudKicker.textContent = "NEXT ILLUSION · T cycle";
+      if (ui.trapHudType) {
+        ui.trapHudType.textContent = t === "prop" ? "PROP" : t === "plat" ? "PLAT" : "FIGHTER";
+      }
+    } else if (showTrap) {
       const type = player.trapperType === "fakePlatform" ? "fake" : "bear";
       ui.trapHud.classList.toggle("fake", type === "fake");
       ui.trapHud.classList.toggle("bear", type === "bear");
+      if (ui.trapHudKicker) ui.trapHudKicker.textContent = "NEXT TRAP · T cycle";
       if (ui.trapHudType) {
         ui.trapHudType.textContent = type === "fake" ? "FAKE PLAT" : "BEAR";
       }
     }
   }
-  ui.teamBars.innerHTML = game.fighters.map((fighter) => `
+  ui.teamBars.innerHTML = game.fighters.filter((f) => !f.illusion).map((fighter) => {
+    const showHp = Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
+    const pct = fighter.maxHp > 0 ? (showHp / fighter.maxHp) * 100 : 0;
+    return `
     <div class="fighter-bar" style="opacity:${fighter.dead ? .38 : 1}">
       <b style="color:${fighter.color}">${escapeHtml(fighter.name)}</b>
-      <div class="hp-track"><i class="hp-fill" style="width:${fighter.hp / fighter.maxHp * 100}%;background:${fighter.team ? "#ff665c" : "#42dff5"}"></i></div>
-      <span>${Math.ceil(fighter.hp)}</span>
-    </div>`).join("");
+      <div class="hp-track"><i class="hp-fill" style="width:${pct}%;background:${fighter.team ? "#ff665c" : "#42dff5"}"></i></div>
+      <span>${Math.ceil(showHp)}</span>
+    </div>`;
+  }).join("");
   ui.fuel.style.width = `${player.fuel * 100}%`;
   ui.fuelMeter.classList.toggle("exhausted", !!player.jetLocked);
   ui.fuelLabel.textContent = player.jetLocked ? "EXHAUSTED" : "FUEL";
@@ -901,6 +921,16 @@ function modifierMarkup(gear) {
         "<span>Short arm time before triggers</span>",
         "<span>Ally outline · faint enemy cue</span>",
         "<span class=\"stat-down\">Owner immune · max 3 active</span>"
+      ].join("");
+    }
+    if (gear.illusionist) {
+      return [
+        "<span>Premium Extension · T cycle · 3 plant</span>",
+        "<span class=\"stat-up\">Fighter decoy · clones your kit</span>",
+        "<span class=\"stat-up\">Gaslight hits · ≥40 phantom HP</span>",
+        "<span>Prop / platform · visual only, no cues</span>",
+        "<span>Real shots pass through · decoy takes 10 hits</span>",
+        "<span class=\"stat-down\">No real damage · most expensive</span>"
       ].join("");
     }
     if (gear.id === "no-extension") {

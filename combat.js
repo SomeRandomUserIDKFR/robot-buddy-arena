@@ -22,6 +22,11 @@ import {
   stepThrownBreakables
 } from "./throw-breakable.js";
 import {
+  applyPhantomDamage, illusionObjectHitBySegment, isIllusionFighter,
+  ILLUSION_PHANTOM_DAMAGE, registerIllusionFighterHit, registerIllusionObjectHit,
+  tickIllusionistFighter
+} from "./illusionist.js";
+import {
   applyTrapLockToIntent, isTrapLocked, tickTrapperFighter
 } from "./trapper.js";
 import { angleDiff, clamp, dist, lerp, segmentHitsBox } from "./utils.js";
@@ -109,6 +114,19 @@ function hit(target, source, damage, angle, game, extras = {}) {
       }
     }
     return;
+  }
+  // Fighter illusions: real hits chip their hit budget; no real HP loss.
+  if (isIllusionFighter(target)) {
+    registerIllusionFighterHit(target, game);
+    return { illusionPassthrough: true };
+  }
+  // Illusion attackers only gaslight — never real HP / shield drain.
+  if (isIllusionFighter(source)) {
+    const phantom = Math.max(ILLUSION_PHANTOM_DAMAGE, damage * (target.damageTaken || 1));
+    applyPhantomDamage(target, phantom, game, source);
+    target.vx += Math.cos(angle) * 40;
+    target.vy += Math.sin(angle) * 20 - 12;
+    return { phantom: true };
   }
   // Snapshot before shield-break may clear raised — melee and projectile alike.
   const counterEligible = !extras.fromCounterSlash
@@ -248,12 +266,30 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct = 1) {
       prop
     })),
     ...game.fighters
-      .filter((enemy) => !enemy.dead && enemy.team !== fighter.team && enemy !== fighter)
+      .filter((enemy) => (
+        !enemy.dead
+        && enemy.team !== fighter.team
+        && enemy !== fighter
+        // Illusions don't block the laser; they're chipped along the beam.
+        && !isIllusionFighter(enemy)
+      ))
       .map((enemy) => ({
         x: enemy.x, y: enemy.y, w: SIZE, h: SIZE, kind: "fighter", enemy
       }))
   ];
   const hitPoint = raycastFirst(ox, oy, ex, ey, boxes);
+  for (const enemy of game.fighters || []) {
+    if (enemy.dead || enemy.team === fighter.team || !isIllusionFighter(enemy)) continue;
+    if (segmentHitsBox(ox, oy, hitPoint.x, hitPoint.y, enemy.x, enemy.y, SIZE, SIZE)) {
+      registerIllusionFighterHit(enemy, game);
+    }
+  }
+  for (const ill of game.illusions || []) {
+    if (!ill || ill.destroyed) continue;
+    if (segmentHitsBox(ox, oy, hitPoint.x, hitPoint.y, ill.x, ill.y, ill.w, ill.h)) {
+      registerIllusionObjectHit(ill, game);
+    }
+  }
   if (hitPoint.box?.kind === "fighter") {
     hit(
       hitPoint.box.enemy,
@@ -262,7 +298,7 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct = 1) {
       shotAngle,
       game
     );
-  } else if (hitPoint.box?.kind === "powerCrate") {
+  } else if (!isIllusionFighter(fighter) && hitPoint.box?.kind === "powerCrate") {
     damagePowerCrate(
       hitPoint.box.prop,
       dmg,
@@ -271,7 +307,7 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct = 1) {
       hitPoint.x,
       hitPoint.y
     );
-  } else if (hitPoint.box?.kind === "armorDummy") {
+  } else if (!isIllusionFighter(fighter) && hitPoint.box?.kind === "armorDummy") {
     damageArmorDummy(
       hitPoint.box.prop,
       dmg,
@@ -279,7 +315,7 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct = 1) {
       hitPoint.x,
       hitPoint.y
     );
-  } else if (hitPoint.box?.kind === "prop") {
+  } else if (!isIllusionFighter(fighter) && hitPoint.box?.kind === "prop") {
     damageProp(
       hitPoint.box.prop,
       dmg,
@@ -298,15 +334,18 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct = 1) {
     team: fighter.team,
     owner: fighter
   });
-  pushBeamReveals(
-    game,
-    fighter.team,
-    ox,
-    oy,
-    hitPoint.x,
-    hitPoint.y,
-    fighter.weaponStats?.beamRevealRadius || 56
-  );
+  // Illusion beams shouldn't punch real fog reveals for the team.
+  if (!isIllusionFighter(fighter)) {
+    pushBeamReveals(
+      game,
+      fighter.team,
+      ox,
+      oy,
+      hitPoint.x,
+      hitPoint.y,
+      fighter.weaponStats?.beamRevealRadius || 56
+    );
+  }
   game.effects.push({
     type: "muzzle", x: ox, y: oy, life: .05, angle: shotAngle, report: false
   });
@@ -380,22 +419,35 @@ export function attack(fighter, game, random = Math.random) {
         }
       }
     }
-    if (slashedFighter) applyNanotechSlashBotLoss(fighter);
+    if (slashedFighter && !isIllusionFighter(fighter)) applyNanotechSlashBotLoss(fighter);
     const cx = fighter.x + SIZE / 2;
     const cy = fighter.y + SIZE / 2;
-    for (const prop of allProjectileBlockers(game)) {
-      if (!prop.breakable) continue;
-      const px = prop.x + prop.w / 2;
-      const py = prop.y + prop.h / 2;
+    // Saber swipes fade visual illusions without being "blocked".
+    for (const ill of game.illusions || []) {
+      if (!ill || ill.destroyed) continue;
+      const px = ill.x + ill.w / 2;
+      const py = ill.y + ill.h / 2;
       if (Math.hypot(px - cx, py - cy) > fighter.weaponReach) continue;
       const angle = Math.atan2(py - cy, px - cx);
       if (Math.abs(angleDiff(angle, fighter.aim)) < .85) {
-        if (prop.powerCrate) {
-          damagePowerCrate(prop, swingDmg, fighter, game, px, py);
-        } else if (prop.armorDummy) {
-          damageArmorDummy(prop, swingDmg, game, px, py);
-        } else {
-          damageProp(prop, swingDmg, game, px, py);
+        registerIllusionObjectHit(ill, game);
+      }
+    }
+    if (!isIllusionFighter(fighter)) {
+      for (const prop of allProjectileBlockers(game)) {
+        if (!prop.breakable) continue;
+        const px = prop.x + prop.w / 2;
+        const py = prop.y + prop.h / 2;
+        if (Math.hypot(px - cx, py - cy) > fighter.weaponReach) continue;
+        const angle = Math.atan2(py - cy, px - cx);
+        if (Math.abs(angleDiff(angle, fighter.aim)) < .85) {
+          if (prop.powerCrate) {
+            damagePowerCrate(prop, swingDmg, fighter, game, px, py);
+          } else if (prop.armorDummy) {
+            damageArmorDummy(prop, swingDmg, game, px, py);
+          } else {
+            damageProp(prop, swingDmg, game, px, py);
+          }
         }
       }
     }
@@ -459,6 +511,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   tickAdaptiveWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
   tickTrapperFighter(fighter, dt);
+  tickIllusionistFighter(fighter, dt);
   // Humans: know fire intent before nanotech tick so hold-to-shoot blocks regen.
   let intent = null;
   if (fighter.human && getHumanIntent) {
@@ -558,36 +611,23 @@ export function stepBullets(game, dt) {
     bullet.y += bullet.vy * dt;
     bullet.traveled += Math.hypot(bullet.vx * dt, bullet.vy * dt);
     bullet.life -= dt;
-    for (const enemy of game.fighters) {
-      if (enemy.dead || enemy.team === bullet.owner.team || enemy === bullet.owner) continue;
-      if (segmentHitsBox(bullet.px, bullet.py, bullet.x, bullet.y, enemy.x, enemy.y, SIZE, SIZE)) {
-        const dropoff = bullet.dropoff;
-        const multiplier = dropoff
-          ? lerp(1, dropoff.minMultiplier, clamp(
-            (bullet.traveled - dropoff.start) / Math.max(1, dropoff.end - dropoff.start),
-            0,
-            1
-          ))
-          : 1;
-        hit(
-          enemy,
-          bullet.owner,
-          (bullet.damage ?? 12 * bullet.owner.weaponDamage) * multiplier,
-          Math.atan2(bullet.vy, bullet.vx),
-          game,
-          { shieldDamageMult: bullet.shieldDamageMult || 1 }
-        );
-        bullet.life = -1;
-        break;
+    const ownerIllusion = isIllusionFighter(bullet.owner);
+
+    // Visual-only illusions: chip/fade them, never stop the real projectile.
+    for (const ill of game.illusions || []) {
+      if (!ill || ill.destroyed) continue;
+      if (illusionObjectHitBySegment(ill, bullet.px, bullet.py, bullet.x, bullet.y)
+        || segmentHitsBox(bullet.px, bullet.py, bullet.x, bullet.y, ill.x, ill.y, ill.w, ill.h)) {
+        registerIllusionObjectHit(ill, game);
       }
     }
-    if (bullet.life <= 0) continue;
-    let blocked = false;
-    for (const prop of allProjectileBlockers(game)) {
-      if (!segmentHitsBox(
-        bullet.px, bullet.py, bullet.x, bullet.y,
-        prop.x, prop.y, prop.w, prop.h
-      )) continue;
+
+    let stopped = false;
+    for (const enemy of game.fighters) {
+      if (enemy.dead || enemy.team === bullet.owner.team || enemy === bullet.owner) continue;
+      if (!segmentHitsBox(bullet.px, bullet.py, bullet.x, bullet.y, enemy.x, enemy.y, SIZE, SIZE)) {
+        continue;
+      }
       const dropoff = bullet.dropoff;
       const multiplier = dropoff
         ? lerp(1, dropoff.minMultiplier, clamp(
@@ -597,23 +637,82 @@ export function stepBullets(game, dt) {
         ))
         : 1;
       const dmg = (bullet.damage ?? 12 * bullet.owner.weaponDamage) * multiplier;
-      if (prop.powerCrate) {
-        damagePowerCrate(prop, dmg, bullet.owner, game, bullet.x, bullet.y);
-      } else if (prop.armorDummy) {
-        damageArmorDummy(prop, dmg, game, bullet.x, bullet.y);
-      } else {
-        damageProp(prop, dmg, game, bullet.x, bullet.y);
+      if (isIllusionFighter(enemy)) {
+        registerIllusionFighterHit(enemy, game);
+        // Real bullets keep flying through decoys.
+        if (!ownerIllusion) continue;
+        // Illusion-vs-illusion: the fake round still vanishes.
+        bullet.life = -1;
+        stopped = true;
+        break;
       }
+      hit(
+        enemy,
+        bullet.owner,
+        dmg,
+        Math.atan2(bullet.vy, bullet.vx),
+        game,
+        { shieldDamageMult: bullet.shieldDamageMult || 1 }
+      );
+      // Illusion rounds always disappear on impact (no real damage path above
+      // already applied phantom via hit()).
       bullet.life = -1;
-      blocked = true;
+      stopped = true;
       break;
     }
-    if (blocked) continue;
-    if (platformsOf(game).some((platform) => segmentHitsBox(
-      bullet.px, bullet.py, bullet.x, bullet.y,
-      platform.x, platform.y, platform.w, platform.h
-    ))) {
-      bullet.life = -1;
+    if (stopped || bullet.life <= 0) continue;
+
+    // Illusion bullets don't damage props/platforms — they just vanish on touch.
+    if (ownerIllusion) {
+      for (const prop of allProjectileBlockers(game)) {
+        if (segmentHitsBox(
+          bullet.px, bullet.py, bullet.x, bullet.y,
+          prop.x, prop.y, prop.w, prop.h
+        )) {
+          bullet.life = -1;
+          break;
+        }
+      }
+      if (bullet.life > 0 && platformsOf(game).some((platform) => segmentHitsBox(
+        bullet.px, bullet.py, bullet.x, bullet.y,
+        platform.x, platform.y, platform.w, platform.h
+      ))) {
+        bullet.life = -1;
+      }
+    } else {
+      let blocked = false;
+      for (const prop of allProjectileBlockers(game)) {
+        if (!segmentHitsBox(
+          bullet.px, bullet.py, bullet.x, bullet.y,
+          prop.x, prop.y, prop.w, prop.h
+        )) continue;
+        const dropoff = bullet.dropoff;
+        const multiplier = dropoff
+          ? lerp(1, dropoff.minMultiplier, clamp(
+            (bullet.traveled - dropoff.start) / Math.max(1, dropoff.end - dropoff.start),
+            0,
+            1
+          ))
+          : 1;
+        const dmg = (bullet.damage ?? 12 * bullet.owner.weaponDamage) * multiplier;
+        if (prop.powerCrate) {
+          damagePowerCrate(prop, dmg, bullet.owner, game, bullet.x, bullet.y);
+        } else if (prop.armorDummy) {
+          damageArmorDummy(prop, dmg, game, bullet.x, bullet.y);
+        } else {
+          damageProp(prop, dmg, game, bullet.x, bullet.y);
+        }
+        bullet.life = -1;
+        blocked = true;
+        break;
+      }
+      if (blocked) continue;
+      if (platformsOf(game).some((platform) => segmentHitsBox(
+        bullet.px, bullet.py, bullet.x, bullet.y,
+        platform.x, platform.y, platform.w, platform.h
+      ))) {
+        bullet.life = -1;
+      }
     }
     if (bullet.y < ceiling || bullet.y > WORLD.h || bullet.x < 0 || bullet.x > WORLD.w) {
       bullet.life = -1;

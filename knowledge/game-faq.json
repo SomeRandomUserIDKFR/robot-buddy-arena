@@ -35,7 +35,7 @@
         "keyboard controls",
         "what buttons do I use"
       ],
-      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. 1 and 2 (or mouse wheel) swap between your primary weapon and secondary when a secondary is equipped. 3 uses your Extension tool (Reconjurer, Light Condensation, or Trapper when equipped). With Trapper, T cycles the next trap type (shown top-right). Mouse aims; left click fires or swings. Hold right-click on Material Consumer for a debris beam; hold V to vacuum excess scraps into its ejection tank. G pings for me. Escape pauses."
+      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. 1 and 2 (or mouse wheel) swap between your primary weapon and secondary when a secondary is equipped. 3 uses your Extension tool (Reconjurer, Light Condensation, Trapper, or Illusionist when equipped). With Trapper or Illusionist, T cycles the next type (shown top-right). Mouse aims; left click fires or swings. Hold right-click on Material Consumer for a debris beam; hold V to vacuum excess scraps into its ejection tank. G pings for me. Escape pauses."
     },
     {
       "id": "controls-retractable-armor",
@@ -487,6 +487,20 @@
       "answer": "Trapper is an Extension-slot tool. Press T to cycle the next trap type (shown in the top-right HUD), then press 3 to plant along your aim. Traps need a short arm time before they can trigger. Bear traps have a tiny visual cue: they deal 25 damage and stop jump, jet, and dodge for 5 seconds (owner immune). Fake platforms look almost like real map plates but something is off — they have no collision, so victims fall through for 10 damage; your team sees a clear outline, enemies get only a faint cue. Max 3 active traps. Does not replace your 1/2 secondary. AI plants bears on ground lanes and fake plats under airborne foes."
     },
     {
+      "id": "equipment-illusionist",
+      "tags": ["equipment", "extension", "illusionist", "illusion", "decoy", "gaslight"],
+      "questions": [
+        "what is illusionist",
+        "illusionist extension",
+        "how do illusions work",
+        "fighter decoy",
+        "phantom damage",
+        "illusion platform",
+        "most expensive extension"
+      ],
+      "answer": "Illusionist is the most expensive Extension (320¢). Press T to cycle FIGHTER / PROP / PLAT (top-right HUD), then 3 to plant. Strictly deception: no world cues, no collision, no sight block. Fighter decoys are AI clones with your exact loadout; they fight for attention. Their hits only gaslight — bars and numbers drop by at least 40 phantom damage, real HP is untouched. Their projectiles vanish on impact. Real shots pass through illusions (fighter decoys absorb 10 hits before fading). Prop and platform illusions look real and punish focus, not bodies — unlike Trapper, which actually hurts. AI cannot tell decoys from real fighters."
+    },
+    {
       "id": "equipment-material-consumer",
       "tags": ["equipment", "nanotech", "secondary", "material consumer", "debris", "sword", "ejection"],
       "questions": [
@@ -528,7 +542,7 @@
         "AI secondary weapons",
         "buddy debris beam"
       ],
-      "answer": "Yes. When Material Consumer, Throw Breakable, Reconjurer / Builder, Light Condensation, or Trapper is equipped, buddies and other AI use them: they swap to Material Consumer to vacuum debris or fire the scrap beam, hold V when the nanobot pool is full near scraps, grab and throw breakables, rebuild or conjure with Reconjurer under pressure, plant or break Light Condensation glare nodes for vision, and lay bear traps or fake platforms with Trapper. Conquest trainers do not start with these tools by default."
+      "answer": "Yes. When Material Consumer, Throw Breakable, Reconjurer / Builder, Light Condensation, Trapper, or Illusionist is equipped, buddies and other AI use them: they swap to Material Consumer to vacuum debris or fire the scrap beam, hold V when the nanobot pool is full near scraps, grab and throw breakables, rebuild or conjure with Reconjurer under pressure, plant or break Light Condensation glare nodes for vision, lay bear traps or fake platforms with Trapper, and cast fighter/prop/platform illusions with Illusionist. AI cannot distinguish Illusionist decoys from real fighters. Conquest trainers do not start with these tools by default."
     },
     {
       "id": "equipment-nanotech",

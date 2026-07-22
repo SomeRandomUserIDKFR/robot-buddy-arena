@@ -829,6 +829,7 @@ export function createRenderer(canvas) {
     context.translate(-camera.x, -camera.y);
     drawBackdrop(game, .2);
     drawPlatforms(game, .28);
+    drawIllusions(game, .35);
     drawTraps(game, .35, game.fighters?.[0]?.team ?? 0);
     drawProps(game, .35, false);
     drawGroundDebris(game, .35);
@@ -880,6 +881,7 @@ export function createRenderer(canvas) {
     context.clip();
     drawBackdrop(game, .9);
     drawPlatforms(game, 1);
+    drawIllusions(game, 1);
     drawTraps(game, 1, player.team);
     drawProps(game, 1, false);
     drawGroundDebris(game, 1);
@@ -1093,6 +1095,42 @@ export function createRenderer(canvas) {
       }
     }
     context.globalAlpha = 1;
+  }
+
+  /**
+   * Illusionist props/platforms — drawn like the real thing with NO tell.
+   * Visual only (no collision / LOS). Fighter decoys use drawFighter.
+   */
+  function drawIllusions(game, alpha) {
+    const colors = platformColors(game);
+    for (const ill of game.illusions || []) {
+      if (!ill || ill.destroyed || !(ill.life > 0)) continue;
+      context.globalAlpha = alpha;
+      if (ill.illusionType === "platform") {
+        context.fillStyle = colors.fill;
+        context.fillRect(ill.x, ill.y, ill.w, ill.h);
+        context.fillStyle = colors.top;
+        context.fillRect(ill.x, ill.y, ill.w, Math.min(4, ill.h));
+        context.strokeStyle = colors.hatch;
+        for (let x = ill.x + 15; x < ill.x + ill.w; x += 42) {
+          context.beginPath();
+          context.moveTo(x, ill.y + 6);
+          context.lineTo(x + 15, ill.y + Math.min(ill.h, 26));
+          context.stroke();
+        }
+      } else {
+        // Crate-like prop silhouette — matches normal crates, no outline cue.
+        context.fillStyle = "#8a6a3a";
+        context.fillRect(ill.x, ill.y, ill.w, ill.h);
+        context.strokeStyle = "#4a3818";
+        context.strokeRect(ill.x + 2, ill.y + 2, ill.w - 4, ill.h - 4);
+        context.beginPath();
+        context.moveTo(ill.x, ill.y);
+        context.lineTo(ill.x + ill.w, ill.y + ill.h);
+        context.stroke();
+      }
+      context.globalAlpha = 1;
+    }
   }
 
   /**
@@ -1408,7 +1446,9 @@ export function createRenderer(canvas) {
     context.fillStyle = "#111c22";
     context.fillRect(fighter.x, fighter.y - 12, SIZE, 5);
     context.fillStyle = fighter.team ? "#ff6259" : "#36dff5";
-    context.fillRect(fighter.x, fighter.y - 12, SIZE * fighter.hp / fighter.maxHp, 5);
+    const showHp = Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
+    const hpFrac = fighter.maxHp > 0 ? showHp / fighter.maxHp : 0;
+    context.fillRect(fighter.x, fighter.y - 12, SIZE * hpFrac, 5);
     context.fillStyle = "#24343c";
     context.fillRect(fighter.x, fighter.y - 5, SIZE, 3);
     context.fillStyle = fighter.jetLocked ? "#ff5e56" : "#ffd64a";

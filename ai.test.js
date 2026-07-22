@@ -7,19 +7,22 @@ import {
   isGreenEnemyAi, mindDodgeScale, pickEscapeCrateHop, pickNearestGrabbable,
   pickNearestVisibleCrate, ROOKIE_BUDDY, SHIELD_MAX_HOLD, shieldHoldDuration,
   shieldLowerCooldown, shieldRaiseAllowed, shieldStyleBias, stepAimSmoothing,
-  tickAiShieldHold, updateAI, updateAiLightCondensation, updateAiMaterialConsumer,
-  updateAiReconjurer, updateAiRetractableArmor, updateAiShield, updateAiThrowBreakable,
-  updateAiTrapper, updateAiWeaponSlot, wantAiSecondarySlot, wantRetractableDeployed
+  tickAiShieldHold, updateAI, updateAiIllusionist, updateAiLightCondensation,
+  updateAiMaterialConsumer, updateAiReconjurer, updateAiRetractableArmor, updateAiShield,
+  updateAiThrowBreakable, updateAiTrapper, updateAiWeaponSlot, wantAiSecondarySlot,
+  wantRetractableDeployed
 } from "./ai.js";
 import { Fighter } from "./combat.js";
 import { AI_PRESETS, DEFAULT_PROFILE, SIZE, WORLD } from "./config.js";
 import { spawnPropDebris } from "./debris.js";
 import {
-  applyLoadout, DEFAULT_LOADOUT, isPrecisionAimWeapon, LIGHT_CONDENSATION_ID,
-  MATERIAL_CONSUMER_ID, RECONJURER_BUILDER_ID, RETRACTABLE_MORPH_DURATION,
-  selectWeaponSlot, tickRetractableArmor, trainerLoadout, TRAPPER_ID
+  applyLoadout, DEFAULT_LOADOUT, ILLUSIONIST_ID, isPrecisionAimWeapon,
+  LIGHT_CONDENSATION_ID, MATERIAL_CONSUMER_ID, RECONJURER_BUILDER_ID,
+  RETRACTABLE_MORPH_DURATION, selectWeaponSlot, tickRetractableArmor, trainerLoadout,
+  TRAPPER_ID
 } from "./equipment.js";
 import { createLightCondensationProp } from "./light-condensation.js";
+import { isIllusionFighter } from "./illusionist.js";
 import {
   ensureLearningProfile, PRECISION_AIM_MAX_REDUCTION, precisionAimErrorScale, recordEvidence
 } from "./learning.js";
@@ -1498,5 +1501,55 @@ console.log("Light Condensation AI suite passed.");
 }
 
 console.log("Trapper AI suite passed.");
+
+// --- Illusionist AI ---
+{
+  assert.match(thoughtReason("casting fighter illusion"), /decoy|focus/i);
+  assert.match(thoughtReason("casting platform illusion"), /false ledge|landing/i);
+}
+
+{
+  // Pressured → fighter decoy with cloned kit.
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: 0, hp: 180, name: "Pixel", color: "#42dff5"
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: ILLUSIONIST_ID,
+    weapon: "pulse-rifle"
+  });
+  const enemy = new Fighter({
+    x: 700, y: 700, team: 1, weapon: "saber", grounded: true, hp: 500
+  });
+  const state = { plan: "idle", desiredAim: null };
+  const game = { fighters: [buddy, enemy], illusions: [], effects: [] };
+  updateAiIllusionist(buddy, state, game, [enemy], enemy);
+  assert.equal(state.plan, "casting fighter illusion");
+  const decoy = game.fighters.find((f) => isIllusionFighter(f));
+  assert.ok(decoy);
+  assert.equal(decoy.loadout.weapon, "pulse-rifle");
+}
+
+{
+  // Airborne foe → platform illusion.
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: -0.5, hp: 400
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: ILLUSIONIST_ID
+  });
+  const enemy = new Fighter({
+    x: 620, y: 500, team: 1, weapon: "gun", grounded: false, hp: 500
+  });
+  const state = { plan: "idle", desiredAim: null };
+  const game = { fighters: [buddy, enemy], illusions: [], effects: [] };
+  updateAiIllusionist(buddy, state, game, [enemy], enemy);
+  assert.equal(state.plan, "casting platform illusion");
+  assert.equal(game.illusions[0].illusionType, "platform");
+}
+
+console.log("Illusionist AI suite passed.");
+
 
 

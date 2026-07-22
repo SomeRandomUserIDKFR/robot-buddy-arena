@@ -1,6 +1,12 @@
 import { SIZE, WORLD } from "./config.js";
 import { updateCamera } from "./camera.js";
-import { Fighter, hit, stepBullets, stepFighter, stepThrownProps, triggerDodge } from "./combat.js";
+import {
+  Fighter, hit, stepBullets, stepFighter, stepThrownProps, triggerDodge
+} from "./combat.js";
+import {
+  cycleIllusionistType, isIllusionist, isRealCombatant, tickIllusionistWorld,
+  tryIllusionistPlant
+} from "./illusionist.js";
 import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
@@ -158,6 +164,7 @@ function makeGame(mode) {
     reconquerBonusAcc: 0,
     beamReveals: [],
     traps: [],
+    illusions: [],
     pings: [],
     camera: { x: 0, y: 0 },
     startedAt: Date.now(),
@@ -317,6 +324,7 @@ function update(dt) {
     tickLightCondensation(fighter, dt);
   }
   tickTrapperWorld(game, dt, trapPrevY);
+  tickIllusionistWorld(game, dt);
   stepBullets(game, dt);
   stepThrownProps(game, dt);
   tickPowerCrateSpawns(game, dt);
@@ -359,8 +367,12 @@ function update(dt) {
   updateCamera(game.camera, player, { width: canvas.width, height: canvas.height }, dt);
   updateHud(game);
 
-  const teamZeroAlive = game.fighters.some((fighter) => fighter.team === 0 && !fighter.dead);
-  const teamOneAlive = game.fighters.some((fighter) => fighter.team === 1 && !fighter.dead);
+  const teamZeroAlive = game.fighters.some((fighter) => (
+    fighter.team === 0 && isRealCombatant(fighter)
+  ));
+  const teamOneAlive = game.fighters.some((fighter) => (
+    fighter.team === 1 && isRealCombatant(fighter)
+  ));
   if (!teamZeroAlive || !teamOneAlive) finish(teamZeroAlive && !teamOneAlive);
 }
 
@@ -417,13 +429,15 @@ function handleKeyDown(event) {
   }
   if (event.code === "Digit3" && !event.repeat) {
     const player = game.fighters[0];
-    if (isTrapper(player)) tryTrapperPlant(player, game);
+    if (isIllusionist(player)) tryIllusionistPlant(player, game, Fighter);
+    else if (isTrapper(player)) tryTrapperPlant(player, game);
     else if (isLightCondensation(player)) tryLightCondensation(player, game);
     else if (isReconjurerBuilder(player)) tryReconjurerBuild(player, game);
   }
   if (event.code === "KeyT" && !event.repeat) {
     const player = game.fighters[0];
-    if (isTrapper(player)) cycleTrapperType(player);
+    if (isIllusionist(player)) cycleIllusionistType(player);
+    else if (isTrapper(player)) cycleTrapperType(player);
   }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
   if (event.code === "KeyG") {

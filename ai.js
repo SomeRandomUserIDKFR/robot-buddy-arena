@@ -26,11 +26,16 @@ import {
   canGrabBreakable, isThrowBreakable, THROW_BREAKABLE_GRAB_RANGE, THROW_BREAKABLE_ID
 } from "./throw-breakable.js";
 import {
+  cycleIllusionistType, isIllusionist, listIllusionFighters, listIllusionObjects,
+  tryIllusionistPlant
+} from "./illusionist.js";
+import {
   cycleTrapperType, isTrapper, listTrapperTraps, tryTrapperPlant
 } from "./trapper.js";
 import { angleDiff, clamp, dist, formatTime, lerp } from "./utils.js";
 import { crateVisibleToTeam } from "./powerups.js";
 import { hasLineOfSight, visibleToTeam } from "./vision.js";
+import { Fighter } from "./combat.js";
 
 /** Min seconds between AI primary ↔ secondary swaps. */
 export const AI_WEAPON_SWAP_CD = 0.9;
@@ -902,6 +907,54 @@ function normalizeTrapTypeSafe(fighter) {
 }
 
 /**
+ * Illusionist (T cycle / key 3): fighter decoys under pressure, plats when foes
+ * are above, props as lane bait. AI never filters illusions out of targeting —
+ * decoys are treated as real combatants by design.
+ */
+export function updateAiIllusionist(fighter, state, game, visible, target) {
+  if (!isIllusionist(fighter) || fighter.dead || !game) return;
+  if ((fighter.illusionistCd || 0) > 0) return;
+  const owned = listIllusionObjects(game).filter((i) => i.owner === fighter).length
+    + listIllusionFighters(game).filter((f) => f.illusionOwner === fighter).length;
+  if (owned >= 2) return;
+
+  const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
+  const engaged = !!target && !target.dead;
+  if (!foe && !engaged && fighter.hp >= 280) return;
+
+  let want = "fighter";
+  if (foe && (!foe.grounded || foe.y < fighter.y - 50)) want = "platform";
+  else if (foe && dist(fighter, foe) > 420) want = "prop";
+  else if (fighter.hp < 200) want = "fighter";
+
+  // Cycle toward desired type (at most 2 steps for 3 types).
+  for (let i = 0; i < 2; i++) {
+    const cur = fighter.illusionistType === "prop"
+      ? "prop"
+      : fighter.illusionistType === "platform"
+        ? "platform"
+        : "fighter";
+    if (cur === want) break;
+    cycleIllusionistType(fighter);
+  }
+
+  if (foe || target) {
+    const aimAt = foe || target;
+    state.desiredAim = Math.atan2(
+      aimAt.y + SIZE / 2 - (fighter.y + SIZE / 2),
+      aimAt.x + SIZE / 2 - (fighter.x + SIZE / 2)
+    );
+  }
+  if (tryIllusionistPlant(fighter, game, Fighter)) {
+    state.plan = want === "platform"
+      ? "casting platform illusion"
+      : want === "prop"
+        ? "casting prop illusion"
+        : "casting fighter illusion";
+  }
+}
+
+/**
  * Preferred fight distance under Mimic: blend default weapon spacing toward
  * the player's engagementRange / rush habits by intensity × reliability.
  */
@@ -1702,6 +1755,7 @@ export function updateAI(fighter, dt, game, profile) {
   updateAiReconjurer(fighter, state, game, visible, target);
   updateAiLightCondensation(fighter, state, game, visible, target);
   updateAiTrapper(fighter, state, game, visible, target);
+  updateAiIllusionist(fighter, state, game, visible, target);
 
   // Enemy trainers stay on the baseline tactical shield policy (bias 0).
   // Buddies blend toward player shieldUse; Mimic scales by intensity blend.

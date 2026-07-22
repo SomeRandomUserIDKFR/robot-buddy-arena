@@ -104,6 +104,7 @@ export const NO_EXTENSION_ID = "no-extension";
 export const RECONJURER_BUILDER_ID = "reconjurer-builder";
 export const LIGHT_CONDENSATION_ID = "light-condensation";
 export const TRAPPER_ID = "trapper";
+export const ILLUSIONIST_ID = "illusionist";
 
 /** World position of the Material Consumer blade tip (aim-aligned). */
 export function materialConsumerTip(fighter) {
@@ -363,7 +364,7 @@ export const GEAR = [
     NO_EXTENSION_ID,
     "extensionSecondary",
     "No Extension",
-    "No extension tool — unlock Reconjurer, Light Condensation, or Trapper to bind ability key 3.",
+    "No extension tool — unlock Reconjurer, Light Condensation, Trapper, or Illusionist to bind ability key 3.",
     {},
     { price: 0 }
   ),
@@ -401,6 +402,18 @@ export const GEAR = [
       price: 190,
       extensionSecondary: true,
       trapper: true
+    }
+  ),
+  item(
+    ILLUSIONIST_ID,
+    "extensionSecondary",
+    "Illusionist",
+    "Premium Extension: T cycles illusion type (HUD), 3 plants. Fighter decoys clone your kit and fight as AI gaslights; prop/platform illusions are visual-only with no cues. No collision or sight block. Real shots pass through (fighter decoys take 10 hits); illusion shots vanish and only phantom-damage bars (≥40). Most expensive extension.",
+    {},
+    {
+      price: 320,
+      extensionSecondary: true,
+      illusionist: true
     }
   ),
 
@@ -2156,7 +2169,8 @@ export function suggestBuddyLoadout(profile) {
   const style = evidenceStyle(profile, equipment.player);
   const secondaryPrefs = [NO_SECONDARY_ID, THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID];
   const extensionPrefs = [
-    NO_EXTENSION_ID, TRAPPER_ID, LIGHT_CONDENSATION_ID, RECONJURER_BUILDER_ID
+    NO_EXTENSION_ID, TRAPPER_ID, LIGHT_CONDENSATION_ID, RECONJURER_BUILDER_ID,
+    ILLUSIONIST_ID
   ];
   const preferences = style === "ranged"
     ? {
@@ -2169,7 +2183,8 @@ export function suggestBuddyLoadout(profile) {
       ],
       secondaryWeapon: secondaryPrefs,
       extensionSecondary: [
-        LIGHT_CONDENSATION_ID, TRAPPER_ID, NO_EXTENSION_ID, RECONJURER_BUILDER_ID
+        ILLUSIONIST_ID, LIGHT_CONDENSATION_ID, TRAPPER_ID, NO_EXTENSION_ID,
+        RECONJURER_BUILDER_ID
       ],
       jetpack: [
         "endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack", "nanotech-reserve"
@@ -2189,7 +2204,8 @@ export function suggestBuddyLoadout(profile) {
         ],
         secondaryWeapon: [THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID, NO_SECONDARY_ID],
         extensionSecondary: [
-          TRAPPER_ID, RECONJURER_BUILDER_ID, LIGHT_CONDENSATION_ID, NO_EXTENSION_ID
+          ILLUSIONIST_ID, TRAPPER_ID, RECONJURER_BUILDER_ID, LIGHT_CONDENSATION_ID,
+          NO_EXTENSION_ID
         ],
         jetpack: [
           "sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack", "nanotech-reserve"
@@ -2378,6 +2394,12 @@ export function applyLoadout(fighter, loadout) {
   fighter.trapperType = "bear";
   fighter.trapLockT = 0;
   fighter.trapLockKind = null;
+  fighter.illusionist = !!extension?.illusionist;
+  fighter.illusionistCd = 0;
+  fighter.illusionistFlash = 0;
+  fighter.illusionistType = "fighter";
+  fighter.phantomDamage = 0;
+  fighter.phantomDecayT = 0;
   if (weapon.id === ADAPTIVE_NANOTECH_ID) {
     applyAdaptiveCombatStats(fighter, "sword");
     syncAdaptiveNanotechCosts(fighter, "sword");

@@ -56,7 +56,10 @@ export function thoughtReason(plan) {
     "condensing light": "a glare spot would reveal or blind the lane",
     "breaking glare": "an enemy light node was cutting vision",
     "setting bear trap": "a mobility lock would pin the lane",
-    "laying fake platform": "a false ledge would punish a landing"
+    "laying fake platform": "a false ledge would punish a landing",
+    "casting fighter illusion": "a kit-matched decoy would steal focus",
+    "casting prop illusion": "a false cover prop would bait shots",
+    "casting platform illusion": "a false ledge would waste a landing"
   })[plan] || "no clean engagement was visible";
 }
 
