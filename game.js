@@ -27,7 +27,9 @@ import { tickThrowBreakable } from "./throw-breakable.js";
 import {
   isLightCondensation, tickLightCondensation, tryLightCondensation
 } from "./light-condensation.js";
-import { isReconjurerBuilder, tickReconjurerBuilder, tryReconjurerBuild } from "./reconjurer-builder.js";
+import {
+  cycleReconjurerType, isReconjurerBuilder, tickReconjurerBuilder, tryReconjurerBuild
+} from "./reconjurer-builder.js";
 import {
   cycleTrapperType, isTrapper, tickTrapperWorld, tryTrapperPlant
 } from "./trapper.js";
@@ -451,6 +453,7 @@ function handleKeyDown(event) {
     const player = game.fighters[0];
     if (isIllusionist(player)) cycleIllusionistType(player);
     else if (isTrapper(player)) cycleTrapperType(player);
+    else if (isReconjurerBuilder(player)) cycleReconjurerType(player, game);
   }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
   if (event.code === "KeyG") {

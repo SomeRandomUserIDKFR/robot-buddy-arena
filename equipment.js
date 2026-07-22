@@ -373,7 +373,7 @@ export const GEAR = [
     RECONJURER_BUILDER_ID,
     "extensionSecondary",
     "Reconjurer / Builder",
-    "Extension tool (press 3). Near debris: free rebuild (+2 ejection scraps). Away from debris: conjure a random breakable for nanobots (metal box 8%, 10s CD). Does not replace your 1/2 secondary.",
+    "Extension tool: T cycles the next breakable (left-corner look preview), 3 places. Near debris: free rebuild (+2 ejection scraps). Away from debris: conjure the selected prop for nanobots (metal box costs more, 10s CD). Does not replace your 1/2 secondary.",
     {},
     {
       price: 200,
@@ -2398,6 +2398,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.reconjurerCd = 0;
   fighter.reconjurerMetalCd = 0;
   fighter.reconjurerFlash = 0;
+  fighter.reconjurerType = "crate";
   fighter.lightCondensation = !!extension?.lightCondensation;
   fighter.lightCondensationCd = 0;
   fighter.lightCondensationFlash = 0;
