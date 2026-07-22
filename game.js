@@ -4,8 +4,9 @@ import { Fighter, hit, stepBullets, stepFighter, triggerDodge } from "./combat.j
 import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
-  acceptSuggestion, applyLoadout, awardConquest, cycleModularMode, equipOwned, purchaseGear,
-  setBuddyMode, toggleRetractableArmor, toggleShieldRaise, trainerLoadout, weaponKind
+  acceptSuggestion, applyLoadout, awardConquest, cycleModularMode, equipOwned,
+  hasNanotechChestplate, purchaseGear, setBuddyMode, setNanotechChanneling,
+  toggleRetractableArmor, toggleShieldRaise, trainerLoadout, weaponKind
 } from "./equipment.js";
 import { tickGroundDebris } from "./debris.js";
 import {
@@ -339,7 +340,12 @@ function handleKeyDown(event) {
     toggleShieldRaise(game.fighters[0]);
   }
   if (event.code === "KeyF" && !event.repeat) {
-    toggleRetractableArmor(game.fighters[0]);
+    const player = game.fighters[0];
+    if (hasNanotechChestplate(player)) {
+      setNanotechChanneling(player, true);
+    } else {
+      toggleRetractableArmor(player);
+    }
   }
   if (event.code === "KeyE" && !event.repeat) {
     cycleModularMode(game.fighters[0]);
@@ -363,6 +369,16 @@ function handleKeyDown(event) {
   }
 }
 
+function handleKeyUp(event) {
+  if (!game || game.over) return;
+  if (event.code === "KeyF") {
+    const player = game.fighters[0];
+    if (hasNanotechChestplate(player)) {
+      setNanotechChanneling(player, false);
+    }
+  }
+}
+
 function loop(now) {
   const dt = Math.min(.033, (now - lastTime) / 1000);
   lastTime = now;
@@ -371,7 +387,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-installInput(canvas, handleKeyDown);
+installInput(canvas, handleKeyDown, handleKeyUp);
 bindUi({
   start,
   openConquest,

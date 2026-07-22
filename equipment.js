@@ -9,7 +9,7 @@ const item = (id, slot, name, tradeoff, modifiers = {}, extra = {}) => ({
   id, slot, name, tradeoff, modifiers, ...extra
 });
 
-const gun = (id, name, tradeoff, stats, price) => item(
+const gun = (id, name, tradeoff, stats, price, extra = {}) => item(
   id, "weapon", name, tradeoff,
   {
     damage: stats.baseDamage / 12,
@@ -21,11 +21,12 @@ const gun = (id, name, tradeoff, stats, price) => item(
     baseKind: "gun",
     dps: stats.baseDamage * stats.rpm / 60,
     weaponStats: { kind: "gun", ...stats },
-    ...(price ? { price } : {})
+    ...(price ? { price } : {}),
+    ...extra
   }
 );
 
-const melee = (id, name, tradeoff, stats, price) => item(
+const melee = (id, name, tradeoff, stats, price, extra = {}) => item(
   id, "weapon", name, tradeoff,
   {
     damage: stats.baseDamage / 40,
@@ -41,7 +42,8 @@ const melee = (id, name, tradeoff, stats, price) => item(
       movementMultiplier: 1.1, iframeMultiplier: 1,
       ...stats
     },
-    ...(price ? { price } : {})
+    ...(price ? { price } : {}),
+    ...extra
   }
 );
 
@@ -179,6 +181,39 @@ export const GEAR = [
     iframeMultiplier: 1.25
   }, 135),
 
+  // Nanotech: counterpart weapon stats; shared bot pool. Weapons need free bots ≥ cost to fire.
+  melee("nanotech-sword", "Nanotech Sword", "Arc Saber stats. Needs 100 free nanobots to swing.", {
+    baseDamage: 55, rpm: 150, range: 120
+  }, 100, { nanotech: true, nanobotCost: 100 }),
+  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle stats. Needs 150 free nanobots to fire.", {
+    baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
+    dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
+    aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
+    movementMultiplier: 1, iframeMultiplier: 1
+  }, 150, { nanotech: true, nanobotCost: 150 }),
+  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper stats. Needs 175 free nanobots to fire.", {
+    baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
+    dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
+    sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
+    iframeMultiplier: 1, tracer: true
+  }, 175, { nanotech: true, nanobotCost: 175 }),
+  item(
+    "nanotech-chestplate",
+    "body",
+    "Nanotech Chestplate",
+    "Hold F to channel free bots into armor (2 bots = 1 HP, cap 250). Takes 10% less damage.",
+    { damageTaken: 0.9 },
+    { price: 500, nanotech: true, nanobotCost: 500 }
+  ),
+  item(
+    "nanotech-reserve",
+    "jetpack",
+    "Nanotech Reserve",
+    "Huge bot tank for nanotech gear. 5% slower. Fuel/thrust unchanged.",
+    { speed: 0.95 },
+    { price: 1000, nanotech: true, nanobotCost: 1000 }
+  ),
+
   item("vector-pack", "jetpack", "Vector Pack", "Balanced fuel, thrust, and recharge.", {}),
   item("sprinter-pack", "jetpack", "Sprinter Pack", "Hard thrust, smaller tank.",
     { fuel: .82, thrust: 1.2, recharge: 1.08 }),
@@ -222,6 +257,12 @@ export const GEAR = [
 /** Deployed retractable armor move-speed multiplier. */
 export const RETRACTABLE_ARMOR_SPEED = 0.9;
 export const RETRACTABLE_MORPH_DURATION = 0.32;
+
+/** Nanotech bot pool: channel free→armor, slow regen when weapon starved. */
+export const NANOTECH_CHANNEL_RATE = 220;
+export const NANOTECH_SLOW_REGEN = 35;
+export const NANOTECH_BOTS_PER_HP = 2;
+export const NANOTECH_ARMOR_BOT_CAP = 500;
 
 export const GEAR_BY_ID = Object.fromEntries(GEAR.map((gear) => [gear.id, gear]));
 export const STARTER_GEAR = [
@@ -481,6 +522,7 @@ export const PRECISION_AIM_WEAPONS = Object.freeze([
   "marksman-rifle",
   "quick-fire-sniper",
   "classic-sniper",
+  "nanotech-sniper",
   "strong-sniper"
 ]);
 
@@ -568,11 +610,109 @@ export function hasRetractableArmor(fighter) {
   return (fighter?.retractableMax || 0) > 0;
 }
 
+export function nanotechCostOf(gearOrId) {
+  const gear = typeof gearOrId === "string" ? GEAR_BY_ID[gearOrId] : gearOrId;
+  if (!gear?.nanotech) return 0;
+  return Math.max(0, Number(gear.nanobotCost) || 0);
+}
+
+export function nanotechPoolCapacity(loadout) {
+  let total = 0;
+  for (const slot of SLOT_ORDER) {
+    total += nanotechCostOf(loadout?.[slot]);
+  }
+  return total;
+}
+
+export function hasNanotechGear(fighter) {
+  return !!fighter?.forceNanotechMorph || (fighter?.nanobotMax || 0) > 0;
+}
+
+export function hasNanotechChestplate(fighter) {
+  return !!fighter?.hasNanotechChestplate
+    || fighter?.loadout?.body === "nanotech-chestplate";
+}
+
+export function nanotechArmorHp(fighter) {
+  return Math.floor(Math.max(0, fighter?.nanobotArmor || 0) / NANOTECH_BOTS_PER_HP);
+}
+
+export function nanotechArmorMaxHp(fighter) {
+  const botCap = Math.min(
+    NANOTECH_ARMOR_BOT_CAP,
+    Math.max(0, fighter?.nanobotMax || 0)
+  );
+  return Math.floor(botCap / NANOTECH_BOTS_PER_HP);
+}
+
+export function canNanotechAttack(fighter) {
+  const cost = fighter?.nanotechWeaponCost || 0;
+  if (cost <= 0) return true;
+  return (fighter.nanobotFree || 0) >= cost;
+}
+
+export function setNanotechChanneling(fighter, on) {
+  if (!fighter || !hasNanotechChestplate(fighter) || fighter.dead) {
+    if (fighter) fighter.nanotechChanneling = false;
+    return false;
+  }
+  fighter.nanotechChanneling = !!on;
+  return true;
+}
+
+/** Core + retractable (if deployed) + nanotech armor buffer → displayed hp/maxHp. */
+export function syncNanotechDisplayedHp(fighter) {
+  if (!fighter) return;
+  fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
+  fighter.coreHp = Math.max(0, Math.min(fighter.coreMaxHp, fighter.coreHp ?? fighter.hp));
+  if (fighter.retractableMax > 0) {
+    fighter.retractableHp = Math.max(
+      0,
+      Math.min(fighter.retractableMax, fighter.retractableHp ?? fighter.retractableMax)
+    );
+  }
+  const retOn = fighter.retractableMax > 0 && fighter.retractableDeployed;
+  const nanoHp = nanotechArmorHp(fighter);
+  fighter.maxHp = fighter.coreMaxHp + (retOn ? fighter.retractableMax : 0) + nanoHp;
+  fighter.hp = fighter.coreHp + (retOn ? fighter.retractableHp : 0) + nanoHp;
+}
+
+export function tickNanotech(fighter, dt) {
+  if (!fighter || !(fighter.nanobotMax > 0) || fighter.dead) return;
+  const max = fighter.nanobotMax;
+  let free = Math.max(0, fighter.nanobotFree || 0);
+  let armor = Math.max(0, fighter.nanobotArmor || 0);
+
+  if (fighter.nanotechChanneling && hasNanotechChestplate(fighter)) {
+    const room = Math.max(0, NANOTECH_ARMOR_BOT_CAP - armor);
+    const flow = Math.min(free, room, NANOTECH_CHANNEL_RATE * dt);
+    free -= flow;
+    armor += flow;
+  } else if (
+    (fighter.nanotechWeaponCost || 0) > 0
+    && free < fighter.nanotechWeaponCost
+    && free + armor < max
+  ) {
+    const room = Math.max(0, max - free - armor);
+    const gain = Math.min(room, NANOTECH_SLOW_REGEN * dt);
+    free += gain;
+  }
+
+  fighter.nanobotFree = Math.max(0, Math.min(max - armor, free));
+  fighter.nanobotArmor = Math.max(0, Math.min(NANOTECH_ARMOR_BOT_CAP, armor));
+  // Keep free+armor ≤ max (channel can leave unused reserve capacity).
+  if (fighter.nanobotFree + fighter.nanobotArmor > max) {
+    fighter.nanobotFree = Math.max(0, max - fighter.nanobotArmor);
+  }
+  syncNanotechDisplayedHp(fighter);
+}
+
 export function syncRetractableDisplayedHp(fighter) {
   if (!fighter) return;
   if (!(fighter.retractableMax > 0)) {
     fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
     fighter.coreHp = fighter.coreHp ?? fighter.hp;
+    syncNanotechDisplayedHp(fighter);
     return;
   }
   fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
@@ -581,13 +721,7 @@ export function syncRetractableDisplayedHp(fighter) {
     0,
     Math.min(fighter.retractableMax, fighter.retractableHp ?? fighter.retractableMax)
   );
-  if (fighter.retractableDeployed) {
-    fighter.maxHp = fighter.coreMaxHp + fighter.retractableMax;
-    fighter.hp = fighter.coreHp + fighter.retractableHp;
-  } else {
-    fighter.maxHp = fighter.coreMaxHp;
-    fighter.hp = fighter.coreHp;
-  }
+  syncNanotechDisplayedHp(fighter);
 }
 
 export function retractableSpeedMultiplier(fighter) {
@@ -634,43 +768,74 @@ export function tickRetractableArmor(fighter, dt) {
   if (fighter.retractableMorphT >= 1) finishRetractableMorph(fighter);
 }
 
-/** Damage after shield block: armor pool first while deployed, then core HP. */
+/** Damage after shield block: nano armor, then retractable pool while deployed, then core. */
 export function applyHpDamage(fighter, dealt, game = null) {
   let left = Math.max(0, dealt);
   if (left <= 0) {
-    syncRetractableDisplayedHp(fighter);
+    if ((fighter.retractableMax || 0) > 0 || (fighter.nanobotMax || 0) > 0) {
+      syncNanotechDisplayedHp(fighter);
+    }
     return 0;
   }
-  if (!(fighter.retractableMax > 0)) {
+
+  // No retractable / nano armor buffer: damage displayed hp (legacy callers reset .hp).
+  if (!(fighter.retractableMax > 0) && !(fighter.nanobotArmor > 0)) {
     fighter.hp = Math.max(0, fighter.hp - left);
     fighter.coreHp = fighter.hp;
-    fighter.coreMaxHp = fighter.maxHp;
-    return left;
+    fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
+    if ((fighter.nanobotMax || 0) > 0) syncNanotechDisplayedHp(fighter);
+    else fighter.coreMaxHp = fighter.maxHp;
+    return dealt;
   }
-  if (fighter.retractableDeployed && fighter.retractableHp > 0) {
-    const absorb = Math.min(fighter.retractableHp, left);
-    fighter.retractableHp -= absorb;
-    left -= absorb;
+
+  fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
+  fighter.coreHp = fighter.coreHp ?? fighter.hp;
+
+  if ((fighter.nanobotArmor || 0) > 0) {
+    const armorHp = nanotechArmorHp(fighter);
+    const absorb = Math.min(left, armorHp);
+    if (absorb > 0) {
+      fighter.nanobotArmor = Math.max(
+        0,
+        fighter.nanobotArmor - absorb * NANOTECH_BOTS_PER_HP
+      );
+      left -= absorb;
+    }
   }
-  if (left > 0) {
+
+  if (fighter.retractableMax > 0) {
+    if (fighter.retractableDeployed && fighter.retractableHp > 0 && left > 0) {
+      const absorb = Math.min(fighter.retractableHp, left);
+      fighter.retractableHp -= absorb;
+      left -= absorb;
+    }
+    if (left > 0) {
+      fighter.coreHp = Math.max(0, fighter.coreHp - left);
+    }
+    if (fighter.retractableDeployed && fighter.retractableHp <= 0 && !fighter.retractableMorphing) {
+      beginRetractableMorph(fighter, false);
+      spawnBrokenArmorDebris(game, fighter);
+    }
+  } else if (left > 0) {
     fighter.coreHp = Math.max(0, fighter.coreHp - left);
   }
-  if (fighter.retractableDeployed && fighter.retractableHp <= 0 && !fighter.retractableMorphing) {
-    beginRetractableMorph(fighter, false);
-    spawnBrokenArmorDebris(game, fighter);
-  }
-  syncRetractableDisplayedHp(fighter);
+
+  syncNanotechDisplayedHp(fighter);
   return dealt;
 }
 
 export function healFighter(fighter, amount) {
   let left = Math.max(0, amount);
-  if (!(fighter.retractableMax > 0)) {
+  if (!(fighter.retractableMax > 0) && !(fighter.nanobotArmor > 0)) {
     fighter.hp = Math.min(fighter.maxHp, fighter.hp + left);
     fighter.coreHp = fighter.hp;
-    fighter.coreMaxHp = fighter.maxHp;
+    fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
+    if ((fighter.nanobotMax || 0) > 0) syncNanotechDisplayedHp(fighter);
+    else fighter.coreMaxHp = fighter.maxHp;
     return;
   }
+  fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
+  fighter.coreHp = fighter.coreHp ?? fighter.hp;
   const coreRoom = Math.max(0, fighter.coreMaxHp - fighter.coreHp);
   const toCore = Math.min(left, coreRoom);
   fighter.coreHp += toCore;
@@ -679,7 +844,7 @@ export function healFighter(fighter, amount) {
     const armorRoom = Math.max(0, fighter.retractableMax - fighter.retractableHp);
     fighter.retractableHp += Math.min(left, armorRoom);
   }
-  syncRetractableDisplayedHp(fighter);
+  syncNanotechDisplayedHp(fighter);
 }
 
 function legacyWeapon(value) {
@@ -847,40 +1012,47 @@ export function suggestBuddyLoadout(profile) {
   const style = evidenceStyle(profile, equipment.player);
   const preferences = style === "ranged"
     ? {
-      body: ["field-frame", "bulwark-frame", "scout-frame", "retractable-armor"],
+      body: ["field-frame", "bulwark-frame", "scout-frame", "retractable-armor", "nanotech-chestplate"],
       helmet: ["wideband-array", "survey-visor", "guard-helm"],
       weapon: [
-        "laser", "quick-fire-sniper", "classic-sniper", "strong-sniper",
-        "marksman-rifle", "pulse-rifle", "gattler", "burst-carbine",
+        "laser", "quick-fire-sniper", "classic-sniper", "nanotech-sniper", "strong-sniper",
+        "marksman-rifle", "nanotech-rifle", "pulse-rifle", "gattler", "burst-carbine",
         "mechanical-modularity", "arc-saber", "duelist-blade"
       ],
-      jetpack: ["endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack"],
+      jetpack: [
+        "endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack", "nanotech-reserve"
+      ],
       shield: [
         "light-buckler", "kinetic-targe", "retractable-shell", "no-shield", "bastion-bulwark"
       ]
     }
     : style === "rusher"
       ? {
-        body: ["scout-frame", "field-frame", "bulwark-frame", "retractable-armor"],
+        body: ["scout-frame", "field-frame", "bulwark-frame", "retractable-armor", "nanotech-chestplate"],
         helmet: ["survey-visor", "wideband-array", "guard-helm"],
         weapon: [
-          "daggers", "heavy-saber", "arc-saber", "duelist-blade",
+          "daggers", "heavy-saber", "arc-saber", "nanotech-sword", "duelist-blade",
           "mechanical-modularity",
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
-        jetpack: ["sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack"],
+        jetpack: [
+          "sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack", "nanotech-reserve"
+        ],
         shield: ["no-shield", "light-buckler", "retractable-shell", "kinetic-targe", "bastion-bulwark"]
       }
       : {
-        body: ["field-frame", "scout-frame", "bulwark-frame", "retractable-armor"],
+        body: ["field-frame", "scout-frame", "bulwark-frame", "retractable-armor", "nanotech-chestplate"],
         helmet: ["survey-visor", "wideband-array", "guard-helm"],
         weapon: [
           "pulse-rifle", "arc-saber", "mechanical-modularity", "burst-carbine",
           "duelist-blade",
           "gattler", "laser", "marksman-rifle", "heavy-saber",
-          "quick-fire-sniper", "classic-sniper", "strong-sniper", "daggers"
+          "quick-fire-sniper", "classic-sniper", "nanotech-sniper", "nanotech-rifle",
+          "nanotech-sword", "strong-sniper", "daggers"
         ],
-        jetpack: ["vector-pack", "sprinter-pack", "endurance-pack", "recycler-pack"],
+        jetpack: [
+          "vector-pack", "sprinter-pack", "endurance-pack", "recycler-pack", "nanotech-reserve"
+        ],
         shield: [
           "light-buckler", "no-shield", "retractable-shell", "kinetic-targe", "bastion-bulwark"
         ]
@@ -983,6 +1155,18 @@ export function applyLoadout(fighter, loadout) {
     fighter._retractableBaseMoveSpeed = null;
   }
   syncRetractableDisplayedHp(fighter);
+  const nanobotMax = nanotechPoolCapacity(fighter.loadout);
+  fighter.nanobotMax = nanobotMax;
+  fighter.nanobotFree = nanobotMax;
+  fighter.nanobotArmor = 0;
+  fighter.nanotechChanneling = false;
+  fighter.nanotechWeaponCost = weapon.nanotech ? nanotechCostOf(weapon) : 0;
+  fighter.hasNanotechChestplate = fighter.loadout.body === "nanotech-chestplate";
+  fighter.forceNanotechMorph = SLOT_ORDER.some((slot) => {
+    const gear = GEAR_BY_ID[fighter.loadout[slot]];
+    return !!gear?.nanotech;
+  });
+  syncNanotechDisplayedHp(fighter);
   fighter.damageTaken = stats.damageTaken / 100;
   fighter.sight = stats.sight;
   fighter.jetFuelCapacity = stats.fuel / 3;

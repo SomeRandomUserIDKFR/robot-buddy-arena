@@ -4,8 +4,9 @@ import {
 } from "./config.js";
 import { updateAI } from "./ai.js";
 import {
-  applyHpDamage, modularAttackLocked, retractableSpeedMultiplier, shieldBlocksAttack,
-  shieldSpeedMultiplier, tickModularWeapon, tickRetractableArmor
+  applyHpDamage, canNanotechAttack, modularAttackLocked, retractableSpeedMultiplier,
+  shieldBlocksAttack, shieldSpeedMultiplier, tickModularWeapon, tickNanotech,
+  tickRetractableArmor
 } from "./equipment.js";
 import { armorDummyBlockers, damageArmorDummy } from "./debris.js";
 import {
@@ -304,6 +305,7 @@ export function attack(fighter, game, random = Math.random) {
   if (fighter.attackCd > 0 || fighter.dead) return;
   if (fighter.shieldRaised && !fighter.shieldBroken) return;
   if (modularAttackLocked(fighter)) return;
+  if (!canNanotechAttack(fighter)) return;
   const spread = weaponAccuracySpread(fighter);
   const shotAngle = fighter.aim + (random() - .5) * spread * 2;
   const ox = fighter.x + SIZE / 2 + Math.cos(shotAngle) * 31;
@@ -424,6 +426,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   fighter.shieldFlash -= dt;
   tickModularWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
+  tickNanotech(fighter, dt);
   if (
     fighter.modularWeapon
     && fighter.modularMode === "shield"

@@ -1,6 +1,6 @@
 import { CEILING, SIGHT, SIZE, WORLD } from "./config.js";
 import { armorDummyColor, FORGE_PHASE_DURATIONS, forgeCastColor } from "./debris.js";
-import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID } from "./equipment.js";
+import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID, nanotechArmorHp, nanotechArmorMaxHp } from "./equipment.js";
 import { normalizeModularMorphStyle } from "./settings.js";
 import { platformsOf } from "./maps.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
@@ -28,6 +28,10 @@ const WEAPON_VISUALS = {
   "duelist-blade": { length: 38, width: 5, gripOffset: 17, ally: "#90f8ff", enemy: "#ff9a88", buddy: "#78f4ff" },
   daggers: { length: 16, width: 4, gripOffset: 18, ally: "#a8e0e8", enemy: "#ffb0a0", buddy: "#9cf0f8" },
   "mechanical-modularity": { length: 48, width: 5, gripOffset: 17, ally: "#70f3ff", enemy: "#ff8279", buddy: "#4df2ff" },
+  // Nanotech weapons: counterpart silhouettes with cyan/magenta nano tint.
+  "nanotech-sword": { length: 48, width: 5, gripOffset: 17, ally: "#5cffd8", enemy: "#ff58c8", buddy: "#48fff0" },
+  "nanotech-rifle": { length: 32, width: 10, gripOffset: 18, ally: "#4ae8ff", enemy: "#e050c0", buddy: "#3af8ff" },
+  "nanotech-sniper": { length: 54, width: 5, gripOffset: 17, ally: "#2ad0ff", enemy: "#d040b8", buddy: "#20e8ff" },
   // Legacy baseKind fallbacks
   gun: { length: 32, width: 10, gripOffset: 18, ally: "#6a8f9c", enemy: "#8a655c", buddy: "#5aa8b4" },
   saber: { length: 48, width: 5, gripOffset: 17, ally: "#70f3ff", enemy: "#ff8279", buddy: "#4df2ff" }
@@ -521,6 +525,12 @@ function drawPanelFoldMorph(context, visual, alpha) {
   }
 }
 
+/** Resolve morph visual style; nanotech gear forces the nanotech swarm look. */
+function morphStyleFor(fighter, game) {
+  if (fighter?.forceNanotechMorph) return "nanotech";
+  return normalizeModularMorphStyle(game?.settings?.visual?.modularMorphStyle);
+}
+
 /** Retractable armor: open-face helmet + chestplate (morph styles: fold / fly / smooth / nanotech). */
 function drawRetractableArmorPlates(context, game, fighter, centerX, centerY, bodyAlpha) {
   if (!(fighter.retractableMax > 0)) return;
@@ -528,12 +538,15 @@ function drawRetractableArmorPlates(context, game, fighter, centerX, centerY, bo
   const deployed = !!fighter.retractableDeployed;
   if (!morphing && !deployed) return;
 
-  const style = normalizeModularMorphStyle(game.settings?.visual?.modularMorphStyle);
+  const style = morphStyleFor(fighter, game);
   const faction = fighter.buddy ? "buddy" : fighter.team ? "enemy" : "ally";
   const plate = MODULAR_MODE_DEFS.shield.visual;
   let color = plate[faction] || "#8aa4b0";
   if (fighter.color && faction === "enemy") {
     color = mixHexColors(color, fighter.color, 0.45);
+  }
+  if (fighter.forceNanotechMorph) {
+    color = mixHexColors(color, "#5cffd8", 0.55);
   }
 
   let u = deployed && !morphing ? 1 : 0;
@@ -569,9 +582,31 @@ function drawRetractableArmorPlates(context, game, fighter, centerX, centerY, bo
   context.restore();
 }
 
+/** Nanotech chestplate buffer: suit scales with channeled armor HP. */
+function drawNanotechChestplateArmor(context, game, fighter, centerX, centerY, bodyAlpha) {
+  if (!fighter.hasNanotechChestplate || !(fighter.nanobotArmor > 0)) return;
+  const maxHp = nanotechArmorMaxHp(fighter);
+  if (maxHp <= 0) return;
+  const u = clamp(nanotechArmorHp(fighter) / maxHp, 0, 1);
+  if (u <= 0.02) return;
+
+  const faction = fighter.buddy ? "buddy" : fighter.team ? "enemy" : "ally";
+  let color = faction === "enemy" ? "#e050c0" : faction === "buddy" ? "#48fff0" : "#5cffd8";
+  if (fighter.color && faction === "enemy") {
+    color = mixHexColors(color, fighter.color, 0.4);
+  }
+  const glow = mixHexColors(color, "#ffffff", 0.4);
+  const half = SIZE / 2 + 4;
+  const morphing = !!fighter.nanotechChanneling;
+  context.save();
+  context.translate(centerX, centerY);
+  drawNanotechArmorSuit(context, color, glow, half, u, bodyAlpha, morphing);
+  context.restore();
+}
+
 function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
   const alpha = bodyAlpha * (shieldUp ? .38 : 1);
-  const morphStyle = normalizeModularMorphStyle(game.settings?.visual?.modularMorphStyle);
+  const morphStyle = morphStyleFor(fighter, game);
   const canMorph = fighter.weaponId === MODULAR_WEAPON_ID
     && visual.morphing
     && visual.fromShape
@@ -990,6 +1025,9 @@ export function createRenderer(canvas) {
     context.fillRect(fighter.x, fighter.y, SIZE, SIZE);
     context.shadowBlur = 0;
     drawRetractableArmorPlates(
+      context, game, fighter, centerX, centerY, fighter.dead ? .45 : 1
+    );
+    drawNanotechChestplateArmor(
       context, game, fighter, centerX, centerY, fighter.dead ? .45 : 1
     );
     context.fillStyle = "#071016";

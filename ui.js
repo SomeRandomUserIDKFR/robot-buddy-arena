@@ -6,8 +6,8 @@ import { defaultQuickReplies, ensureCoaching } from "./coaching.js";
 import { FAQ_TOPIC_CHIPS } from "./game-faq.js";
 import { analyzerStatus, initializeLanguageAnalyzer } from "./language-analyzer.js";
 import {
-  effectiveStats, GEAR, GEAR_BY_ID, ownedForSlot, shieldStats, SLOT_LABELS, SLOT_ORDER,
-  theoreticalDps, weaponKind, weaponStats
+  effectiveStats, GEAR, GEAR_BY_ID, nanotechArmorHp, nanotechArmorMaxHp, ownedForSlot,
+  shieldStats, SLOT_LABELS, SLOT_ORDER, theoreticalDps, weaponKind, weaponStats
 } from "./equipment.js";
 import {
   beginConquestSelect, getPendingEncounter, hasFreeReroll, loadoutSummary,
@@ -330,10 +330,26 @@ export function updateHud(game) {
   ui.fuel.style.width = `${player.fuel * 100}%`;
   ui.fuelMeter.classList.toggle("exhausted", !!player.jetLocked);
   ui.fuelLabel.textContent = player.jetLocked ? "EXHAUSTED" : "FUEL";
-  const hasArmor = (player.retractableMax || 0) > 0;
+  const hasNanoArmor = !!player.hasNanotechChestplate;
+  const hasArmor = (player.retractableMax || 0) > 0 || hasNanoArmor;
   if (ui.armorMeter) {
     ui.armorMeter.classList.toggle("hidden", !hasArmor);
-    if (hasArmor) {
+    if (hasNanoArmor) {
+      const maxHp = nanotechArmorMaxHp(player);
+      const curHp = nanotechArmorHp(player);
+      const armorPct = maxHp > 0 ? (curHp / maxHp) * 100 : 0;
+      ui.armor.style.width = `${armorPct}%`;
+      ui.armorMeter.classList.toggle("deployed", curHp > 0 && !player.nanotechChanneling);
+      ui.armorMeter.classList.toggle("morphing", !!player.nanotechChanneling);
+      ui.armorMeter.classList.toggle("empty", curHp <= 0);
+      const weaponCost = player.nanotechWeaponCost || 0;
+      const freeLow = weaponCost > 0 && (player.nanobotFree || 0) < weaponCost;
+      ui.armorLabel.textContent = player.nanotechChanneling
+        ? "CHANNEL…"
+        : freeLow
+          ? "NANO LOW"
+          : "NANO";
+    } else if (hasArmor) {
       const armorPct = player.retractableMax > 0
         ? (player.retractableHp / player.retractableMax) * 100
         : 0;
@@ -740,6 +756,9 @@ function modifierMarkup(gear) {
       "<span>Separate pool · no mid-match recharge</span>"
     ].join("");
   }
+  const nanoCostLine = gear.nanotech && gear.nanobotCost
+    ? `<span class="stat-up">${gear.nanobotCost} nanobot pool</span>`
+    : "";
   if (gear.slot === "weapon") {
     if (gear.id === "mechanical-modularity") {
       return [
@@ -757,6 +776,7 @@ function modifierMarkup(gear) {
       `<span>${Math.round(theoreticalDps(gear) * 10) / 10} DPS</span>`,
       `<span>${Math.round(stats.range)} reach</span>`
     ];
+    if (nanoCostLine) changes.unshift(nanoCostLine);
     if ((stats.movementMultiplier || 1) > 1) {
       changes.push(`<span class="stat-up">Base speed +${Math.round((stats.movementMultiplier - 1) * 100)}%</span>`);
     }
@@ -795,6 +815,10 @@ function modifierMarkup(gear) {
     const good = beneficialDown ? percent < 0 : percent > 0;
     return `<span class="${good ? "stat-up" : percent ? "stat-down" : ""}">${escapeHtml(names[key] || key)} ${sign}${percent}%</span>`;
   });
+  if (nanoCostLine) changes.unshift(nanoCostLine);
+  if (gear.id === "nanotech-chestplate") {
+    changes.push("<span>Hold F to channel bots → armor</span>");
+  }
   return changes.length ? changes.join("") : "<span>Baseline stats</span>";
 }
 

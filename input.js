@@ -1,13 +1,14 @@
 export const keys = Object.create(null);
 export const mouse = { x: 0, y: 0, down: false };
 
-export function installInput(canvas, onKeyDown) {
+export function installInput(canvas, onKeyDown, onKeyUp) {
   addEventListener("keydown", (event) => {
     keys[event.code] = true;
-    onKeyDown(event);
+    onKeyDown?.(event);
   });
   addEventListener("keyup", (event) => {
     keys[event.code] = false;
+    onKeyUp?.(event);
   });
   canvas.addEventListener("mousemove", (event) => {
     const bounds = canvas.getBoundingClientRect();

@@ -35,7 +35,7 @@
         "keyboard controls",
         "what buttons do I use"
       ],
-      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped. E cycles Mechanical Modularity modes when that weapon is equipped. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
+      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped, or hold F to channel Nanotech Chestplate armor. E cycles Mechanical Modularity modes when that weapon is equipped. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
     },
     {
       "id": "controls-retractable-armor",
@@ -48,7 +48,7 @@
         "how does folding armor work",
         "armor deploy key"
       ],
-      "answer": "F deploys or retracts Retractable Armor (Main Armor) or Retractable Shell (Shield slot). While deployed you gain a separate armor HP pool added to your max and current HP, and move about 10% slower. Damage hits the armor pool first. The pool normally does not recharge mid-match (Protective Rebuilding can refill it); when emptied the plates fold away. You can equip both items, but there is one F toggle and the larger pool is used. Morph style matches Settings → Visual (Panel fold / Flying rearrangement / Nanotech)."
+      "answer": "F deploys or retracts Retractable Armor (Main Armor) or Retractable Shell (Shield slot). While deployed you gain a separate armor HP pool added to your max and current HP, and move about 10% slower. Damage hits the armor pool first. The pool normally does not recharge mid-match (Protective Rebuilding can refill it); when emptied the plates fold away. You can equip both items, but there is one F toggle and the larger pool is used. Morph style matches Settings → Visual (Panel fold / Flying rearrangement / Nanotech). If you equip Nanotech Chestplate instead, F hold-channels bots into nano armor."
     },
     {
       "id": "controls-shield",
@@ -431,6 +431,20 @@
         "armor helmet weapon jetpack"
       ],
       "answer": "Five slots: body armor, helmet, weapon, jetpack, and shield. Starters include ten free items (two per slot, including No Shield). Every piece is a tradeoff, not a straight power level."
+    },
+    {
+      "id": "equipment-nanotech",
+      "tags": ["equipment", "nanotech", "nanobot", "channel", "f", "armor"],
+      "questions": [
+        "what is nanotech gear",
+        "how does nanotech work",
+        "nanobot pool",
+        "nanotech chestplate",
+        "hold F channel",
+        "nanotech sword rifle sniper",
+        "nanotech reserve"
+      ],
+      "answer": "Nanotech pieces share a bot pool equal to the sum of each piece's nanobot cost. Nanotech weapons need that many free bots ready to fire (not spent per shot). Hold F with Nanotech Chestplate to channel free bots into armor (2 bots = 1 HP, armor capped at 500 bots / 250 HP). Nanotech Reserve adds a large pool but slows you 5%. With the chestplate, F channels instead of toggling Retractable Armor."
     },
     {
       "id": "equipment-shields",

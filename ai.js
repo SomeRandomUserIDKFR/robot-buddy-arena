@@ -4,7 +4,8 @@ import {
 import { platformsOf } from "./maps.js";
 import { directiveStrength } from "./coaching.js";
 import {
-  beginModularMorph, beginRetractableMorph, hasRetractableArmor, isModularWeapon
+  beginModularMorph, beginRetractableMorph, hasNanotechChestplate, hasRetractableArmor,
+  isModularWeapon, setNanotechChanneling
 } from "./equipment.js";
 import {
   ensureLearningProfile, evidenceReliability, evidenceState, mimicBlendFactor,
@@ -470,6 +471,8 @@ export function wantRetractableDeployed(fighter, state, game, visible, target) {
  * player buddies deploy reliably (this is a loadout verb, not a timing skill).
  */
 export function updateAiRetractableArmor(fighter, state, game, visible, target, aiId) {
+  // Nanotech chestplate owns F — do not toggle retractable shell while channeling.
+  if (hasNanotechChestplate(fighter)) return;
   if (!hasRetractableArmor(fighter) || fighter.dead || fighter.retractableMorphing) {
     return;
   }
@@ -507,6 +510,21 @@ export function updateAiRetractableArmor(fighter, state, game, visible, target, 
   if (!beginRetractableMorph(fighter, want)) return;
   state.retractableCooldownUntil = now + RETRACTABLE_AI_COOLDOWN;
   if (want) state.retractableHoldUntil = now + RETRACTABLE_AI_MIN_HOLD;
+}
+
+/** Minimal nanotech channel: under fire with spare free bots → hold channel. */
+export function updateAiNanotech(fighter, state, game, visible, target) {
+  if (!hasNanotechChestplate(fighter) || fighter.dead) {
+    setNanotechChanneling(fighter, false);
+    return;
+  }
+  const weaponCost = fighter.nanotechWeaponCost || 0;
+  const free = fighter.nanobotFree || 0;
+  const underFire = (visible || []).some((foe) => foe && !foe.dead)
+    || (!!target && !target.dead);
+  const want = underFire && free > weaponCost + 40
+    && (fighter.nanobotArmor || 0) < 500;
+  setNanotechChanneling(fighter, want);
 }
 
 /**
@@ -1295,6 +1313,7 @@ export function updateAI(fighter, dt, game, profile) {
   updateAiRetractableArmor(
     fighter, state, game, visible, target, fighter.ai || "balanced"
   );
+  updateAiNanotech(fighter, state, game, visible, target);
   stepAimSmoothing(fighter, dt, turnRate);
   return state;
 }
