@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import {
-  ARMOR_DUMMY_COOL_DURATION, buildPropJigsaw, consumeDebrisSource, damageArmorDummy,
-  forgeCastColor, FORGE_PHASE_DURATIONS, NON_ARMOR_DEBRIS_LIFE, pickNearbyRestoreProp,
+  ARMOR_DUMMY_COOL_DURATION, buildPropJigsaw, claimDebrisForMaterialConsume,
+  consumeDebrisSource, damageArmorDummy, forgeCastColor, FORGE_PHASE_DURATIONS,
+  MATERIAL_CONSUME_DURATION, NON_ARMOR_DEBRIS_LIFE, pickNearbyRestoreProp,
   PROP_DEBRIS_COLORS, pullSpawnTowardOrigin, RECONQUER_BONUS_INTERVAL, RECONQUER_NEAR_RANGE,
   restoreMapProp, spawnBrokenArmorDebris, spawnPropDebris, tickGroundDebris,
   tryReconquerAtSpawn, vacuumNearbyDebris
@@ -512,7 +513,7 @@ function pointNear(spot, origin) {
 
 assert.equal(restoreMapProp(null), false);
 
-// Vacuum consumes whole source groups and clears reconquer (no rebuild leftovers).
+// Instant vacuum consumes whole source groups and clears reconquer leftovers.
 {
   const game = {
     groundDebris: [
@@ -539,7 +540,27 @@ assert.equal(restoreMapProp(null), false);
   assert.equal(game.reconquerQueue.length, 0);
 }
 
-// Material Consumer turns vacuumed scraps into free bots (capped by pool room).
+// Claim starts tip-suction and cancels reconquer without instant delete.
+{
+  const owner = { id: "vac-owner" };
+  const game = {
+    groundDebris: [
+      { x: 10, y: 10, w: 8, h: 8, sourceId: "claim-a", despawnMode: null, color: "#888" },
+      { x: 14, y: 12, w: 8, h: 8, sourceId: "claim-a", despawnMode: null, color: "#888" }
+    ],
+    reconquerQueue: [{ sourceId: "claim-a" }],
+    forgeCasts: [],
+    armorDummyBuilds: [],
+    effects: []
+  };
+  const claimed = claimDebrisForMaterialConsume(game, 10, 10, 40, owner, 4);
+  assert.equal(claimed.pieces, 2);
+  assert.equal(game.reconquerQueue.length, 0, "reconquer cancelled on claim");
+  assert.ok(game.groundDebris.every((p) => p.despawnMode === "material-consume"));
+  assert.ok(game.groundDebris.every((p) => p.consumeOwner === owner));
+}
+
+// Material Consumer: scraps stream to tip, ingest FX, then free bots (pool-capped).
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
@@ -548,6 +569,7 @@ assert.equal(restoreMapProp(null), false);
   });
   fighter.x = 100;
   fighter.y = 200;
+  fighter.aim = 0;
   assert.ok(selectWeaponSlot(fighter, "secondaryWeapon"));
   assert.equal(fighter.weaponId, MATERIAL_CONSUMER_ID);
   assert.equal(fighter.materialConsumer, true);
@@ -557,28 +579,58 @@ assert.equal(restoreMapProp(null), false);
   const freeBefore = fighter.nanobotFree;
   const pieces = 3;
   const game = {
+    elapsed: 0,
     groundDebris: Array.from({ length: pieces }, (_, i) => ({
-      x: fighter.x + 20 + i, y: fighter.y + 20, sourceId: "mc-src", despawnMode: null
+      x: fighter.x + 20 + i,
+      y: fighter.y + 20,
+      w: 8,
+      h: 8,
+      sourceId: "mc-src",
+      despawnMode: null,
+      color: "#8a7a68",
+      vx: 0,
+      vy: 0,
+      spin: 0,
+      rot: 0
     })),
     reconquerQueue: [{ sourceId: "mc-src" }],
     forgeCasts: [],
     armorDummyBuilds: [],
-    effects: []
+    effects: [],
+    materialConsumeArrivals: []
   };
-  const gained = tickMaterialConsumerVacuum(fighter, game, 1 / 60);
+
+  // Claim on first vacuum tick — scraps stay visible and start streaming.
+  assert.equal(tickMaterialConsumerVacuum(fighter, game, 1 / 60), 0, "bots after ingest, not on claim");
+  assert.equal(game.reconquerQueue.length, 0);
+  assert.equal(game.groundDebris.length, pieces);
+  assert.ok(game.groundDebris.every((p) => p.despawnMode === "material-consume"));
+
+  let gained = 0;
+  const frames = Math.ceil(MATERIAL_CONSUME_DURATION * 60) + 20;
+  for (let i = 0; i < frames; i++) {
+    game.elapsed += 1 / 60;
+    tickGroundDebris(game, 1 / 60);
+    gained += tickMaterialConsumerVacuum(fighter, game, 1 / 60);
+  }
   assert.equal(gained, pieces * MATERIAL_CONSUMER_BOTS_PER_PIECE);
   assert.equal(fighter.nanobotFree, freeBefore + gained);
   assert.equal(game.groundDebris.length, 0);
-  assert.equal(game.reconquerQueue.length, 0);
+  assert.ok(game.effects.some((e) => e.type === "nanoIngest"), "ingest swirl at tip");
+  assert.ok(game.effects.some((e) => e.type === "nanoBotGrant"), "bots bloom from tip");
 
   // Full pool: leave debris alone.
   fighter.nanobotFree = fighter.nanobotMax;
   fighter.nanobotArmor = 0;
   fighter.nanobotWeapon = 0;
-  game.groundDebris = [{ x: fighter.x + 10, y: fighter.y + 10, sourceId: "mc-full", despawnMode: null }];
+  game.groundDebris = [{
+    x: fighter.x + 10, y: fighter.y + 10, w: 8, h: 8,
+    sourceId: "mc-full", despawnMode: null, color: "#888", vx: 0, vy: 0, spin: 0, rot: 0
+  }];
   game.reconquerQueue = [{ sourceId: "mc-full" }];
   assert.equal(tickMaterialConsumerVacuum(fighter, game, 1 / 60), 0);
   assert.equal(game.groundDebris.length, 1);
+  assert.equal(game.groundDebris[0].despawnMode, null);
   assert.equal(game.reconquerQueue.length, 1);
 }
 

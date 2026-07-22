@@ -30,6 +30,9 @@ export const FORGE_PHASE_DURATIONS = Object.freeze({
   cool: 1.05
 });
 
+/** Material Consumer: scraps stream to the saber tip then dissolve into bots. */
+export const MATERIAL_CONSUME_DURATION = 0.52;
+
 const MOLTEN_COLOR = "#ff4a00";
 const MOLTEN_HOT = "#ffe14a";
 
@@ -926,9 +929,75 @@ export function consumeDebrisSource(game, sourceId) {
   return removed;
 }
 
+function clearDebrisSourceQueues(game, sourceId) {
+  game.reconquerQueue = (game.reconquerQueue || []).filter(
+    (entry) => entry.sourceId !== sourceId
+  );
+  game.forgeCasts = (game.forgeCasts || []).filter(
+    (forge) => forge.sourceId !== sourceId
+  );
+  game.armorDummyBuilds = (game.armorDummyBuilds || []).filter(
+    (build) => build.sourceId !== sourceId
+  );
+}
+
+function isVacuumLockedMode(mode) {
+  return mode === "forge-ingest"
+    || mode === "build-dummy-melt"
+    || mode === "reconquer-home"
+    || mode === "material-consume"
+    || mode === "gone";
+}
+
 /**
- * Vacuum nearby debris groups into a sink. Whole sourceIds are consumed so
- * reconquer cannot rebuild from leftovers.
+ * Claim nearby debris for Material Consumer suction. Pieces stay visible and
+ * stream to the tip; reconquer/forge/dummy queues for those sources are cleared
+ * immediately so leftovers cannot rebuild.
+ * @returns {{ pieces: number, sources: number }}
+ */
+export function claimDebrisForMaterialConsume(game, tipX, tipY, radius, owner, botsPerPiece = 4) {
+  const pieces = game?.groundDebris || [];
+  if (!pieces.length || !(radius > 0) || !owner) return { pieces: 0, sources: 0 };
+  const r2 = radius * radius;
+  const hitIds = new Set();
+  for (const piece of pieces) {
+    if (!piece.sourceId || isVacuumLockedMode(piece.despawnMode)) continue;
+    const dx = piece.x - tipX;
+    const dy = piece.y - tipY;
+    // Also accept scraps near the fighter body when tip is offset.
+    if (dx * dx + dy * dy <= r2) hitIds.add(piece.sourceId);
+  }
+  let claimed = 0;
+  for (const sourceId of hitIds) {
+    clearDebrisSourceQueues(game, sourceId);
+    const group = piecesForSource(game, sourceId);
+    let i = 0;
+    for (const piece of group) {
+      if (isVacuumLockedMode(piece.despawnMode) && piece.despawnMode !== "material-consume") {
+        continue;
+      }
+      piece.despawnMode = "material-consume";
+      piece.despawnT = -i * 0.04;
+      piece.grounded = false;
+      piece.vx = (piece.vx || 0) * 0.2;
+      piece.vy = (piece.vy || 0) * 0.2;
+      piece.homeX = tipX;
+      piece.homeY = tipY;
+      piece.consumeOwner = owner;
+      piece.consumeBots = Math.max(0, botsPerPiece | 0);
+      piece.consumeBaseColor = piece.color || "#8a7a68";
+      piece.scale = 1;
+      piece.alpha = 1;
+      claimed += 1;
+      i += 1;
+    }
+  }
+  return { pieces: claimed, sources: hitIds.size };
+}
+
+/**
+ * Instant vacuum (hard remove). Prefer claimDebrisForMaterialConsume for the
+ * animated Material Consumer path.
  * @returns {{ pieces: number, sources: number }}
  */
 export function vacuumNearbyDebris(game, x, y, radius) {
@@ -938,12 +1007,7 @@ export function vacuumNearbyDebris(game, x, y, radius) {
   const hitIds = new Set();
   for (const piece of pieces) {
     if (!piece.sourceId || piece.despawnMode === "gone") continue;
-    // Skip scraps already committed to forge / dummy / jigsaw home.
-    if (
-      piece.despawnMode === "forge-ingest"
-      || piece.despawnMode === "build-dummy-melt"
-      || piece.despawnMode === "reconquer-home"
-    ) continue;
+    if (isVacuumLockedMode(piece.despawnMode)) continue;
     const dx = piece.x - x;
     const dy = piece.y - y;
     if (dx * dx + dy * dy <= r2) hitIds.add(piece.sourceId);
@@ -953,6 +1017,38 @@ export function vacuumNearbyDebris(game, x, y, radius) {
     removed += consumeDebrisSource(game, sourceId);
   }
   return { pieces: removed, sources: hitIds.size };
+}
+
+/** Refresh tip targets for scraps already streaming into a Material Consumer. */
+export function retargetMaterialConsumeTip(game, owner, tipX, tipY) {
+  if (!game?.groundDebris?.length || !owner) return;
+  for (const piece of game.groundDebris) {
+    if (piece.despawnMode === "material-consume" && piece.consumeOwner === owner) {
+      piece.homeX = tipX;
+      piece.homeY = tipY;
+    }
+  }
+}
+
+function finishMaterialConsumePiece(game, piece) {
+  const tipX = piece.homeX;
+  const tipY = piece.homeY;
+  game.effects ||= [];
+  // Scraps collapse into the blade tip…
+  game.effects.push({
+    type: "nanoIngest",
+    x: tipX,
+    y: tipY,
+    life: 0.26,
+    color: piece.color || "#6cffb0"
+  });
+  game.materialConsumeArrivals ||= [];
+  game.materialConsumeArrivals.push({
+    owner: piece.consumeOwner,
+    bots: Math.max(0, piece.consumeBots || 0),
+    x: tipX,
+    y: tipY
+  });
 }
 
 /** Restore a destroyed map prop in place. */
@@ -1285,6 +1381,39 @@ export function tickGroundDebris(game, dt) {
       // Glow molten while melting into the dummy.
       piece.color = piece.despawnT < 0.55 ? "#ff4a00" : "#ffe14a";
       if (Math.hypot(tx - piece.x, ty - piece.y) < 6 || piece.despawnT >= 1) {
+        continue;
+      }
+      keep.push(piece);
+      continue;
+    } else if (piece.despawnMode === "material-consume") {
+      // Stream scraps into the Material Consumer tip, then dissolve into bots.
+      piece.despawnT = Math.min(1, (piece.despawnT || 0) + dt / MATERIAL_CONSUME_DURATION);
+      if (piece.despawnT < 0) {
+        // Staggered start: hover / nudge while waiting to launch.
+        piece.y += Math.sin((game.elapsed || 0) * 10 + piece.x) * 8 * dt;
+        keep.push(piece);
+        continue;
+      }
+      const tx = piece.homeX;
+      const ty = piece.homeY;
+      const pull = 4.5 + piece.despawnT * 10;
+      piece.x += (tx - piece.x) * Math.min(1, dt * pull);
+      piece.y += (ty - piece.y) * Math.min(1, dt * pull);
+      // Spiral in as it nears the tip.
+      const ang = Math.atan2(ty - piece.y, tx - piece.x) + Math.PI * 0.5;
+      const swirl = (1 - piece.despawnT) * 28 * dt;
+      piece.x += Math.cos(ang) * swirl;
+      piece.y += Math.sin(ang) * swirl;
+      piece.rot += (piece.spin || 2) * dt + dt * (6 + piece.despawnT * 14);
+      piece.spin = (piece.spin || 0) * Math.max(0, 1 - dt * 2);
+      piece.scale = Math.max(0.06, 1 - piece.despawnT * 0.95);
+      piece.alpha = Math.max(0.18, 1 - piece.despawnT * 0.82);
+      // Shift scrap color toward nanotech cyan as it converts.
+      if (piece.despawnT > 0.55) piece.color = "#6cffb0";
+      else if (piece.despawnT > 0.28) piece.color = "#9ab888";
+      const dist = Math.hypot(tx - piece.x, ty - piece.y);
+      if (dist < 9 || piece.despawnT >= 1) {
+        finishMaterialConsumePiece(game, piece);
         continue;
       }
       keep.push(piece);

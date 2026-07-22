@@ -736,6 +736,29 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
       width * 0.7
     );
   }
+
+  // Material Consumer: tip glows while vacuuming / absorbing scraps into bots.
+  if (fighter.materialConsumer) {
+    const tipX = visual.gripOffset + length;
+    const flash = Math.max(0, fighter.materialConsumeFlash || 0);
+    const pulse = 0.35 + flash * 3.2;
+    context.save();
+    context.globalAlpha = alpha * Math.min(1, 0.35 + flash * 2.5);
+    context.fillStyle = "#9ffff0";
+    context.shadowColor = "#6cffb0";
+    context.shadowBlur = 8 + flash * 28;
+    context.beginPath();
+    context.arc(tipX, 0, 2.5 + pulse, 0, Math.PI * 2);
+    context.fill();
+    if (flash > 0.02) {
+      context.strokeStyle = "rgba(108,255,176,.85)";
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.arc(tipX, 0, 6 + flash * 22, 0, Math.PI * 2);
+      context.stroke();
+    }
+    context.restore();
+  }
 }
 
 export function createRenderer(canvas) {
@@ -1709,6 +1732,53 @@ export function createRenderer(canvas) {
         context.moveTo(effect.x + 8, effect.y - 6);
         context.lineTo(effect.x - 6, effect.y + 10);
         context.stroke();
+      }
+      if (effect.type === "nanoIngest") {
+        // Debris collapses into the blade tip as a tight cyan swirl.
+        const u = 1 - clamp(effect.life / 0.26, 0, 1);
+        const color = effect.color || "#6cffb0";
+        context.strokeStyle = color;
+        context.fillStyle = color;
+        context.lineWidth = 1.5;
+        context.globalAlpha = clamp(effect.life * 3.2, 0, 1);
+        for (let i = 0; i < 8; i++) {
+          const ang = i * 0.85 + u * 9;
+          const r = (1 - u) * (16 - i * 1.2);
+          context.beginPath();
+          context.arc(
+            effect.x + Math.cos(ang) * r,
+            effect.y + Math.sin(ang) * r,
+            Math.max(0.8, 2.4 * (1 - u)),
+            0,
+            Math.PI * 2
+          );
+          context.fill();
+        }
+        context.beginPath();
+        context.arc(effect.x, effect.y, 2 + u * 5, 0, Math.PI * 2);
+        context.stroke();
+      }
+      if (effect.type === "nanoBotGrant") {
+        // Free bots bloom out of the tip after a scrap is digested.
+        const maxLife = 0.5;
+        const u = 1 - clamp(effect.life / maxLife, 0, 1);
+        const color = effect.color || "#6cffb0";
+        context.fillStyle = color;
+        context.globalAlpha = clamp(effect.life * 1.8, 0, 1);
+        const count = Math.min(12, 4 + (effect.bots || 4));
+        for (let i = 0; i < count; i++) {
+          const ang = -Math.PI * 0.55 + (i / Math.max(1, count - 1)) * Math.PI * 1.1;
+          const dist = 6 + u * (18 + (i % 3) * 7);
+          const bx = effect.x + Math.cos(ang) * dist * 0.55;
+          const by = effect.y - u * (10 + i * 2.2) + Math.sin(ang) * dist * 0.25;
+          context.fillRect(bx - 1.4, by - 1.4, 2.8, 2.8);
+        }
+        context.font = "bold 11px ui-monospace,Consolas";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillStyle = "#d8fff0";
+        context.globalAlpha = clamp(effect.life * 1.4, 0, 1);
+        context.fillText(`+${effect.bots || 0}`, effect.x, effect.y - 14 - u * 20);
       }
       if (effect.type === "debris") {
         const t = 1 - clamp(effect.life / .45, 0, 1);

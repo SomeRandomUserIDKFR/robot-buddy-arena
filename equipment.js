@@ -1,4 +1,6 @@
-import { spawnBrokenArmorDebris, vacuumNearbyDebris } from "./debris.js";
+import {
+  claimDebrisForMaterialConsume, retargetMaterialConsumeTip, spawnBrokenArmorDebris
+} from "./debris.js";
 import { angleDiff } from "./utils.js";
 import { SIZE } from "./config.js";
 import {
@@ -79,8 +81,21 @@ export const SLOT_LABELS = {
 export const MATERIAL_CONSUMER_VACUUM_RADIUS = 150;
 /** Free bots granted per vacuumed debris piece (still clamped by pool room). */
 export const MATERIAL_CONSUMER_BOTS_PER_PIECE = 4;
+/** Reach from fighter center to saber tip (gripOffset 17 + length 44). */
+export const MATERIAL_CONSUMER_TIP_REACH = 61;
 export const MATERIAL_CONSUMER_ID = "material-consumer-nanotech";
 export const NO_SECONDARY_ID = "no-secondary";
+
+/** World position of the Material Consumer blade tip (aim-aligned). */
+export function materialConsumerTip(fighter) {
+  const cx = (fighter?.x || 0) + SIZE / 2;
+  const cy = (fighter?.y || 0) + SIZE / 2;
+  const aim = Number.isFinite(fighter?.aim) ? fighter.aim : 0;
+  return {
+    x: cx + Math.cos(aim) * MATERIAL_CONSUMER_TIP_REACH,
+    y: cy + Math.sin(aim) * MATERIAL_CONSUMER_TIP_REACH
+  };
+}
 
 export const GEAR = [
   item("field-frame", "body", "Field Frame", "Balanced protection and mobility.", {}),
@@ -1295,28 +1310,71 @@ export function cycleWeaponSlot(fighter) {
 }
 
 /**
- * While Material Consumer is active, suck nearby debris into free nanobots.
- * Vacuumed scraps are fully removed (reconquer cannot claim them).
+ * While Material Consumer is active: claim nearby scraps (they stream to the tip),
+ * retarget in-flight suction, and convert arrived scraps into free nanobots.
+ * Vacuumed scraps cannot reconquer (queues cleared on claim).
  * @returns {number} bots gained this tick
  */
 export function tickMaterialConsumerVacuum(fighter, game, dt) {
   if (!fighter || fighter.dead || !isMaterialConsumer(fighter)) return 0;
   if (!(dt > 0) || !(fighter.nanobotMax > 0)) return 0;
-  // Leave scraps alone when the pool is already full (still capped normally).
-  if (nanotechPoolRoom(fighter) <= 0) return 0;
-  const cx = fighter.x + SIZE / 2;
-  const cy = fighter.y + SIZE / 2;
-  const result = vacuumNearbyDebris(game, cx, cy, MATERIAL_CONSUMER_VACUUM_RADIUS);
-  if (!(result.pieces > 0)) return 0;
-  const bots = result.pieces * MATERIAL_CONSUMER_BOTS_PER_PIECE;
-  const gained = grantFreeNanobots(fighter, bots);
-  if (result.pieces > 0 && game?.effects) {
-    game.effects.push({
-      type: "propHit",
-      x: cx,
-      y: cy,
-      life: 0.12
-    });
+
+  const tip = materialConsumerTip(fighter);
+  retargetMaterialConsumeTip(game, fighter, tip.x, tip.y);
+
+  // Scraps that reached the tip this debris tick → free bots + conversion FX.
+  let gained = 0;
+  const arrivals = game.materialConsumeArrivals || [];
+  if (arrivals.length) {
+    const keep = [];
+    for (const arrival of arrivals) {
+      if (arrival.owner !== fighter) {
+        keep.push(arrival);
+        continue;
+      }
+      const got = grantFreeNanobots(fighter, arrival.bots || 0);
+      gained += got;
+      if (got > 0 && game.effects) {
+        game.effects.push({
+          type: "nanoBotGrant",
+          x: arrival.x ?? tip.x,
+          y: arrival.y ?? tip.y,
+          life: 0.5,
+          bots: got,
+          color: "#6cffb0"
+        });
+      }
+      fighter.materialConsumeFlash = Math.max(fighter.materialConsumeFlash || 0, 0.18);
+    }
+    game.materialConsumeArrivals = keep;
+  }
+
+  // Only claim new scraps when the pool still has room.
+  if (nanotechPoolRoom(fighter) > 0) {
+    claimDebrisForMaterialConsume(
+      game,
+      tip.x,
+      tip.y,
+      MATERIAL_CONSUMER_VACUUM_RADIUS,
+      fighter,
+      MATERIAL_CONSUMER_BOTS_PER_PIECE
+    );
+    // Also claim relative to body center so tip offset does not miss ground piles.
+    const cx = fighter.x + SIZE / 2;
+    const cy = fighter.y + SIZE / 2;
+    claimDebrisForMaterialConsume(
+      game,
+      cx,
+      cy,
+      MATERIAL_CONSUMER_VACUUM_RADIUS,
+      fighter,
+      MATERIAL_CONSUMER_BOTS_PER_PIECE
+    );
+    retargetMaterialConsumeTip(game, fighter, tip.x, tip.y);
+  }
+
+  if (fighter.materialConsumeFlash > 0) {
+    fighter.materialConsumeFlash = Math.max(0, fighter.materialConsumeFlash - dt);
   }
   return gained;
 }
