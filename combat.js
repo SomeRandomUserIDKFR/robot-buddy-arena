@@ -22,9 +22,9 @@ import {
   stepThrownBreakables
 } from "./throw-breakable.js";
 import {
-  applyPhantomDamage, ghostBulletThroughIllusion, illusionObjectHitBySegment,
-  isIllusionFighter, ILLUSION_PHANTOM_DAMAGE, registerIllusionFighterHit,
-  registerIllusionObjectHit, tickIllusionistFighter
+  applyPhantomDamage, ghostBulletThroughIllusion, isIllusionFighter,
+  ILLUSION_PHANTOM_DAMAGE, registerIllusionFighterHit, registerIllusionObjectHit,
+  tickIllusionistFighter
 } from "./illusionist.js";
 import {
   applyTrapLockToIntent, isTrapLocked, tickTrapperFighter
@@ -34,20 +34,37 @@ import { angleDiff, clamp, dist, lerp, segmentHitsBox } from "./utils.js";
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
 
 function landableSurfaces(game) {
-  return [
+  if (game?._landables) return game._landables;
+  const list = [
     ...platformsOf(game),
     ...solidProps(game),
     ...powerCrateBlockers(game).filter((c) => c.solid),
     ...armorDummyBlockers(game).filter((d) => d.solid)
   ];
+  if (game) game._landables = list;
+  return list;
 }
 
 function allProjectileBlockers(game) {
-  return [
+  if (game?._projectileBlockers) return game._projectileBlockers;
+  const list = [
     ...projectileBlockers(game),
     ...powerCrateBlockers(game),
     ...armorDummyBlockers(game)
   ];
+  if (game) game._projectileBlockers = list;
+  return list;
+}
+
+/** Clear / rebuild shared geometry caches once per sim tick. */
+export function refreshCombatCaches(game) {
+  if (!game) return;
+  game._landables = null;
+  game._projectileBlockers = null;
+  game._sightBlockers = null;
+  // Touch getters so later per-fighter / per-bullet work hits warm arrays.
+  landableSurfaces(game);
+  allProjectileBlockers(game);
 }
 
 export class Fighter {
@@ -499,6 +516,7 @@ export function stepJetFuel(fighter, jetHeld, wantsThrust, dt) {
 
 export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   if (fighter.dead) return;
+  const decoy = isIllusionFighter(fighter);
   fighter.attackCd -= dt;
   fighter.dodgeCd -= dt;
   fighter.iframe -= dt;
@@ -507,10 +525,11 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   fighter.dodgeFace -= dt;
   fighter.spotted -= dt;
   fighter.shieldFlash -= dt;
+  // Decoys keep weapon morph ticks (kit clone) but skip trapper bookkeeping.
   tickModularWeapon(fighter, dt);
   tickAdaptiveWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
-  tickTrapperFighter(fighter, dt);
+  if (!decoy) tickTrapperFighter(fighter, dt);
   tickIllusionistFighter(fighter, dt);
   // Humans: know fire intent before nanotech tick so hold-to-shoot blocks regen.
   let intent = null;
@@ -604,6 +623,11 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
 
 export function stepBullets(game, dt) {
   const ceiling = game.ceiling ?? CEILING;
+  const livingIllusions = game._livingIllusionObjects
+    || (game.illusions || []).filter((i) => i && !i.destroyed);
+  const hasIllusions = livingIllusions.length > 0;
+  const blockers = allProjectileBlockers(game);
+  const platforms = platformsOf(game);
   for (const bullet of game.bullets) {
     bullet.px = bullet.x;
     bullet.py = bullet.y;
@@ -614,12 +638,16 @@ export function stepBullets(game, dt) {
     const ownerIllusion = isIllusionFighter(bullet.owner);
 
     // Visual-only illusions: chip/fade them; real rounds ghost (invisible, keep going).
-    for (const ill of game.illusions || []) {
-      if (!ill || ill.destroyed) continue;
-      if (illusionObjectHitBySegment(ill, bullet.px, bullet.py, bullet.x, bullet.y)
-        || segmentHitsBox(bullet.px, bullet.py, bullet.x, bullet.y, ill.x, ill.y, ill.w, ill.h)) {
-        registerIllusionObjectHit(ill, game);
-        if (!ownerIllusion) ghostBulletThroughIllusion(bullet, game);
+    if (hasIllusions) {
+      for (const ill of livingIllusions) {
+        if (!ill || ill.destroyed) continue;
+        if (segmentHitsBox(
+          bullet.px, bullet.py, bullet.x, bullet.y,
+          ill.x, ill.y, ill.w, ill.h
+        )) {
+          registerIllusionObjectHit(ill, game);
+          if (!ownerIllusion) ghostBulletThroughIllusion(bullet, game);
+        }
       }
     }
 
@@ -673,7 +701,7 @@ export function stepBullets(game, dt) {
 
     // Illusion bullets don't damage props/platforms — they just vanish on touch.
     if (ownerIllusion) {
-      for (const prop of allProjectileBlockers(game)) {
+      for (const prop of blockers) {
         if (segmentHitsBox(
           bullet.px, bullet.py, bullet.x, bullet.y,
           prop.x, prop.y, prop.w, prop.h
@@ -682,15 +710,20 @@ export function stepBullets(game, dt) {
           break;
         }
       }
-      if (bullet.life > 0 && platformsOf(game).some((platform) => segmentHitsBox(
-        bullet.px, bullet.py, bullet.x, bullet.y,
-        platform.x, platform.y, platform.w, platform.h
-      ))) {
-        bullet.life = -1;
+      if (bullet.life > 0) {
+        for (const platform of platforms) {
+          if (segmentHitsBox(
+            bullet.px, bullet.py, bullet.x, bullet.y,
+            platform.x, platform.y, platform.w, platform.h
+          )) {
+            bullet.life = -1;
+            break;
+          }
+        }
       }
     } else {
       let blocked = false;
-      for (const prop of allProjectileBlockers(game)) {
+      for (const prop of blockers) {
         if (!segmentHitsBox(
           bullet.px, bullet.py, bullet.x, bullet.y,
           prop.x, prop.y, prop.w, prop.h
@@ -716,11 +749,14 @@ export function stepBullets(game, dt) {
         break;
       }
       if (blocked) continue;
-      if (platformsOf(game).some((platform) => segmentHitsBox(
-        bullet.px, bullet.py, bullet.x, bullet.y,
-        platform.x, platform.y, platform.w, platform.h
-      ))) {
-        bullet.life = -1;
+      for (const platform of platforms) {
+        if (segmentHitsBox(
+          bullet.px, bullet.py, bullet.x, bullet.y,
+          platform.x, platform.y, platform.w, platform.h
+        )) {
+          bullet.life = -1;
+          break;
+        }
       }
     }
     if (bullet.y < ceiling || bullet.y > WORLD.h || bullet.x < 0 || bullet.x > WORLD.w) {

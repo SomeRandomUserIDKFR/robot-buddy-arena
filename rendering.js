@@ -840,7 +840,14 @@ export function createRenderer(canvas) {
     drawArmorDummies(game, .35);
     drawCeiling(game, .35);
     const player = game.fighters[0];
-    const allies = game.fighters.filter((fighter) => !fighter.dead && fighter.team === player.team);
+    // Real allies only for fog / sight discs — decoys must not expand vision.
+    const allies = game.fighters.filter(
+      (fighter) => !fighter.dead && !isIllusionFighter(fighter) && fighter.team === player.team
+    );
+    const viewerTruth = hasIllusionTruthSight(player);
+    const winningTeam = game.over
+      ? (game.fighters.some((other) => other.team === 0 && !other.dead && !isIllusionFighter(other)) ? 0 : 1)
+      : -1;
     context.save();
     context.beginPath();
     for (const fighter of allies) {
@@ -925,7 +932,7 @@ export function createRenderer(canvas) {
     for (const fighter of game.fighters) {
       const enemy = fighter.team !== player.team;
       if (!enemy || visibleToTeam(game, player, fighter) || fighter.buddy) {
-        drawFighter(game, fighter, player);
+        drawFighter(game, fighter, player, viewerTruth, winningTeam);
       }
     }
     // Held breakables sit on the hand — draw after the body so they read on top.
@@ -1365,11 +1372,18 @@ export function createRenderer(canvas) {
     context.globalAlpha = 1;
   }
 
-  function drawFighter(game, fighter, viewer = null) {
+  function drawFighter(
+    game,
+    fighter,
+    viewer = null,
+    truthSight = null,
+    winningTeamHint = null
+  ) {
     if (fighter.iframe > 0 && Math.floor(fighter.iframe * 80) % 2) return;
     const centerX = fighter.x + SIZE / 2;
     const centerY = fighter.y + SIZE / 2;
-    const truth = hasIllusionTruthSight(viewer);
+    const truth = truthSight == null ? hasIllusionTruthSight(viewer) : truthSight;
+    const decoy = isIllusionFighter(fighter);
     context.save();
     if (fighter.dead) context.globalAlpha = .45;
     if (fighter.buddy) {
@@ -1379,7 +1393,7 @@ export function createRenderer(canvas) {
       context.lineWidth = 4;
       context.strokeRect(fighter.x - 3, fighter.y - 3, SIZE + 6, SIZE + 6);
     }
-    if (truth && isIllusionFighter(fighter) && !fighter.dead) {
+    if (truth && decoy && !fighter.dead) {
       context.strokeStyle = "rgba(210,180,255,.95)";
       context.lineWidth = 2.5;
       context.setLineDash([6, 4]);
@@ -1390,19 +1404,24 @@ export function createRenderer(canvas) {
     context.fillStyle = fighter.hitFlash > 0 ? "#fff" : fighter.color;
     context.fillRect(fighter.x, fighter.y, SIZE, SIZE);
     context.shadowBlur = 0;
-    drawRetractableArmorPlates(
-      context, game, fighter, centerX, centerY, fighter.dead ? .45 : 1
-    );
-    drawNanotechChestplateArmor(
-      context, game, fighter, centerX, centerY, fighter.dead ? .45 : 1
-    );
+    // Decoys skip heavy armor plate flair — silhouette + gun is enough gaslight.
+    if (!decoy) {
+      drawRetractableArmorPlates(
+        context, game, fighter, centerX, centerY, fighter.dead ? .45 : 1
+      );
+      drawNanotechChestplateArmor(
+        context, game, fighter, centerX, centerY, fighter.dead ? .45 : 1
+      );
+    }
     context.fillStyle = "#071016";
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.font = "bold 15px ui-monospace,Consolas";
-    const winningTeam = game.over
-      ? (game.fighters.some((other) => other.team === 0 && !other.dead) ? 0 : 1)
-      : -1;
+    const winningTeam = winningTeamHint != null
+      ? winningTeamHint
+      : (game.over
+        ? (game.fighters.some((other) => other.team === 0 && !other.dead && !isIllusionFighter(other)) ? 0 : 1)
+        : -1);
     const face = fighter.dead
       ? "-_-"
       : game.over && fighter.team === winningTeam
@@ -1490,7 +1509,7 @@ export function createRenderer(canvas) {
         3
       );
     }
-    drawBuffClocks(fighter);
+    if (!decoy) drawBuffClocks(fighter);
   }
 
   function drawBuffClocks(fighter) {

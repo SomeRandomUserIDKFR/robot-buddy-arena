@@ -6,9 +6,10 @@ import {
 import {
   applyPhantomDamage, createFighterIllusion, cycleIllusionistType, displayedHp,
   hasIllusionTruthSight, ILLUSION_FIGHTER_HITS, ILLUSION_PHANTOM_DAMAGE,
-  isIllusionFighter, isIllusionist, isRealCombatant, registerIllusionFighterHit,
-  tryIllusionistPlant
+  isIllusionFighter, isIllusionist, isRealCombatant, refreshIllusionCaches,
+  registerIllusionFighterHit, tryIllusionistPlant
 } from "./illusionist.js";
+import { updateAIDecoy } from "./ai.js";
 
 assert.equal(GEAR_BY_ID[ILLUSIONIST_ID].slot, "extensionSecondary");
 assert.equal(GEAR_BY_ID[ILLUSIONIST_ID].illusionist, true);
@@ -140,6 +141,38 @@ assert.equal(ILLUSION_PHANTOM_DAMAGE, 40);
   assert.equal(prop.illusionType, "prop");
   assert.equal(prop.blocksSight, false);
   assert.equal(prop.solid, false);
+}
+
+{
+  // Frame caches + light decoy AI still fight / can nest-plant.
+  const owner = applyLoadout(new Fighter({
+    x: 100, y: 700, team: 0, name: "YOU", color: "#fff", hp: 500, maxHp: 500,
+    aim: 0, grounded: true
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: ILLUSIONIST_ID,
+    weapon: "pulse-rifle"
+  });
+  const decoy = createFighterIllusion(owner, Fighter);
+  decoy.x = 400;
+  decoy.y = 700;
+  decoy.illusionistCd = 0;
+  decoy.illusionistType = "prop";
+  const enemy = new Fighter({
+    x: 550, y: 700, team: 1, hp: 500, maxHp: 500, grounded: true
+  });
+  const game = {
+    fighters: [owner, decoy, enemy],
+    illusions: [],
+    effects: [],
+    bullets: [],
+    pings: []
+  };
+  refreshIllusionCaches(game);
+  assert.equal(game._livingIllusionFighters.length, 1);
+  const state = updateAIDecoy(decoy, 1, game);
+  assert.ok(state.plan === "illusion pressing" || state.plan?.includes("illusion"));
+  assert.ok(state.attack || state.desiredAim != null);
 }
 
 console.log("illusionist.test.js passed.");
