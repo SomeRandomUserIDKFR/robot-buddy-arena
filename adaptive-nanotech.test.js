@@ -4,8 +4,9 @@ import {
   ADAPTIVE_MODE_COOLDOWN, ADAPTIVE_MODE_DEFS, ADAPTIVE_MORPH_DURATION, ADAPTIVE_NANOTECH_ID,
   adaptiveAttackLocked, applyLoadout, beginAdaptiveMorph, cycleAdaptiveMode, DEFAULT_LOADOUT,
   GEAR, GEAR_BY_ID, isAdaptiveNanotechWeapon, isPrecisionAimWeapon, nanotechAmmoBonusOf,
-  nanotechCostOf, nanotechFormCostOf, nanotechFormPct, nextAdaptiveMode, tickAdaptiveWeapon,
-  tickNanotech, tryFormNanotechWeapon, tryNanotechWeaponAction, weaponAttackLocked, weaponStats
+  nanotechCostOf, nanotechFormCostOf, nanotechFormPct, nextAdaptiveMode, NANOTECH_DAMAGE_MULT,
+  tickAdaptiveWeapon, tickNanotech, tryFormNanotechWeapon, tryNanotechWeaponAction,
+  weaponAttackLocked, weaponStats
 } from "./equipment.js";
 import { isBladeFighter, isMeleeFighter, powerupRollWeights } from "./powerups.js";
 import { weaponVisual } from "./rendering.js";
@@ -34,11 +35,11 @@ function finishMorph(fighter) {
   assert.equal(nanotechAmmoBonusOf(ADAPTIVE_NANOTECH_ID), 95);
 }
 
-// Per-mode combat stats match dedicated counterparts exactly.
+// Per-mode combat stats match counterparts with +25% damage (same RPM/range/etc).
 {
-  assertWeaponStatsMatch(ADAPTIVE_MODE_DEFS.sword.weaponStats, weaponStats("arc-saber"));
-  assertWeaponStatsMatch(ADAPTIVE_MODE_DEFS.rifle.weaponStats, weaponStats("pulse-rifle"));
-  assertWeaponStatsMatch(ADAPTIVE_MODE_DEFS.sniper.weaponStats, weaponStats("classic-sniper"));
+  assertNanotechBuffed(ADAPTIVE_MODE_DEFS.sword.weaponStats, weaponStats("arc-saber"));
+  assertNanotechBuffed(ADAPTIVE_MODE_DEFS.rifle.weaponStats, weaponStats("pulse-rifle"));
+  assertNanotechBuffed(ADAPTIVE_MODE_DEFS.sniper.weaponStats, weaponStats("classic-sniper"));
   assert.equal(ADAPTIVE_MODE_DEFS.sword.formCost, 100);
   assert.equal(ADAPTIVE_MODE_DEFS.sword.shotCost, 0);
   assert.equal(ADAPTIVE_MODE_DEFS.rifle.formCost, 150);
@@ -47,9 +48,12 @@ function finishMorph(fighter) {
   assert.equal(ADAPTIVE_MODE_DEFS.sniper.shotCost, 20);
 }
 
-function assertWeaponStatsMatch(a, b) {
-  for (const key of Object.keys(b)) {
-    assert.deepEqual(a[key], b[key], key);
+function assertNanotechBuffed(nanoStats, baseStats) {
+  assert.equal(nanoStats.baseDamage, baseStats.baseDamage * NANOTECH_DAMAGE_MULT, "baseDamage");
+  assert.equal(nanoStats.rpm, baseStats.rpm, "rpm");
+  assert.equal(nanoStats.range, baseStats.range, "range");
+  if (baseStats.projectileSpeed != null) {
+    assert.equal(nanoStats.projectileSpeed, baseStats.projectileSpeed, "projectileSpeed");
   }
 }
 
@@ -67,7 +71,10 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(fighter.nanobotFree, 95);
   assert.equal(nanotechFormPct(fighter), 1);
   assert.equal(isAdaptiveNanotechWeapon(fighter), true);
-  assert.equal(fighter.weaponBaseDamage, weaponStats("arc-saber").baseDamage);
+  assert.equal(
+    fighter.weaponBaseDamage,
+    weaponStats("arc-saber").baseDamage * NANOTECH_DAMAGE_MULT
+  );
   assert.equal(fighter.weaponRpm, weaponStats("arc-saber").rpm);
   assert.equal(fighter.weaponReach, weaponStats("arc-saber").range);
 }

@@ -47,6 +47,12 @@ const melee = (id, name, tradeoff, stats, price, extra = {}) => item(
   }
 );
 
+/**
+ * Nanotech weapons (including Adaptive bodies) deal this much more damage than
+ * their dedicated counterparts — compensation for bot-pool / form restrictions.
+ */
+export const NANOTECH_DAMAGE_MULT = 1.25;
+
 const shield = (id, name, tradeoff, stats, price) => item(
   id, "shield", name, tradeoff, {},
   {
@@ -181,20 +187,21 @@ export const GEAR = [
     iframeMultiplier: 1.25
   }, 135),
 
-  // Nanotech: counterpart weapon stats; shared bot pool. Weapons need free bots ≥ cost to fire.
-  melee("nanotech-sword", "Nanotech Sword", "Arc Saber. E forms from bots (partial OK). Incomplete swings bleed 2% bots.", {
-    baseDamage: 55, rpm: 150, range: 120
+  // Nanotech: counterpart weapon stats × NANOTECH_DAMAGE_MULT; shared bot pool.
+  // Weapons need free bots ≥ cost to fire / form.
+  melee("nanotech-sword", "Nanotech Sword", "Arc Saber +25% damage. E forms from bots (partial OK). Incomplete swings bleed 2% bots.", {
+    baseDamage: 55 * NANOTECH_DAMAGE_MULT, rpm: 150, range: 120
   }, 100, { nanotech: true, nanobotCost: 100 }),
-  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle. E forms/absorbs the gun (150 bots); +30 pool bots for ammo (2/shot).", {
-    baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
+  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle +25% damage. E forms/absorbs the gun (150 bots); +30 pool bots for ammo (2/shot).", {
+    baseDamage: 12 * NANOTECH_DAMAGE_MULT, rpm: 500, range: 1317.5, projectileSpeed: 1550,
     dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
     aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
     movementMultiplier: 1, iframeMultiplier: 1
   }, 150, {
     nanotech: true, nanobotCost: 180, nanobotFormCost: 150, nanobotShotCost: 2
   }),
-  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper. E forms/absorbs the gun (175 bots); +20 pool bots for ammo (20/shot).", {
-    baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
+  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper +25% damage. E forms/absorbs the gun (175 bots); +20 pool bots for ammo (20/shot).", {
+    baseDamage: 180 * NANOTECH_DAMAGE_MULT, rpm: 30, range: 2450, projectileSpeed: 3200,
     dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
     sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
     iframeMultiplier: 1, tracer: true
@@ -202,22 +209,21 @@ export const GEAR = [
     nanotech: true, nanobotCost: 195, nanobotFormCost: 175, nanobotShotCost: 20
   }),
   // Ultimate: R cycles Sword/Rifle/Sniper bodies from one shared 195-bot pool.
-  // Catalog defaults (baseKind + weaponStats + nanobotFormCost) describe sword
-  // mode — matches Arc Saber / nanotech-sword — so shop math and the generic
-  // nanotech loadout path already agree before syncAdaptiveNanotechCosts runs.
+  // Catalog defaults describe sword mode (= nanotech-sword) so shop math and the
+  // generic nanotech loadout path agree before syncAdaptiveNanotechCosts runs.
   item(
     "adaptive-nanotech-unit",
     "weapon",
     "Adaptive Nanotech Unit",
-    "Ultimate morph: R cycles Sword ↔ Rifle ↔ Sniper bodies from a shared 195-bot pool. E still forms/absorbs the active body like other nanotech gear.",
+    "Ultimate morph: R cycles Sword ↔ Rifle ↔ Sniper bodies from a shared 195-bot pool (+25% damage). E still forms/absorbs the active body like other nanotech gear.",
     {
-      damage: 55 / 40,
+      damage: (55 * NANOTECH_DAMAGE_MULT) / 40,
       fireRate: 150 / 150,
       range: 120 / 120
     },
     {
       baseKind: "saber",
-      dps: 55 * 150 / 60,
+      dps: (55 * NANOTECH_DAMAGE_MULT) * 150 / 60,
       price: 400,
       nanotech: true,
       adaptiveNanotech: true,
@@ -228,7 +234,7 @@ export const GEAR = [
         kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
         sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
         movementMultiplier: 1.1, iframeMultiplier: 1,
-        baseDamage: 55, rpm: 150, range: 120
+        baseDamage: 55 * NANOTECH_DAMAGE_MULT, rpm: 150, range: 120
       }
     }
   ),
@@ -573,8 +579,8 @@ export const ADAPTIVE_NANOTECH_ID = "adaptive-nanotech-unit";
 
 /**
  * Per-mode combat + visual targets, plus the nanotech form/ammo split for that
- * body. Sword/Rifle/Sniper stats match Arc Saber / Pulse Rifle / Classic Sniper
- * exactly — the ultimate's cost is paid in bots (195 pool), not weaker stats.
+ * body. Sword/Rifle/Sniper match Arc Saber / Pulse Rifle / Classic Sniper with
+ * NANOTECH_DAMAGE_MULT (+25% damage) — bot pool + morph downtime are the cost.
  * Visuals reuse the nanotech sword/rifle/sniper palette from rendering.js.
  */
 export const ADAPTIVE_MODE_DEFS = Object.freeze({
@@ -582,12 +588,14 @@ export const ADAPTIVE_MODE_DEFS = Object.freeze({
     baseKind: "saber",
     formCost: 100,
     shotCost: 0,
-    modifiers: Object.freeze({ damage: 55 / 40, fireRate: 1, range: 1 }),
+    modifiers: Object.freeze({
+      damage: (55 * NANOTECH_DAMAGE_MULT) / 40, fireRate: 1, range: 1
+    }),
     weaponStats: Object.freeze({
       kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
       sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
       movementMultiplier: 1.1, iframeMultiplier: 1,
-      baseDamage: 55, rpm: 150, range: 120
+      baseDamage: 55 * NANOTECH_DAMAGE_MULT, rpm: 150, range: 120
     }),
     visual: Object.freeze({
       length: 48, width: 5, gripOffset: 17,
@@ -598,10 +606,12 @@ export const ADAPTIVE_MODE_DEFS = Object.freeze({
     baseKind: "gun",
     formCost: 150,
     shotCost: 2,
-    modifiers: Object.freeze({ damage: 1, fireRate: 1, range: 1, projectileSpeed: 1 }),
+    modifiers: Object.freeze({
+      damage: NANOTECH_DAMAGE_MULT, fireRate: 1, range: 1, projectileSpeed: 1
+    }),
     weaponStats: Object.freeze({
       kind: "gun",
-      baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
+      baseDamage: 12 * NANOTECH_DAMAGE_MULT, rpm: 500, range: 1317.5, projectileSpeed: 1550,
       dropoff: Object.freeze({ start: 300, end: 1200, minMultiplier: 10 / 12 }),
       aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
       movementMultiplier: 1, iframeMultiplier: 1
@@ -616,11 +626,14 @@ export const ADAPTIVE_MODE_DEFS = Object.freeze({
     formCost: 175,
     shotCost: 20,
     modifiers: Object.freeze({
-      damage: 180 / 12, fireRate: 30 / 500, range: 2450 / 1317.5, projectileSpeed: 3200 / 1550
+      damage: (180 * NANOTECH_DAMAGE_MULT) / 12,
+      fireRate: 30 / 500,
+      range: 2450 / 1317.5,
+      projectileSpeed: 3200 / 1550
     }),
     weaponStats: Object.freeze({
       kind: "gun",
-      baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
+      baseDamage: 180 * NANOTECH_DAMAGE_MULT, rpm: 30, range: 2450, projectileSpeed: 3200,
       dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
       sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
       iframeMultiplier: 1, tracer: true

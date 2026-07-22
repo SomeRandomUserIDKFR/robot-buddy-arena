@@ -5,26 +5,31 @@ import {
   canNanotechAttack, DEFAULT_LOADOUT, GEAR_BY_ID, hasNanotechChestplate, nanotechArmorHp,
   nanotechArmorMaxHp, nanotechCostOf, nanotechFormCostOf, nanotechAmmoBonusOf, nanotechFormPct,
   nanotechPoolCapacity, NANOTECH_ARMOR_BOT_CAP, NANOTECH_ARMOR_PRESS, NANOTECH_BOTS_PER_HP,
-  NANOTECH_CHANNEL_RATE, NANOTECH_REGEN_HIT_DELAY, NANOTECH_SLOW_REGEN, PRECISION_AIM_WEAPONS,
-  pulseNanotechArmor, setNanotechChanneling, STARTER_GEAR, tickNanotech, tryFormNanotechWeapon,
-  tryNanotechWeaponAction, weaponStats
+  NANOTECH_CHANNEL_RATE, NANOTECH_DAMAGE_MULT, NANOTECH_REGEN_HIT_DELAY, NANOTECH_SLOW_REGEN,
+  PRECISION_AIM_WEAPONS, pulseNanotechArmor, setNanotechChanneling, STARTER_GEAR, tickNanotech,
+  tryFormNanotechWeapon, tryNanotechWeaponAction, weaponStats
 } from "./equipment.js";
 
 const loadout = (overrides = {}) => ({ ...DEFAULT_LOADOUT, ...overrides });
 
-function assertWeaponStatsMatch(a, b) {
-  const sa = weaponStats(a);
-  const sb = weaponStats(b);
-  for (const key of Object.keys(sb)) {
-    assert.deepEqual(sa[key], sb[key], `${a}.${key}`);
+/** Nanotech weapons match counterparts except +25% damage (same RPM/range/etc). */
+function assertNanotechBuffed(nanoId, counterpartId) {
+  const nano = weaponStats(nanoId);
+  const base = weaponStats(counterpartId);
+  assert.equal(nano.baseDamage, base.baseDamage * NANOTECH_DAMAGE_MULT, `${nanoId}.baseDamage`);
+  assert.equal(nano.rpm, base.rpm, `${nanoId}.rpm`);
+  assert.equal(nano.range, base.range, `${nanoId}.range`);
+  if (base.projectileSpeed != null) {
+    assert.equal(nano.projectileSpeed, base.projectileSpeed, `${nanoId}.projectileSpeed`);
   }
 }
 
-// Catalog: nanotech weapons match counterparts; tagged with nanotech + cost.
+// Catalog: nanotech weapons are counterpart stats × 1.25 damage; tagged + cost.
 {
-  assertWeaponStatsMatch("nanotech-sword", "arc-saber");
-  assertWeaponStatsMatch("nanotech-rifle", "pulse-rifle");
-  assertWeaponStatsMatch("nanotech-sniper", "classic-sniper");
+  assert.equal(NANOTECH_DAMAGE_MULT, 1.25);
+  assertNanotechBuffed("nanotech-sword", "arc-saber");
+  assertNanotechBuffed("nanotech-rifle", "pulse-rifle");
+  assertNanotechBuffed("nanotech-sniper", "classic-sniper");
   for (const id of [
     "nanotech-sword", "nanotech-rifle", "nanotech-sniper",
     "nanotech-chestplate", "nanotech-reserve"
