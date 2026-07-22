@@ -346,10 +346,11 @@ export function updateHud(game) {
       ui.armorMeter.classList.toggle("empty", curHp <= 0 && !player.nanotechArmorSpawning);
       const weaponCost = player.nanotechWeaponCost || 0;
       const freeLow = weaponCost > 0 && (player.nanobotFree || 0) < weaponCost;
+      const armorFull = maxHp > 0 && curHp >= maxHp;
       ui.armorLabel.textContent = player.nanotechArmorSpawning
         ? "NANO FORM…"
         : player.nanotechChanneling
-          ? "CHANNEL…"
+          ? (armorFull ? "NANO FULL" : "CHANNEL…")
           : freeLow
             ? "NANO LOW"
             : "NANO";

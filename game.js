@@ -268,6 +268,11 @@ function update(dt) {
   game.elapsed += dt;
   game.announcement -= dt;
   game.thoughtClock -= dt;
+  // Drive nanotech channel from live F key so a missed keyup can't stick CHANNEL…
+  const player = game.fighters[0];
+  if (player && hasNanotechChestplate(player) && !player.dead) {
+    setNanotechChanneling(player, !!keys.KeyF);
+  }
   for (const fighter of game.fighters) {
     stepFighter(fighter, dt, game, profile, keys, humanIntent);
     tickFighterPowerBuffs(fighter, dt);
@@ -342,9 +347,8 @@ function handleKeyDown(event) {
   }
   if (event.code === "KeyF" && !event.repeat) {
     const player = game.fighters[0];
-    if (hasNanotechChestplate(player)) {
-      setNanotechChanneling(player, true);
-    } else {
+    // Nanotech channel is held via keys.KeyF (synced each frame). F only toggles retractable.
+    if (!hasNanotechChestplate(player)) {
       toggleRetractableArmor(player);
     }
   }
@@ -363,6 +367,10 @@ function handleKeyDown(event) {
   }
   if (event.code === "Escape") {
     game.paused = !game.paused;
+    if (game.paused) {
+      const player = game.fighters[0];
+      if (hasNanotechChestplate(player)) setNanotechChanneling(player, false);
+    }
     showPause(game.paused);
   }
   if (["Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE", "KeyF"].includes(event.code)) {
@@ -372,12 +380,7 @@ function handleKeyDown(event) {
 
 function handleKeyUp(event) {
   if (!game || game.over) return;
-  if (event.code === "KeyF") {
-    const player = game.fighters[0];
-    if (hasNanotechChestplate(player)) {
-      setNanotechChanneling(player, false);
-    }
-  }
+  // Nanotech channel release is handled by per-frame keys.KeyF sync in update().
 }
 
 function loop(now) {

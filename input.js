@@ -10,6 +10,10 @@ export function installInput(canvas, onKeyDown, onKeyUp) {
     keys[event.code] = false;
     onKeyUp?.(event);
   });
+  // Lost focus can miss keyup — clear held keys so channel/hold actions release.
+  addEventListener("blur", () => {
+    for (const code of Object.keys(keys)) keys[code] = false;
+  });
   canvas.addEventListener("mousemove", (event) => {
     const bounds = canvas.getBoundingClientRect();
     mouse.x = (event.clientX - bounds.left) * canvas.width / bounds.width;
