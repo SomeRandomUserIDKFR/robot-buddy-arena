@@ -201,7 +201,7 @@ export const GEAR = [
     "nanotech-chestplate",
     "body",
     "Nanotech Chestplate",
-    "Tap F: +100 bots to armor. Hold F: drain 20 bots/s into armor (2 bots = 1 HP, cap 250). 10% less damage taken.",
+    "Tap F: +100 bots to armor. Hold F: return 20 bots/s to reserve (2 bots = 1 HP, cap 250). 10% less damage taken.",
     { damageTaken: 0.9 },
     { price: 500, nanotech: true, nanobotCost: 500 }
   ),
@@ -258,11 +258,13 @@ export const GEAR = [
 export const RETRACTABLE_ARMOR_SPEED = 0.9;
 export const RETRACTABLE_MORPH_DURATION = 0.32;
 
-/** Nanotech: tap F loans +100 free→armor; hold F drains free→armor at 20/s. Armor stays until spent. */
-export const NANOTECH_CHANNEL_RATE = 20;
+/** Nanotech: tap F loans +100 free→armor; hold F returns armor→free at 20/s. */
+export const NANOTECH_RECALL_RATE = 20;
+/** @deprecated Use NANOTECH_RECALL_RATE — hold F recalls armor to reserve. */
+export const NANOTECH_CHANNEL_RATE = NANOTECH_RECALL_RATE;
 export const NANOTECH_ARMOR_PRESS = 100;
-/** @deprecated Armor no longer auto-recalls on release; kept for older call sites. */
-export const NANOTECH_RECALL_RATE = 0;
+/** Seconds of F held before tap becomes recall-hold. */
+export const NANOTECH_F_HOLD_THRESHOLD = 0.18;
 export const NANOTECH_SLOW_REGEN = 55;
 export const NANOTECH_BOTS_PER_HP = 2;
 export const NANOTECH_ARMOR_BOT_CAP = 500;
@@ -820,13 +822,8 @@ export function setNanotechChanneling(fighter, on) {
     if (fighter) fighter.nanotechChanneling = false;
     return false;
   }
-  const want = !!on;
-  const was = !!fighter.nanotechChanneling;
-  fighter.nanotechChanneling = want;
-  // Fresh channel from empty armor → particle suit spawn (sword dissolves into it).
-  if (want && !was && (fighter.nanobotArmor || 0) <= 0) {
-    beginNanotechArmorSpawn(fighter);
-  }
+  // Hold F = recall armor→free (spawn happens on tap pulse, not here).
+  fighter.nanotechChanneling = !!on;
   return true;
 }
 
@@ -871,11 +868,10 @@ export function tickNanotech(fighter, dt) {
   }
 
   if (fighter.nanotechChanneling && hasNanotechChestplate(fighter)) {
-    // Hold F: drain free reserve into armor at NANOTECH_CHANNEL_RATE (never steals weapon).
-    const room = Math.max(0, max - armor - weapon);
-    const flow = Math.min(free, room, NANOTECH_CHANNEL_RATE * dt);
-    free -= flow;
-    armor += flow;
+    // Hold F: return armor bots to free reserve (never touches weapon).
+    const flow = Math.min(armor, NANOTECH_RECALL_RATE * dt);
+    armor -= flow;
+    free += flow;
   } else if (free + armor + weapon < max) {
     // Rebuild free reserve when bots were destroyed (slash bleed / armor damage).
     const room = Math.max(0, max - free - armor - weapon);
@@ -888,11 +884,11 @@ export function tickNanotech(fighter, dt) {
   fighter.nanobotWeapon = weapon;
   clampNanotechPool(fighter);
 
-  // Rising edge into armor while already channeling (e.g. bots arrive mid-hold).
+  // Rising edge into armor (tap pulse) while not recalling.
   if (
     armorBefore <= 0
     && fighter.nanobotArmor > 0
-    && fighter.nanotechChanneling
+    && !fighter.nanotechChanneling
     && !fighter.nanotechArmorSpawning
   ) {
     beginNanotechArmorSpawn(fighter);

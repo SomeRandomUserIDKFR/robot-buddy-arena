@@ -77,7 +77,7 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(hasNanotechChestplate(fighter), true);
 }
 
-// Tap F pulses +100; hold F drains at CHANNEL_RATE; armor stays on release.
+// Tap F pulses +100; hold F recalls armor→free at RECALL_RATE; release stops recall.
 {
   const fighter = applyLoadout(new Fighter({}), loadout({
     body: "nanotech-chestplate",
@@ -95,27 +95,27 @@ function assertWeaponStatsMatch(a, b) {
 
   assert.equal(setNanotechChanneling(fighter, true), true);
   tickNanotech(fighter, 1);
-  assert.equal(fighter.nanobotArmor, 100 + NANOTECH_CHANNEL_RATE);
-  assert.equal(fighter.nanobotFree, 400 - NANOTECH_CHANNEL_RATE);
+  assert.equal(fighter.nanobotArmor, 100 - NANOTECH_CHANNEL_RATE);
+  assert.equal(fighter.nanobotFree, 400 + NANOTECH_CHANNEL_RATE);
   assert.equal(fighter.nanobotWeapon, 100);
 
   setNanotechChanneling(fighter, false);
   const armorAfterRelease = fighter.nanobotArmor;
+  const freeAfterRelease = fighter.nanobotFree;
   tickNanotech(fighter, 1);
-  assert.equal(fighter.nanobotArmor, armorAfterRelease, "armor sticks after release");
+  assert.equal(fighter.nanobotArmor, armorAfterRelease, "armor sticks when not holding");
+  assert.equal(fighter.nanobotFree, freeAfterRelease);
   assert.equal(nanotechArmorHp(fighter), Math.floor(
     Math.min(armorAfterRelease, NANOTECH_ARMOR_BOT_CAP) / NANOTECH_BOTS_PER_HP
   ));
 
-  // Cap HP at 500 bots / 250 HP even if more bots loaned.
-  fighter.nanobotFree = 600;
-  fighter.nanobotArmor = 0;
-  fighter.nanobotWeapon = 0;
-  pulseNanotechArmor(fighter, 100);
+  // Hold can empty armor back into reserve.
+  fighter.nanobotArmor = 50;
+  fighter.nanobotFree = 0;
   setNanotechChanneling(fighter, true);
-  for (let i = 0; i < 40; i++) tickNanotech(fighter, 1);
-  assert.ok(fighter.nanobotArmor >= 500);
-  assert.equal(nanotechArmorHp(fighter), Math.floor(NANOTECH_ARMOR_BOT_CAP / 2));
+  for (let i = 0; i < 5; i++) tickNanotech(fighter, 1);
+  assert.equal(fighter.nanobotArmor, 0);
+  assert.equal(fighter.nanobotFree, 50);
   assert.equal(nanotechArmorMaxHp(fighter), Math.floor(NANOTECH_ARMOR_BOT_CAP / 2));
 }
 

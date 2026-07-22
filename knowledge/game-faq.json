@@ -35,7 +35,7 @@
         "keyboard controls",
         "what buttons do I use"
       ],
-      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped, or hold F to channel Nanotech Chestplate armor. E cycles Mechanical Modularity modes when that weapon is equipped. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
+      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
     },
     {
       "id": "controls-retractable-armor",
@@ -48,7 +48,7 @@
         "how does folding armor work",
         "armor deploy key"
       ],
-      "answer": "F deploys or retracts Retractable Armor (Main Armor) or Retractable Shell (Shield slot). While deployed you gain a separate armor HP pool added to your max and current HP, and move about 10% slower. Damage hits the armor pool first. The pool normally does not recharge mid-match (Protective Rebuilding can refill it); when emptied the plates fold away. You can equip both items, but there is one F toggle and the larger pool is used. Morph style matches Settings → Visual (Panel fold / Flying rearrangement / Nanotech). If you equip Nanotech Chestplate instead, F hold-channels bots into nano armor."
+      "answer": "F deploys or retracts Retractable Armor (Main Armor) or Retractable Shell (Shield slot). While deployed you gain a separate armor HP pool added to your max and current HP, and move about 10% slower. Damage hits the armor pool first. The pool normally does not recharge mid-match (Protective Rebuilding can refill it); when emptied the plates fold away. You can equip both items, but there is one F toggle and the larger pool is used. Morph style matches Settings → Visual (Panel fold / Flying rearrangement / Nanotech). If you equip Nanotech Chestplate instead, tap F to loan +100 bots into nano armor and hold F to return bots to reserve at 20/s."
     },
     {
       "id": "controls-shield",
@@ -446,7 +446,7 @@
         "nanotech reserve",
         "partial form sword"
       ],
-      "answer": "Nanotech gear shares one bot reserve (sum of each piece's nanobot cost). Press E to form your nanotech weapon from free bots — it tries to reach full cost (sword 100, rifle 150, sniper 175). Partial form is allowed: damage scales with form %. Press E again while formed to absorb the weapon back into free reserve (nanoparticle drain). Incomplete swords lose 2% of their bot cost on each successful fighter slash. You can attack with any formed bots (>0). Tap F with Nanotech Chestplate to loan +100 free bots into the armor bar; hold F to drain 20 bots/s into armor (2 bots = 1 HP, cap 500 bots / 250 HP). Armor stays until damage spends it — F never steals bots already in the weapon. Nanotech Reserve adds a large tank but slows you 5%. With the chestplate, F channels instead of toggling Retractable Armor."
+      "answer": "Nanotech gear shares one bot reserve (sum of each piece's nanobot cost). Press E to form your nanotech weapon from free bots — it tries to reach full cost (sword 100, rifle 150, sniper 175). Partial form is allowed: damage scales with form %. Press E again while formed to absorb the weapon back into free reserve (nanoparticle drain). Incomplete swords lose 2% of their bot cost on each successful fighter slash. You can attack with any formed bots (>0). Tap F with Nanotech Chestplate to loan +100 free bots into the armor bar (2 bots = 1 HP, cap 500 bots / 250 HP). Hold F to return armor bots to free reserve at 20/s. F never steals bots already in the weapon. Nanotech Reserve adds a large tank but slows you 5%. With the chestplate, F channels instead of toggling Retractable Armor."
     },
     {
       "id": "equipment-shields",

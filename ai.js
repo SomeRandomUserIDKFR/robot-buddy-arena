@@ -513,7 +513,7 @@ export function updateAiRetractableArmor(fighter, state, game, visible, target, 
   if (want) state.retractableHoldUntil = now + RETRACTABLE_AI_MIN_HOLD;
 }
 
-/** Minimal nanotech: form weapon; tap-style +100 then hold channel at 20/s when under fire. */
+/** Minimal nanotech: form weapon; tap +100 under fire; hold-recall when needing free bots. */
 export function updateAiNanotech(fighter, state, game, visible, target) {
   if (fighter.dead) {
     setNanotechChanneling(fighter, false);
@@ -527,14 +527,21 @@ export function updateAiNanotech(fighter, state, game, visible, target) {
     return;
   }
   const free = fighter.nanobotFree || 0;
+  const armor = fighter.nanobotArmor || 0;
   const underFire = (visible || []).some((foe) => foe && !foe.dead)
     || (!!target && !target.dead);
-  const want = underFire && free > 40
-    && (fighter.nanobotArmor || 0) < 500;
-  if (want && !fighter.nanotechChanneling) {
-    pulseNanotechArmor(fighter);
+  if (underFire && free >= 40 && armor < 400) {
+    if (!state.nanoPulseLatch) {
+      pulseNanotechArmor(fighter);
+      state.nanoPulseLatch = true;
+    }
+    setNanotechChanneling(fighter, false);
+    return;
   }
-  setNanotechChanneling(fighter, want);
+  state.nanoPulseLatch = false;
+  const weaponCost = fighter.nanotechWeaponCost || 0;
+  const wantRecall = armor > 0 && free < Math.max(40, weaponCost * 0.5);
+  setNanotechChanneling(fighter, wantRecall);
 }
 
 /**

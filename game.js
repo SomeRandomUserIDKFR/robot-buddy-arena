@@ -5,8 +5,8 @@ import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
   acceptSuggestion, applyLoadout, awardConquest, cycleModularMode, equipOwned,
-  hasNanotechChestplate, isModularWeapon, pulseNanotechArmor, purchaseGear,
-  reconcileLoadoutsToOwned, setBuddyMode, setNanotechChanneling,
+  hasNanotechChestplate, isModularWeapon, NANOTECH_F_HOLD_THRESHOLD, pulseNanotechArmor,
+  purchaseGear, reconcileLoadoutsToOwned, setBuddyMode, setNanotechChanneling,
   tryNanotechWeaponAction, toggleRetractableArmor, toggleShieldRaise,
   trainerLoadout, weaponKind
 } from "./equipment.js";
@@ -45,6 +45,9 @@ const canvas = document.querySelector("#game");
 const renderer = createRenderer(canvas);
 let game = null;
 let lastTime = performance.now();
+/** Nanotech F: accumulate hold time so a short press is +100 and a hold recalls. */
+let nanoFHoldT = 0;
+let nanoFHoldLatched = false;
 
 function resolveMapId(mode) {
   if (mode === "conquest") {
@@ -270,9 +273,25 @@ function update(dt) {
   game.announcement -= dt;
   game.thoughtClock -= dt;
   const player = game.fighters[0];
-  // Drive nanotech channel from live F key so a missed keyup can't stick CHANNEL…
+  // Tap F = +100 armor; hold F = recall armor→reserve at 20/s (after threshold).
   if (player && hasNanotechChestplate(player) && !player.dead) {
-    setNanotechChanneling(player, !!keys.KeyF);
+    if (keys.KeyF) {
+      nanoFHoldT += dt;
+      if (nanoFHoldT >= NANOTECH_F_HOLD_THRESHOLD) {
+        nanoFHoldLatched = true;
+        setNanotechChanneling(player, true);
+      }
+    } else {
+      if (nanoFHoldT > 0 && !nanoFHoldLatched) {
+        pulseNanotechArmor(player);
+      }
+      nanoFHoldT = 0;
+      nanoFHoldLatched = false;
+      setNanotechChanneling(player, false);
+    }
+  } else {
+    nanoFHoldT = 0;
+    nanoFHoldLatched = false;
   }
   for (const fighter of game.fighters) {
     stepFighter(fighter, dt, game, profile, keys, humanIntent);
@@ -347,9 +366,8 @@ function handleKeyDown(event) {
   }
   if (event.code === "KeyF" && !event.repeat) {
     const player = game.fighters[0];
-    if (hasNanotechChestplate(player)) {
-      pulseNanotechArmor(player);
-    } else {
+    // Nanotech tap/hold is resolved in update(); F only toggles retractable without chestplate.
+    if (!hasNanotechChestplate(player)) {
       toggleRetractableArmor(player);
     }
   }
