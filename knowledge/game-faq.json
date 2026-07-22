@@ -446,7 +446,7 @@
         "nanotech reserve",
         "partial form sword"
       ],
-      "answer": "Nanotech gear shares one bot reserve (sum of each piece's nanobot cost). Press E to form your nanotech weapon from free bots — it tries to reach full cost (sword 100, rifle 150, sniper 175). Partial form is allowed: damage scales with form %. Incomplete swords lose 2% of their bot cost on each successful fighter slash. You can attack with any formed bots (>0). Hold F with Nanotech Chestplate to loan free bots into the armor bar (2 bots = 1 HP, cap 500 bots / 250 HP); F never steals bots already in the weapon. Release F to recall armor to free reserve. Nanotech Reserve adds a large tank but slows you 5%. With the chestplate, F channels instead of toggling Retractable Armor."
+      "answer": "Nanotech gear shares one bot reserve (sum of each piece's nanobot cost). Press E to form your nanotech weapon from free bots — it tries to reach full cost (sword 100, rifle 150, sniper 175). Partial form is allowed: damage scales with form %. Press E again while formed to absorb the weapon back into free reserve (nanoparticle drain). Incomplete swords lose 2% of their bot cost on each successful fighter slash. You can attack with any formed bots (>0). Tap F with Nanotech Chestplate to loan +100 free bots into the armor bar; hold F to drain 20 bots/s into armor (2 bots = 1 HP, cap 500 bots / 250 HP). Armor stays until damage spends it — F never steals bots already in the weapon. Nanotech Reserve adds a large tank but slows you 5%. With the chestplate, F channels instead of toggling Retractable Armor."
     },
     {
       "id": "equipment-shields",

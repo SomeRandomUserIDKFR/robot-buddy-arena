@@ -656,15 +656,18 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
   context.fillStyle = visual.color;
   context.fillRect(visual.gripOffset, -width / 2, length, width);
 
-  // Melting nano flecks while the blade dissolves into armor.
+  // Melting nano flecks while the blade dissolves / absorbs into reserve.
   if (fighter.weaponId === "nanotech-sword" && swordVis < 0.92 && swordVis > 0.02) {
     const scatter = 1 - swordVis;
-    for (let i = 0; i < 10; i++) {
-      const along = visual.gripOffset + length * ((i + 0.5) / 10);
-      const drift = Math.sin(i * 2.3 + scatter * 9) * scatter * 14;
+    const absorbing = !!fighter.nanotechWeaponAbsorbing;
+    const flecks = absorbing ? 18 : 10;
+    for (let i = 0; i < flecks; i++) {
+      const along = visual.gripOffset + length * ((i + 0.5) / flecks);
+      const drift = Math.sin(i * 2.3 + scatter * 9) * scatter * (absorbing ? 22 : 14);
+      const inward = absorbing ? -scatter * (8 + (i % 5) * 3) : 0;
       context.globalAlpha = alpha * (0.25 + scatter * 0.55);
       context.fillStyle = i % 2 ? "#9fffff" : visual.color;
-      context.fillRect(along, drift - 1.2, 2.2, 2.2);
+      context.fillRect(along + inward, drift - 1.2, absorbing ? 1.6 : 2.2, absorbing ? 1.6 : 2.2);
     }
   }
 

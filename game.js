@@ -5,9 +5,10 @@ import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
   acceptSuggestion, applyLoadout, awardConquest, cycleModularMode, equipOwned,
-  hasNanotechChestplate, isModularWeapon, purchaseGear, reconcileLoadoutsToOwned,
-  setBuddyMode, setNanotechChanneling, tryFormNanotechWeapon,
-  toggleRetractableArmor, toggleShieldRaise, trainerLoadout, weaponKind
+  hasNanotechChestplate, isModularWeapon, pulseNanotechArmor, purchaseGear,
+  reconcileLoadoutsToOwned, setBuddyMode, setNanotechChanneling,
+  tryNanotechWeaponAction, toggleRetractableArmor, toggleShieldRaise,
+  trainerLoadout, weaponKind
 } from "./equipment.js";
 import { tickGroundDebris } from "./debris.js";
 import {
@@ -346,8 +347,9 @@ function handleKeyDown(event) {
   }
   if (event.code === "KeyF" && !event.repeat) {
     const player = game.fighters[0];
-    // Nanotech channel is held via keys.KeyF (synced each frame). F only toggles retractable.
-    if (!hasNanotechChestplate(player)) {
+    if (hasNanotechChestplate(player)) {
+      pulseNanotechArmor(player);
+    } else {
       toggleRetractableArmor(player);
     }
   }
@@ -356,7 +358,7 @@ function handleKeyDown(event) {
     if (isModularWeapon(player)) {
       cycleModularMode(player);
     } else if ((player.nanotechWeaponCost || 0) > 0) {
-      tryFormNanotechWeapon(player);
+      tryNanotechWeaponAction(player);
     }
   }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);

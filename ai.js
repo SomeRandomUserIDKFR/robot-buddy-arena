@@ -5,7 +5,8 @@ import { platformsOf } from "./maps.js";
 import { directiveStrength } from "./coaching.js";
 import {
   beginModularMorph, beginRetractableMorph, hasNanotechChestplate, hasRetractableArmor,
-  isModularWeapon, nanotechFormPct, setNanotechChanneling, tryFormNanotechWeapon
+  isModularWeapon, nanotechFormPct, pulseNanotechArmor, setNanotechChanneling,
+  tryFormNanotechWeapon
 } from "./equipment.js";
 import {
   ensureLearningProfile, evidenceReliability, evidenceState, mimicBlendFactor,
@@ -512,7 +513,7 @@ export function updateAiRetractableArmor(fighter, state, game, visible, target, 
   if (want) state.retractableHoldUntil = now + RETRACTABLE_AI_MIN_HOLD;
 }
 
-/** Minimal nanotech: form weapon from free bots; under fire with spare free → channel. */
+/** Minimal nanotech: form weapon; tap-style +100 then hold channel at 20/s when under fire. */
 export function updateAiNanotech(fighter, state, game, visible, target) {
   if (fighter.dead) {
     setNanotechChanneling(fighter, false);
@@ -530,6 +531,9 @@ export function updateAiNanotech(fighter, state, game, visible, target) {
     || (!!target && !target.dead);
   const want = underFire && free > 40
     && (fighter.nanobotArmor || 0) < 500;
+  if (want && !fighter.nanotechChanneling) {
+    pulseNanotechArmor(fighter);
+  }
   setNanotechChanneling(fighter, want);
 }
 
