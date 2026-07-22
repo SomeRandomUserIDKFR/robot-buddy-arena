@@ -16,7 +16,9 @@ assert.equal(normalizeReconquerRate(2), 2);
 assert.equal(normalizeReconquerRate(0.1), 0.1);
 assert.equal(normalizeReconquerRate(1.5), 1.5);
 assert.equal(normalizeReconquerRate(0), 0.1);
-assert.equal(normalizeReconquerRate(9), 2);
+assert.equal(normalizeReconquerRate(9), 9);
+assert.equal(normalizeReconquerRate(10), 10);
+assert.equal(normalizeReconquerRate(99), 10);
 
 // Jigsaw uses exact prop colors and full fragment coverage.
 {

@@ -286,7 +286,7 @@ function despawnStyle(game) {
   return normalizeDebrisDespawnStyle(game?.settings?.visual?.debrisDespawnStyle);
 }
 
-/** 1×–2× multiplier for how often reconquer queues and fires. */
+/** 0.1×–10× multiplier for how often reconquer queues and fires. */
 export function reconquerRate(game) {
   return normalizeReconquerRate(game?.settings?.visual?.reconquerRate);
 }

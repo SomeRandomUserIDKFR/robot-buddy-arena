@@ -72,7 +72,7 @@ export const DEFAULT_PROFILE = {
     visual: {
       modularMorphStyle: "fold",
       debrisDespawnStyle: "fade",
-      // 0.1×–2× baseline reconquer cadence (1× = default).
+      // 0.1×–10× baseline reconquer cadence (1× = default).
       reconquerRate: 1
     }
   },

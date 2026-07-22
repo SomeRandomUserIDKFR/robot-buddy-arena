@@ -12,7 +12,7 @@ export const DEBRIS_DESPAWN_STYLES = Object.freeze([
 
 /** Reconquer frequency multiplier relative to the baseline cadence. */
 export const RECONQUER_RATE_MIN = 0.1;
-export const RECONQUER_RATE_MAX = 2;
+export const RECONQUER_RATE_MAX = 10;
 
 export function normalizeModularMorphStyle(value, legacyMechanicalShifting = false) {
   if (MODULAR_MORPH_STYLES.includes(value)) return value;
