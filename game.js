@@ -1,6 +1,6 @@
 import { SIZE, WORLD } from "./config.js";
 import { updateCamera } from "./camera.js";
-import { Fighter, hit, stepBullets, stepFighter, triggerDodge } from "./combat.js";
+import { Fighter, hit, stepBullets, stepFighter, stepThrownProps, triggerDodge } from "./combat.js";
 import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
@@ -12,6 +12,7 @@ import {
   toggleRetractableArmor, toggleShieldRaise, trainerLoadout, weaponKind
 } from "./equipment.js";
 import { tickGroundDebris } from "./debris.js";
+import { tickThrowBreakable } from "./throw-breakable.js";
 import {
   getPendingEncounter, rerollEncounter, setPendingEncounter
 } from "./conquest.js";
@@ -142,6 +143,7 @@ function makeGame(mode) {
     bullets: [],
     effects: [],
     groundDebris: [],
+    thrownBreakables: [],
     reconquerQueue: [],
     forgeCasts: [],
     armorDummyBuilds: [],
@@ -297,8 +299,10 @@ function update(dt) {
   for (const fighter of game.fighters) {
     stepFighter(fighter, dt, game, profile, keys, humanIntent);
     tickFighterPowerBuffs(fighter, dt);
+    tickThrowBreakable(fighter, game, dt);
   }
   stepBullets(game, dt);
+  stepThrownProps(game, dt);
   tickPowerCrateSpawns(game, dt);
   trackTraining(game, dt);
   if (game.mode === "training") {

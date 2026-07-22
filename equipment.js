@@ -1,6 +1,9 @@
 import {
   claimDebrisForMaterialConsume, retargetMaterialConsumeTip, spawnBrokenArmorDebris
 } from "./debris.js";
+import {
+  dropHeldBreakable, THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID
+} from "./throw-breakable.js";
 import { angleDiff } from "./utils.js";
 import { SIZE } from "./config.js";
 import {
@@ -84,6 +87,7 @@ export const MATERIAL_CONSUMER_BOTS_PER_PIECE = 4;
 /** Reach from fighter center to saber tip (gripOffset 17 + length 44). */
 export const MATERIAL_CONSUMER_TIP_REACH = 61;
 export const MATERIAL_CONSUMER_ID = "material-consumer-nanotech";
+export { THROW_BREAKABLE_ID } from "./throw-breakable.js";
 export const NO_SECONDARY_ID = "no-secondary";
 
 /** World position of the Material Consumer blade tip (aim-aligned). */
@@ -312,6 +316,29 @@ export const GEAR = [
         sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
         movementMultiplier: 1.08, iframeMultiplier: 1.05,
         baseDamage: 48 * NANOTECH_DAMAGE_MULT, rpm: 150, range: 110
+      }
+    }
+  ),
+  item(
+    THROW_BREAKABLE_ID,
+    "secondaryWeapon",
+    "Throw Breakable",
+    "Grab any breakable cover (click), hold it in hand (enemies can still damage it), then click again to throw. OK impact damage; shatters into debris at the hit — reconquer rebuilds there.",
+    {
+      damage: THROW_BREAKABLE_DAMAGE / 40,
+      fireRate: 90 / 150,
+      range: 100 / 120
+    },
+    {
+      baseKind: "saber",
+      dps: THROW_BREAKABLE_DAMAGE * 90 / 60,
+      price: 160,
+      throwBreakable: true,
+      weaponStats: {
+        kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+        sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+        movementMultiplier: 1.04, iframeMultiplier: 1,
+        baseDamage: THROW_BREAKABLE_DAMAGE, rpm: 90, range: 100
       }
     }
   ),
@@ -1219,7 +1246,12 @@ export function applyActiveWeaponGear(fighter, gearId) {
   if (gear.weaponStats?.dropoff) {
     fighter.weaponStats.dropoff = { ...gear.weaponStats.dropoff };
   }
+  // Drop a held breakable when leaving Throw Breakable.
+  if (fighter.throwBreakable && !gear.throwBreakable && fighter.heldProp) {
+    dropHeldBreakable(fighter, null);
+  }
   fighter.materialConsumer = !!gear.materialConsumer;
+  fighter.throwBreakable = !!gear.throwBreakable;
   fighter.nanotechWeaponCost = gear.nanotech ? nanotechFormCostOf(gear) : 0;
   fighter.nanobotShotCost = gear.nanotech ? Math.max(0, Number(gear.nanobotShotCost) || 0) : 0;
   fighter.nanotechAmmoBonus = gear.nanotech ? nanotechAmmoBonusOf(gear) : 0;
@@ -1892,7 +1924,7 @@ function pickOwned(profileOrEquipment, slot, preferences = []) {
 export function suggestBuddyLoadout(profile) {
   const equipment = profile.equipment;
   const style = evidenceStyle(profile, equipment.player);
-  const secondaryPrefs = [NO_SECONDARY_ID, MATERIAL_CONSUMER_ID];
+  const secondaryPrefs = [NO_SECONDARY_ID, THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID];
   const preferences = style === "ranged"
     ? {
       body: ["field-frame", "bulwark-frame", "scout-frame", "retractable-armor", "nanotech-chestplate"],
@@ -1919,7 +1951,7 @@ export function suggestBuddyLoadout(profile) {
           "duelist-blade", "mechanical-modularity",
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
-        secondaryWeapon: [MATERIAL_CONSUMER_ID, NO_SECONDARY_ID],
+        secondaryWeapon: [THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID, NO_SECONDARY_ID],
         jetpack: [
           "sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack", "nanotech-reserve"
         ],
@@ -2083,8 +2115,10 @@ export function applyLoadout(fighter, loadout) {
     const gear = GEAR_BY_ID[fighter.loadout[slot]];
     return !!gear?.nanotech;
   });
-  // Matches primary start above; Material Consumer is swapped in via 1/2 / scroll.
+  // Matches primary start above; secondaries are swapped in via 1/2 / scroll.
   fighter.materialConsumer = false;
+  fighter.throwBreakable = false;
+  fighter.heldProp = null;
   if (weapon.id === ADAPTIVE_NANOTECH_ID) {
     applyAdaptiveCombatStats(fighter, "sword");
     syncAdaptiveNanotechCosts(fighter, "sword");

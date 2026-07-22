@@ -17,6 +17,9 @@ import {
   consumeOvercharge, damagePowerCrate, fireRateBuffMult, moveSpeedBuffMult,
   powerCrateBlockers, tryCounterSlash
 } from "./powerups.js";
+import {
+  attackThrowBreakable, isThrowBreakable, stepThrownBreakables
+} from "./throw-breakable.js";
 import { angleDiff, clamp, dist, lerp, segmentHitsBox } from "./utils.js";
 
 function landableSurfaces(game) {
@@ -307,6 +310,21 @@ export function attack(fighter, game, random = Math.random) {
   if (fighter.shieldRaised && !fighter.shieldBroken) return;
   if (weaponAttackLocked(fighter)) return;
   if (!canNanotechAttack(fighter)) return;
+  if (isThrowBreakable(fighter)) {
+    attackThrowBreakable(fighter, game);
+    if (fighter.buddy && game.mode === "training") {
+      game.stats.buddyAttacks++;
+      game.lastBuddyAttackAt = game.elapsed;
+    }
+    if (fighter.human && game.mode === "training") {
+      game.stats.attacks++;
+      game.lastPlayerAttackAt = game.elapsed;
+      const buddy = game.fighters.find((candidate) => candidate.buddy);
+      if (buddy) game.stats.attackRangeSum += dist(fighter, buddy);
+      if (fighter.hp < 180) game.stats.lowHpAttack++;
+    }
+    return;
+  }
   const spread = weaponAccuracySpread(fighter);
   const shotAngle = fighter.aim + (random() - .5) * spread * 2;
   const ox = fighter.x + SIZE / 2 + Math.cos(shotAngle) * 31;
@@ -588,4 +606,9 @@ export function stepBullets(game, dt) {
     }
   }
   game.bullets = game.bullets.filter((bullet) => bullet.life > 0);
+}
+
+/** Integrate Throw Breakable projectiles (fighter hits via `hit`). */
+export function stepThrownProps(game, dt) {
+  stepThrownBreakables(game, dt, hit);
 }

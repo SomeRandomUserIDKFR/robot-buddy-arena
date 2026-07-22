@@ -851,6 +851,16 @@ function modifierMarkup(gear) {
         "<span class=\"stat-down\">Vacuumed scraps cannot reconquer</span>"
       ].filter(Boolean).join("");
     }
+    if (gear.throwBreakable) {
+      const stats = weaponStats(gear);
+      return [
+        "<span>Secondary · click grab / click throw</span>",
+        `<span>${stats.baseDamage} throw damage</span>`,
+        "<span class=\"stat-up\">Grab any breakable cover</span>",
+        "<span>Held props stay damageable</span>",
+        "<span class=\"stat-down\">Shatters at impact · reconquer there</span>"
+      ].join("");
+    }
     const stats = weaponStats(gear);
     const changes = [
       `<span>${stats.kind === "gun" ? "Ranged" : "Melee"} mechanics</span>`,

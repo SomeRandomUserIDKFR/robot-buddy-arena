@@ -38,6 +38,9 @@ const WEAPON_VISUALS = {
   "material-consumer-nanotech": {
     length: 44, width: 6, gripOffset: 17, ally: "#6cffb0", enemy: "#ff6aa8", buddy: "#58ffd0"
   },
+  "throw-breakable": {
+    length: 22, width: 8, gripOffset: 16, ally: "#c4a878", enemy: "#d88868", buddy: "#d0b888"
+  },
   // Legacy baseKind fallbacks
   gun: { length: 32, width: 10, gripOffset: 18, ally: "#6a8f9c", enemy: "#8a655c", buddy: "#5aa8b4" },
   saber: { length: 48, width: 5, gripOffset: 17, ally: "#70f3ff", enemy: "#ff8279", buddy: "#4df2ff" }
@@ -708,6 +711,20 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
       : 1;
   const length = visual.length * scale;
   const width = visual.width * Math.max(0.35, scale);
+
+  // Throw Breakable: mitt when empty; held props are drawn in world space on the hand.
+  if (fighter.throwBreakable) {
+    if (!fighter.heldProp) {
+      context.globalAlpha = alpha * 0.9;
+      context.fillStyle = visual.color;
+      context.fillRect(visual.gripOffset, -width / 2, Math.min(length, 18), width);
+      context.strokeStyle = "rgba(255,255,255,.35)";
+      context.lineWidth = 1;
+      context.strokeRect(visual.gripOffset, -width / 2, Math.min(length, 18), width);
+    }
+    return;
+  }
+
   context.globalAlpha = alpha;
   context.fillStyle = visual.color;
   context.fillRect(visual.gripOffset, -width / 2, length, width);
@@ -855,9 +872,19 @@ export function createRenderer(canvas) {
     }
     drawEffects(game);
     drawBullets(game);
+    drawThrownBreakables(game, 1);
     for (const fighter of game.fighters) {
       const enemy = fighter.team !== player.team;
       if (!enemy || visibleToTeam(game, player, fighter) || fighter.buddy) drawFighter(game, fighter);
+    }
+    // Held breakables sit on the hand — draw after the body so they read on top.
+    for (const fighter of game.fighters) {
+      const enemy = fighter.team !== player.team;
+      if (enemy && !visibleToTeam(game, player, fighter) && !fighter.buddy) continue;
+      const held = fighter.heldProp;
+      if (!held || held.destroyed) continue;
+      drawPropBody(held, 1);
+      if (held.canopy) drawCanopy(held, 0.85);
     }
     drawProps(game, 1, true);
     drawPings(game);
@@ -1107,9 +1134,22 @@ export function createRenderer(canvas) {
   /** @param {boolean} canopiesOnly draw tree tops above fighters when true */
   function drawProps(game, alpha, canopiesOnly) {
     for (const prop of game.props || []) {
+      // Held / in-flight props are drawn with the thrower / thrown pass.
+      if (prop.heldBy || prop.thrownInFlight) continue;
       if (canopiesOnly) drawCanopy(prop, alpha);
       else drawPropBody(prop, alpha);
     }
+  }
+
+  function drawThrownBreakables(game, alpha) {
+    context.globalAlpha = alpha;
+    for (const thrown of game.thrownBreakables || []) {
+      const prop = thrown?.prop;
+      if (!prop || prop.destroyed) continue;
+      drawPropBody(prop, alpha);
+      if (prop.canopy) drawCanopy(prop, alpha * 0.9);
+    }
+    context.globalAlpha = 1;
   }
 
   // The world ceiling: an energy barrier line with downward hatch ticks so

@@ -450,13 +450,24 @@
       "questions": [
         "what is material consumer",
         "material consumer nanotech",
-        "secondary weapon",
         "how do I vacuum debris",
-        "debris into nanobots",
-        "how do I swap secondary weapon",
-        "1 and 2 weapon swap"
+        "debris into nanobots"
       ],
       "answer": "Material Consumer is a secondary-slot nanotech tool-sword. Equip it in the Secondary bay, then press 2 (or scroll) to draw it; 1 returns to your primary. While active it vacuums nearby debris into free nanobots (as if they regenerated, still capped by your pool), and those scraps cannot reconquer. It adds 120 bots to the shared nanotech pool and swings as a physical saber — no E form step."
+    },
+    {
+      "id": "equipment-throw-breakable",
+      "tags": ["equipment", "secondary", "throw", "breakable", "grab", "cover"],
+      "questions": [
+        "what is throw breakable",
+        "how do I throw crates",
+        "grab breakable",
+        "secondary weapon",
+        "how do I swap secondary weapon",
+        "1 and 2 weapon swap",
+        "throw trees"
+      ],
+      "answer": "Throw Breakable is a secondary tool. Press 2 (or scroll) to draw it. Click near any breakable map prop to grab it into your hand — enemies can still shoot or slash the held object. Click again to throw: it deals about 48 impact damage, then shatters into debris where it hits. With Reconquer on, rebuild attempts target that impact site (the prop slot moves with the throw)."
     },
     {
       "id": "equipment-nanotech",

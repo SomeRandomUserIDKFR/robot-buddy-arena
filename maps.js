@@ -615,7 +615,10 @@ export function platformsOf(game) {
 export function projectileBlockers(game) {
   const props = game?.props || [];
   return props.filter(
-    (p) => !p.destroyed && p.blocksProjectiles && (p.hp == null || p.hp > 0)
+    (p) => !p.destroyed
+      && p.blocksProjectiles
+      && !p.thrownInFlight
+      && (p.hp == null || p.hp > 0)
   );
 }
 

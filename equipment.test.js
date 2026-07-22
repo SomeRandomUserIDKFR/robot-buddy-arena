@@ -281,7 +281,7 @@ const clone = (value) => structuredClone(value);
 // Every slot has enough choices; every primary weapon keeps a known base mechanic.
 {
   for (const slot of SLOT_ORDER) {
-    const min = slot === "secondaryWeapon" ? 2 : 4;
+    const min = slot === "secondaryWeapon" ? 3 : 4;
     assert.ok(
       GEAR.filter((gear) => gear.slot === slot).length >= min,
       `${slot} should have >= ${min} options`
