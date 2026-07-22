@@ -870,7 +870,7 @@ export function createRenderer(canvas) {
       ) {
         continue;
       }
-      const pr = prop.revealRadius || ((prop.w || 14) * 10);
+      const pr = prop.revealRadius || ((prop.w || 14) * 40);
       if (!(pr > 0)) continue;
       const px = prop.x + (prop.w || 0) / 2;
       const py = prop.y + (prop.h || 0) / 2;

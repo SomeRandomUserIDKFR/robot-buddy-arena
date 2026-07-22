@@ -887,8 +887,8 @@ function modifierMarkup(gear) {
       return [
         "<span>Extension · press 3</span>",
         "<span class=\"stat-up\">Tiny neon glare square</span>",
-        "<span class=\"stat-up\">Reveals allies · 10× size</span>",
-        "<span class=\"stat-up\">Blocks sight · 5× size box</span>",
+        "<span class=\"stat-up\">Reveals allies · 40× size</span>",
+        "<span class=\"stat-up\">Blocks sight · 20× size box</span>",
         "<span>Break the square to end both · 10s CD</span>",
         "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"
       ].join("");

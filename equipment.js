@@ -383,7 +383,7 @@ export const GEAR = [
     LIGHT_CONDENSATION_ID,
     "extensionSecondary",
     "Light Condensation",
-    "Extension tool (press 3). Plants a tiny neon glare square: reveals a wide area for your team (10× size) and blocks sight on a mid glare box (5× size). Break the square to end both. 10s cooldown.",
+    "Extension tool (press 3). Plants a tiny neon glare square: reveals a wide area for your team (40× size) and blocks sight on a large glare box (20× size). Break the square to end both. 10s cooldown.",
     {},
     {
       price: 180,

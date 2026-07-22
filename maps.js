@@ -649,7 +649,7 @@ export function sightBlockers(game) {
     // Light Condensation: LOS uses an inflated glare box, not the tiny sprite.
     if (p.lightCondensation || p.kind === "lightCondensation") {
       const side = p.sightBlockSide
-        || Math.max(p.w || 14, (p.w || 14) * 5);
+        || Math.max(p.w || 14, (p.w || 14) * 20);
       const cx = p.x + (p.w || 0) / 2;
       const cy = p.y + (p.h || 0) / 2;
       props.push({

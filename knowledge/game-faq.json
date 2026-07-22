@@ -470,7 +470,7 @@
         "neon light square",
         "condense light"
       ],
-      "answer": "Light Condensation is an Extension-slot tool (press 3). It plants a tiny neon whitish-yellow square along your aim. That spot reveals a wide area for your team (about 10× the square's size) and blocks line of sight on a mid-size glare box (about 5× larger than it looks). Shoot or slash the square to break it and end both effects. 10s cooldown. It does not replace your 1/2 secondary or Reconjurer — equip one Extension at a time. AI with it equipped plants glare to scout last-known foes or blind a lane, and will shoot enemy glare nodes."
+      "answer": "Light Condensation is an Extension-slot tool (press 3). It plants a tiny neon whitish-yellow square along your aim. That spot reveals a wide area for your team (about 40× the square's size) and blocks line of sight on a large glare box (about 20× larger than it looks). Shoot or slash the square to break it and end both effects. 10s cooldown. It does not replace your 1/2 secondary or Reconjurer — equip one Extension at a time. AI with it equipped plants glare to scout last-known foes or blind a lane, and will shoot enemy glare nodes."
     },
     {
       "id": "equipment-trapper",

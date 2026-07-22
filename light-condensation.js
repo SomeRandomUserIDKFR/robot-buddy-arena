@@ -16,9 +16,9 @@ export const LIGHT_CONDENSATION_SIZE = 14;
 /** HP — a few bullets or one solid slash. */
 export const LIGHT_CONDENSATION_HP = 36;
 /** Reveal radius = size × this (ally fog + team vision). */
-export const LIGHT_CONDENSATION_REVEAL_MULT = 10;
+export const LIGHT_CONDENSATION_REVEAL_MULT = 40;
 /** Sight block box side = size × this (centered on the sprite). */
-export const LIGHT_CONDENSATION_BLOCK_MULT = 5;
+export const LIGHT_CONDENSATION_BLOCK_MULT = 20;
 /** Aim-placed distance from planter center. */
 export const LIGHT_CONDENSATION_PLACE_REACH = 110;
 /** Neon fill for the condensed core. */
