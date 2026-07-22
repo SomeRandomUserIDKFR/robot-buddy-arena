@@ -52,7 +52,9 @@ export function thoughtReason(plan) {
     "approaching breakable": "cover could be thrown",
     "throwing breakable": "a held prop made a good missile",
     "reconjuring debris": "nearby scrap could be rebuilt",
-    "conjuring cover": "a breakable would buy space"
+    "conjuring cover": "a breakable would buy space",
+    "condensing light": "a glare spot would reveal or blind the lane",
+    "breaking glare": "an enemy light node was cutting vision"
   })[plan] || "no clean engagement was visible";
 }
 

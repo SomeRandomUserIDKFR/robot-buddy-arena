@@ -1,4 +1,5 @@
 import { SIGHT, SIZE } from "./config.js";
+import { inLightCondensationReveal } from "./light-condensation.js";
 import { sightBlockers } from "./maps.js";
 import { angleDiff, dist, segmentHitsBox } from "./utils.js";
 
@@ -52,7 +53,9 @@ export function visibleToTeam(game, observer, target) {
       !fighter.dead && fighter.team === observer.team
       && canSeeTarget(game, fighter, target)
     )
-  ) || inBeamReveal(game, observer.team, target);
+  )
+    || inBeamReveal(game, observer.team, target)
+    || inLightCondensationReveal(game, observer.team, target);
 }
 
 export function visibleToSelf(observer, target, game = null) {

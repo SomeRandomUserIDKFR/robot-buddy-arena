@@ -869,6 +869,16 @@ function modifierMarkup(gear) {
         "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"
       ].join("");
     }
+    if (gear.lightCondensation) {
+      return [
+        "<span>Extension · press 3</span>",
+        "<span class=\"stat-up\">Tiny neon glare square</span>",
+        "<span class=\"stat-up\">Reveals allies · 10× size</span>",
+        "<span class=\"stat-up\">Blocks sight · 5× size box</span>",
+        "<span>Break the square to end both · 10s CD</span>",
+        "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"
+      ].join("");
+    }
     if (gear.id === "no-extension") {
       return "<span>Empty extension slot · key 3 idle</span>";
     }

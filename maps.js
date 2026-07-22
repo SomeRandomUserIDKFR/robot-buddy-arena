@@ -643,9 +643,27 @@ export function solidProps(game) {
 /** Geometry that hard-blocks team vision (walls + sight-blocking props). */
 export function sightBlockers(game) {
   const platforms = platformsOf(game).filter((p) => p.blocksSight);
-  const props = (game?.props || []).filter(
-    (p) => !p.destroyed && p.blocksSight && (p.hp == null || p.hp > 0)
-  );
+  const props = [];
+  for (const p of game?.props || []) {
+    if (p.destroyed || !p.blocksSight || (p.hp != null && !(p.hp > 0))) continue;
+    // Light Condensation: LOS uses an inflated glare box, not the tiny sprite.
+    if (p.lightCondensation || p.kind === "lightCondensation") {
+      const side = p.sightBlockSide
+        || Math.max(p.w || 14, (p.w || 14) * 5);
+      const cx = p.x + (p.w || 0) / 2;
+      const cy = p.y + (p.h || 0) / 2;
+      props.push({
+        x: cx - side / 2,
+        y: cy - side / 2,
+        w: side,
+        h: side,
+        blocksSight: true,
+        lightCondensation: true
+      });
+      continue;
+    }
+    props.push(p);
+  }
   return [...platforms, ...props];
 }
 

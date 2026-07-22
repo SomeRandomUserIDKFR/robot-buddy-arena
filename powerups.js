@@ -7,6 +7,7 @@ import { SIZE, SIGHT } from "./config.js";
 import { spawnPowerCrateDebris, tryReconquerAtSpawn } from "./debris.js";
 import { ADAPTIVE_NANOTECH_ID, healFighter, syncRetractableDisplayedHp } from "./equipment.js";
 import { POWER_CRATE_MAP, POWER_CRATE_SPAWNS } from "./maps.js";
+import { inLightCondensationReveal } from "./light-condensation.js";
 import { inBeamReveal, inDirectionalSight, hasLineOfSight } from "./vision.js";
 import { clamp, dist } from "./utils.js";
 
@@ -229,7 +230,9 @@ export function crateVisibleToTeam(game, observer, crate) {
     (fighter) => (
       !fighter.dead && fighter.team === team && canSeeCrate(game, fighter, crate)
     )
-  ) || inBeamReveal(game, team, crateAsTarget(crate));
+  )
+    || inBeamReveal(game, team, crateAsTarget(crate))
+    || inLightCondensationReveal(game, team, crateAsTarget(crate));
 }
 
 /** True if any living fighter on either team currently sees the spawn point. */

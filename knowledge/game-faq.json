@@ -35,7 +35,7 @@
         "keyboard controls",
         "what buttons do I use"
       ],
-      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. 1 and 2 (or mouse wheel) swap between your primary weapon and secondary when a secondary is equipped. 3 uses your Extension tool (Reconjurer / Builder when equipped). Mouse aims; left click fires or swings. Hold right-click on Material Consumer for a debris beam; hold V to vacuum excess scraps into its ejection tank. G pings for me. Escape pauses."
+      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. 1 and 2 (or mouse wheel) swap between your primary weapon and secondary when a secondary is equipped. 3 uses your Extension tool (Reconjurer / Builder or Light Condensation when equipped). Mouse aims; left click fires or swings. Hold right-click on Material Consumer for a debris beam; hold V to vacuum excess scraps into its ejection tank. G pings for me. Escape pauses."
     },
     {
       "id": "controls-retractable-armor",
@@ -459,6 +459,20 @@
       "answer": "Reconjurer / Builder is an Extension-slot tool (not your 1/2 secondary). Buy and Equip it in the Extension bay, then press 3. Near debris it rebuilds that pile for free and grants 2 ejection scraps. Away from debris it conjures a random breakable for nanobots (same odds as before, including an 8% metal power crate when your 10s metal countdown is ready). Metal box rebuilds/conjures share that personal 10s cooldown. It stays on 3 for the whole match and does not replace Material Consumer or Throw Breakable. Buddies and other AI with it equipped rebuild nearby debris on their own, and may conjure cover when pressured."
     },
     {
+      "id": "equipment-light-condensation",
+      "tags": ["equipment", "extension", "light", "condensation", "vision", "glare", "fog"],
+      "questions": [
+        "what is light condensation",
+        "light condensation",
+        "glare spot",
+        "how do I plant light",
+        "vision block extension",
+        "neon light square",
+        "condense light"
+      ],
+      "answer": "Light Condensation is an Extension-slot tool (press 3). It plants a tiny neon whitish-yellow square along your aim. That spot reveals a wide area for your team (about 10× the square's size) and blocks line of sight on a mid-size glare box (about 5× larger than it looks). Shoot or slash the square to break it and end both effects. 10s cooldown. It does not replace your 1/2 secondary or Reconjurer — equip one Extension at a time. AI with it equipped plants glare to scout last-known foes or blind a lane, and will shoot enemy glare nodes."
+    },
+    {
       "id": "equipment-material-consumer",
       "tags": ["equipment", "nanotech", "secondary", "material consumer", "debris", "sword", "ejection"],
       "questions": [
@@ -500,7 +514,7 @@
         "AI secondary weapons",
         "buddy debris beam"
       ],
-      "answer": "Yes. When Material Consumer, Throw Breakable, or Reconjurer / Builder is equipped, buddies and other AI use them: they swap to Material Consumer to vacuum debris or fire the scrap beam, hold V when the nanobot pool is full near scraps, grab and throw breakables, and press the Extension action to rebuild nearby debris or conjure cover under pressure. Conquest trainers do not start with these tools by default."
+      "answer": "Yes. When Material Consumer, Throw Breakable, Reconjurer / Builder, or Light Condensation is equipped, buddies and other AI use them: they swap to Material Consumer to vacuum debris or fire the scrap beam, hold V when the nanobot pool is full near scraps, grab and throw breakables, rebuild or conjure with Reconjurer under pressure, and plant or break Light Condensation glare nodes for vision. Conquest trainers do not start with these tools by default."
     },
     {
       "id": "equipment-nanotech",

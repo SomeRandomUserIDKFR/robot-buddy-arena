@@ -7,18 +7,19 @@ import {
   isGreenEnemyAi, mindDodgeScale, pickEscapeCrateHop, pickNearestGrabbable,
   pickNearestVisibleCrate, ROOKIE_BUDDY, SHIELD_MAX_HOLD, shieldHoldDuration,
   shieldLowerCooldown, shieldRaiseAllowed, shieldStyleBias, stepAimSmoothing,
-  tickAiShieldHold, updateAI, updateAiMaterialConsumer, updateAiReconjurer,
-  updateAiRetractableArmor, updateAiShield, updateAiThrowBreakable,
+  tickAiShieldHold, updateAI, updateAiLightCondensation, updateAiMaterialConsumer,
+  updateAiReconjurer, updateAiRetractableArmor, updateAiShield, updateAiThrowBreakable,
   updateAiWeaponSlot, wantAiSecondarySlot, wantRetractableDeployed
 } from "./ai.js";
 import { Fighter } from "./combat.js";
 import { AI_PRESETS, DEFAULT_PROFILE, SIZE, WORLD } from "./config.js";
 import { spawnPropDebris } from "./debris.js";
 import {
-  applyLoadout, DEFAULT_LOADOUT, isPrecisionAimWeapon, MATERIAL_CONSUMER_ID,
-  RECONJURER_BUILDER_ID, RETRACTABLE_MORPH_DURATION, selectWeaponSlot,
-  tickRetractableArmor, trainerLoadout
+  applyLoadout, DEFAULT_LOADOUT, isPrecisionAimWeapon, LIGHT_CONDENSATION_ID,
+  MATERIAL_CONSUMER_ID, RECONJURER_BUILDER_ID, RETRACTABLE_MORPH_DURATION,
+  selectWeaponSlot, tickRetractableArmor, trainerLoadout
 } from "./equipment.js";
+import { createLightCondensationProp } from "./light-condensation.js";
 import {
   ensureLearningProfile, PRECISION_AIM_MAX_REDUCTION, precisionAimErrorScale, recordEvidence
 } from "./learning.js";
@@ -1337,3 +1338,89 @@ console.log("Retractable armor AI suite passed.");
 }
 
 console.log("Secondary / extension AI suite passed.");
+
+// --- Light Condensation AI ---
+{
+  assert.match(thoughtReason("condensing light"), /glare|reveal|blind/i);
+  assert.match(thoughtReason("breaking glare"), /light node|vision/i);
+}
+
+{
+  // Hunt last-known: plant a glare spot along the lane.
+  const profile = clone(DEFAULT_PROFILE);
+  const player = new Fighter({
+    x: 100, y: 700, human: true, team: 0, grounded: true
+  });
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: 0, sight: 820, hp: 400
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: LIGHT_CONDENSATION_ID
+  });
+  // Far enemy outside sight so AI hunts last-known after a prior spot.
+  const enemy = new Fighter({
+    x: 1800, y: 700, team: 1, weapon: "gun", hp: 500, grounded: true
+  });
+  buddy.aiState.timer = 0;
+  buddy.aiState.lastKnown = { x: enemy.x, y: enemy.y, vx: 0, vy: 0, weapon: "gun" };
+  buddy.aiState.stale = 1;
+  const game = {
+    mode: "conquest", elapsed: 1, lastShotAtPlayer: -99,
+    fighters: [player, buddy, enemy], pings: [], thoughts: [], bullets: [],
+    props: [], platforms: [{ x: 0, y: 760, w: 2400, h: 40 }], effects: []
+  };
+  updateAI(buddy, .05, game, profile);
+  assert.ok(
+    game.props.some((p) => p.lightCondensation),
+    "AI plants Light Condensation while hunting last-known"
+  );
+  assert.ok(
+    buddy.aiState.plan === "condensing light"
+      || buddy.lightCondensationCd > 0
+  );
+}
+
+{
+  // Enemy glare in range → break it.
+  const buddy = applyLoadout(new Fighter({
+    x: 400, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: 0, hp: 400
+  }), DEFAULT_LOADOUT);
+  const glare = createLightCondensationProp(700, 720, { team: 1 });
+  const state = {
+    attack: false, plan: "idle", desiredAim: null, chuck: false, ejectVacuum: false
+  };
+  updateAiLightCondensation(
+    buddy,
+    state,
+    { props: [glare], fighters: [buddy] },
+    [],
+    null
+  );
+  assert.equal(state.plan, "breaking glare");
+  assert.equal(state.attack, true);
+}
+
+{
+  // Pressure + equipped → plant glare as lane blind/scout.
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: 0, hp: 180
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: LIGHT_CONDENSATION_ID
+  });
+  const enemy = new Fighter({
+    x: 720, y: 700, team: 1, weapon: "saber", grounded: true
+  });
+  const state = { plan: "idle", attack: false, desiredAim: null };
+  const game = { props: [], effects: [], fighters: [buddy, enemy] };
+  updateAiLightCondensation(buddy, state, game, [enemy], enemy);
+  assert.equal(state.plan, "condensing light");
+  assert.equal(game.props.length, 1);
+  assert.ok(buddy.lightCondensationCd > 0);
+}
+
+console.log("Light Condensation AI suite passed.");
+

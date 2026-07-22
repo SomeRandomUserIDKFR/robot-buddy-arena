@@ -37,6 +37,8 @@ export function canGrabBreakable(prop) {
   if (!prop || prop.destroyed || !prop.breakable) return false;
   if (prop.heldBy || prop.thrownInFlight) return false;
   if (prop.armorDummy || prop.forgeHidden) return false;
+  // Glare nodes are shot, not handheld.
+  if (prop.lightCondensation || prop.kind === "lightCondensation") return false;
   if (prop.powerCrate || prop.kind === "powerCrate") {
     const maxHp = Math.max(1, prop.maxHp ?? prop.hp ?? 1);
     return (prop.hp ?? maxHp) <= maxHp * THROW_POWER_CRATE_GRAB_HP_FRAC;

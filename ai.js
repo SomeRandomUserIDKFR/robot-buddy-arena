@@ -17,6 +17,9 @@ import {
   precisionAimErrorScale
 } from "./learning.js";
 import {
+  isLightCondensation, listLightCondensationProps, tryLightCondensation
+} from "./light-condensation.js";
+import {
   isReconjurerBuilder, RECONJURER_BOT_COST, RECONJURER_REBUILD_RADIUS, tryReconjurerBuild
 } from "./reconjurer-builder.js";
 import {
@@ -24,7 +27,7 @@ import {
 } from "./throw-breakable.js";
 import { angleDiff, clamp, dist, formatTime, lerp } from "./utils.js";
 import { crateVisibleToTeam } from "./powerups.js";
-import { visibleToTeam } from "./vision.js";
+import { hasLineOfSight, visibleToTeam } from "./vision.js";
 
 /** Min seconds between AI primary ↔ secondary swaps. */
 export const AI_WEAPON_SWAP_CD = 0.9;
@@ -766,6 +769,89 @@ export function updateAiReconjurer(fighter, state, game, visible, target) {
   if (!canPay) return;
   if (tryReconjurerBuild(fighter, game)) {
     state.plan = "conjuring cover";
+  }
+}
+
+/** Nearest living enemy Light Condensation node (for shoot-to-break). */
+export function pickEnemyLightCondensation(game, fighter) {
+  if (!game || !fighter) return null;
+  const fx = fighter.x + SIZE / 2;
+  const fy = fighter.y + SIZE / 2;
+  let best = null;
+  let bestD = Infinity;
+  for (const prop of listLightCondensationProps(game)) {
+    if (prop.team === fighter.team) continue;
+    const px = prop.x + (prop.w || 0) / 2;
+    const py = prop.y + (prop.h || 0) / 2;
+    const d = Math.hypot(px - fx, py - fy);
+    if (d < bestD) {
+      best = prop;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/**
+ * Light Condensation (key 3): plant glare to scout last-known / blind a lane;
+ * prioritize shooting enemy glare nodes that cut LOS.
+ */
+export function updateAiLightCondensation(fighter, state, game, visible, target) {
+  if (!fighter || fighter.dead || !game) return;
+
+  // Shoot enemy glare first — ending their reveal/block is worth a clip.
+  // (Own glare box would self-block LOS to its center, so use range + other walls.)
+  const enemyGlare = pickEnemyLightCondensation(game, fighter);
+  if (enemyGlare) {
+    const gx = enemyGlare.x + enemyGlare.w / 2;
+    const gy = enemyGlare.y + enemyGlare.h / 2;
+    const probe = { x: gx - SIZE / 2, y: gy - SIZE / 2 };
+    const reach = fighter.sight || SIGHT;
+    const inRange = dist(fighter, probe) <= reach + 80;
+    if (inRange) {
+      state.desiredAim = Math.atan2(
+        gy - (fighter.y + SIZE / 2),
+        gx - (fighter.x + SIZE / 2)
+      );
+      state.attack = true;
+      state.plan = "breaking glare";
+    }
+  }
+
+  if (!isLightCondensation(fighter)) return;
+  if ((fighter.lightCondensationCd || 0) > 0) return;
+
+  const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
+  const hunting = !!target && !foe && (state.stale || 0) < 6;
+  const pressured = fighter.hp < 220 || (foe && dist(fighter, foe) < 300);
+  const ownGlare = listLightCondensationProps(game).filter((p) => p.team === fighter.team);
+  // Cap active ally nodes so maps don't fill with neon squares.
+  if (ownGlare.length >= 2) return;
+
+  if (hunting) {
+    // Aim toward last-known before planting so the spot lands on the hunt lane.
+    if (target) {
+      state.desiredAim = Math.atan2(
+        target.y + SIZE / 2 - (fighter.y + SIZE / 2),
+        target.x + SIZE / 2 - (fighter.x + SIZE / 2)
+      );
+    }
+    if (tryLightCondensation(fighter, game)) {
+      state.plan = "condensing light";
+    }
+    return;
+  }
+
+  if (pressured || (foe && !hasLineOfSight(game, fighter, foe))) {
+    if (foe) {
+      state.desiredAim = Math.atan2(
+        foe.y + SIZE / 2 - (fighter.y + SIZE / 2),
+        foe.x + SIZE / 2 - (fighter.x + SIZE / 2)
+      );
+    }
+    if (tryLightCondensation(fighter, game)) {
+      state.plan = "condensing light";
+    }
   }
 }
 
@@ -1563,10 +1649,12 @@ export function updateAI(fighter, dt, game, profile) {
     state.attack = false;
   }
 
-  // Secondaries / extension: Material Consumer beam+V, Throw Breakable, Reconjurer.
+  // Secondaries / extension: Material Consumer beam+V, Throw Breakable, Reconjurer,
+  // Light Condensation.
   updateAiMaterialConsumer(fighter, state, game, visible, target);
   updateAiThrowBreakable(fighter, state, game, visible, target);
   updateAiReconjurer(fighter, state, game, visible, target);
+  updateAiLightCondensation(fighter, state, game, visible, target);
 
   // Enemy trainers stay on the baseline tactical shield policy (bias 0).
   // Buddies blend toward player shieldUse; Mimic scales by intensity blend.

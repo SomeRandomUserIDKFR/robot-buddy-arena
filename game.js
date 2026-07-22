@@ -13,7 +13,10 @@ import {
 } from "./equipment.js";
 import { tickGroundDebris } from "./debris.js";
 import { tickThrowBreakable } from "./throw-breakable.js";
-import { tickReconjurerBuilder, tryReconjurerBuild } from "./reconjurer-builder.js";
+import {
+  isLightCondensation, tickLightCondensation, tryLightCondensation
+} from "./light-condensation.js";
+import { isReconjurerBuilder, tickReconjurerBuilder, tryReconjurerBuild } from "./reconjurer-builder.js";
 import {
   getPendingEncounter, rerollEncounter, setPendingEncounter
 } from "./conquest.js";
@@ -305,6 +308,7 @@ function update(dt) {
     tickFighterPowerBuffs(fighter, dt);
     tickThrowBreakable(fighter, game, dt);
     tickReconjurerBuilder(fighter, dt);
+    tickLightCondensation(fighter, dt);
   }
   stepBullets(game, dt);
   stepThrownProps(game, dt);
@@ -405,7 +409,9 @@ function handleKeyDown(event) {
     selectWeaponSlot(game.fighters[0], "secondaryWeapon");
   }
   if (event.code === "Digit3" && !event.repeat) {
-    tryReconjurerBuild(game.fighters[0], game);
+    const player = game.fighters[0];
+    if (isLightCondensation(player)) tryLightCondensation(player, game);
+    else if (isReconjurerBuilder(player)) tryReconjurerBuild(player, game);
   }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
   if (event.code === "KeyG") {

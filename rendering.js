@@ -860,6 +860,22 @@ export function createRenderer(canvas) {
       context.moveTo(sample.x + sample.radius, sample.y);
       context.arc(sample.x, sample.y, sample.radius, 0, Math.PI * 2);
     }
+    for (const prop of game.props || []) {
+      if (
+        prop.destroyed
+        || !(prop.hp > 0)
+        || prop.team !== player.team
+        || !(prop.lightCondensation || prop.kind === "lightCondensation")
+      ) {
+        continue;
+      }
+      const pr = prop.revealRadius || ((prop.w || 14) * 10);
+      if (!(pr > 0)) continue;
+      const px = prop.x + (prop.w || 0) / 2;
+      const py = prop.y + (prop.h || 0) / 2;
+      context.moveTo(px + pr, py);
+      context.arc(px, py, pr, 0, Math.PI * 2);
+    }
     context.clip();
     drawBackdrop(game, .9);
     drawPlatforms(game, 1);
@@ -1081,6 +1097,29 @@ export function createRenderer(canvas) {
     if (prop.destroyed) return;
     context.globalAlpha = alpha * (prop.hitFlash > 0 ? 1 : .95);
     const flash = prop.hitFlash > 0;
+    if (prop.lightCondensation || prop.kind === "lightCondensation") {
+      const cx = prop.x + prop.w / 2;
+      const cy = prop.y + prop.h / 2;
+      const glow = prop.glow || "#ffe56a";
+      const core = flash ? "#ffffff" : (prop.color || "#f7f4c8");
+      // Soft bloom hint (not the full reveal/block radius — keep the core tiny).
+      const bloom = Math.max(prop.w, prop.h) * 1.8;
+      const grad = context.createRadialGradient(cx, cy, 0, cx, cy, bloom);
+      grad.addColorStop(0, "rgba(255,240,160,.55)");
+      grad.addColorStop(0.45, "rgba(255,220,80,.22)");
+      grad.addColorStop(1, "rgba(255,220,80,0)");
+      context.fillStyle = grad;
+      context.beginPath();
+      context.arc(cx, cy, bloom, 0, Math.PI * 2);
+      context.fill();
+      context.fillStyle = core;
+      context.fillRect(prop.x, prop.y, prop.w, prop.h);
+      context.strokeStyle = glow;
+      context.lineWidth = 1.5;
+      context.strokeRect(prop.x + 0.5, prop.y + 0.5, prop.w - 1, prop.h - 1);
+      context.globalAlpha = 1;
+      return;
+    }
     if (prop.kind === "cactus") {
       context.fillStyle = flash ? "#dfffd0" : "#3d8a4a";
       context.fillRect(prop.x + 8, prop.y, 12, prop.h);

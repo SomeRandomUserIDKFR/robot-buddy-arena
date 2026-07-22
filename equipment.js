@@ -102,6 +102,7 @@ export { THROW_BREAKABLE_ID } from "./throw-breakable.js";
 export const NO_SECONDARY_ID = "no-secondary";
 export const NO_EXTENSION_ID = "no-extension";
 export const RECONJURER_BUILDER_ID = "reconjurer-builder";
+export const LIGHT_CONDENSATION_ID = "light-condensation";
 
 /** World position of the Material Consumer blade tip (aim-aligned). */
 export function materialConsumerTip(fighter) {
@@ -361,7 +362,7 @@ export const GEAR = [
     NO_EXTENSION_ID,
     "extensionSecondary",
     "No Extension",
-    "No extension tool — unlock Reconjurer / Builder to bind ability key 3.",
+    "No extension tool — unlock Reconjurer / Builder or Light Condensation to bind ability key 3.",
     {},
     { price: 0 }
   ),
@@ -375,6 +376,18 @@ export const GEAR = [
       price: 200,
       extensionSecondary: true,
       reconjurerBuilder: true
+    }
+  ),
+  item(
+    LIGHT_CONDENSATION_ID,
+    "extensionSecondary",
+    "Light Condensation",
+    "Extension tool (press 3). Plants a tiny neon glare square: reveals a wide area for your team (10× size) and blocks sight on a mid glare box (5× size). Break the square to end both. 10s cooldown.",
+    {},
+    {
+      price: 180,
+      extensionSecondary: true,
+      lightCondensation: true
     }
   ),
 
@@ -2129,7 +2142,9 @@ export function suggestBuddyLoadout(profile) {
   const equipment = profile.equipment;
   const style = evidenceStyle(profile, equipment.player);
   const secondaryPrefs = [NO_SECONDARY_ID, THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID];
-  const extensionPrefs = [NO_EXTENSION_ID, RECONJURER_BUILDER_ID];
+  const extensionPrefs = [
+    NO_EXTENSION_ID, LIGHT_CONDENSATION_ID, RECONJURER_BUILDER_ID
+  ];
   const preferences = style === "ranged"
     ? {
       body: ["field-frame", "bulwark-frame", "scout-frame", "retractable-armor", "nanotech-chestplate"],
@@ -2140,7 +2155,7 @@ export function suggestBuddyLoadout(profile) {
         "gattler", "burst-carbine", "mechanical-modularity", "arc-saber", "duelist-blade"
       ],
       secondaryWeapon: secondaryPrefs,
-      extensionSecondary: extensionPrefs,
+      extensionSecondary: [LIGHT_CONDENSATION_ID, NO_EXTENSION_ID, RECONJURER_BUILDER_ID],
       jetpack: [
         "endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack", "nanotech-reserve"
       ],
@@ -2158,7 +2173,7 @@ export function suggestBuddyLoadout(profile) {
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
         secondaryWeapon: [THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID, NO_SECONDARY_ID],
-        extensionSecondary: [RECONJURER_BUILDER_ID, NO_EXTENSION_ID],
+        extensionSecondary: [RECONJURER_BUILDER_ID, LIGHT_CONDENSATION_ID, NO_EXTENSION_ID],
         jetpack: [
           "sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack", "nanotech-reserve"
         ],
@@ -2337,6 +2352,9 @@ export function applyLoadout(fighter, loadout) {
   fighter.reconjurerCd = 0;
   fighter.reconjurerMetalCd = 0;
   fighter.reconjurerFlash = 0;
+  fighter.lightCondensation = !!extension?.lightCondensation;
+  fighter.lightCondensationCd = 0;
+  fighter.lightCondensationFlash = 0;
   if (weapon.id === ADAPTIVE_NANOTECH_ID) {
     applyAdaptiveCombatStats(fighter, "sword");
     syncAdaptiveNanotechCosts(fighter, "sword");
