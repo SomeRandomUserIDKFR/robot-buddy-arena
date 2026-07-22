@@ -1036,12 +1036,13 @@ button span { opacity: .6; font-size: 11px; }
 .meter.armor.morphing { border-color: var(--cyan); }
 .meter.armor.empty { border-color: #6b7580; }
 .meter.armor.empty span { color: #c5ced6; }
-.meter.armor.empty i { background: #6b7580; }
-.meter.armor i { background: #a8b8c4; }
-.meter.armor.deployed { border-color: #c5d4de; }
-.meter.armor.deployed i { background: #d0dde6; }
-.meter.armor.morphing { border-color: var(--cyan); }
 .meter.armor.empty i { background: #4a5560; }
+.meter.reserve i { background: #3ecf9a; }
+.meter.reserve.low { border-color: #e8c04a; }
+.meter.reserve.low span { color: #ffe9a8; }
+.meter.reserve.empty { border-color: #6b7580; }
+.meter.reserve.empty span { color: #c5ced6; }
+.meter.reserve.empty i { background: #355a4c; }
 .meter.exhausted { border-color: #ff5e56; }
 .meter.exhausted span { color: #ffb4ae; animation: exhaustedBlink 1s step-start infinite; }
 .meter.exhausted i { background: #ff5e56; }

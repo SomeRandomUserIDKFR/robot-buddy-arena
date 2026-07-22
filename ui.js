@@ -63,6 +63,9 @@ export const ui = {
   armor: $("#armorFill"),
   armorMeter: $("#armorMeter"),
   armorLabel: $("#armorLabel"),
+  reserve: $("#reserveFill"),
+  reserveMeter: $("#reserveMeter"),
+  reserveLabel: $("#reserveLabel"),
   shield: $("#shieldFill"),
   shieldMeter: $("#shieldMeter"),
   shieldLabel: $("#shieldLabel"),
@@ -333,6 +336,7 @@ export function updateHud(game) {
   ui.fuelMeter.classList.toggle("exhausted", !!player.jetLocked);
   ui.fuelLabel.textContent = player.jetLocked ? "EXHAUSTED" : "FUEL";
   const hasNanoArmor = !!player.hasNanotechChestplate;
+  const hasNanoPool = (player.nanobotMax || 0) > 0;
   const hasArmor = (player.retractableMax || 0) > 0 || hasNanoArmor;
   if (ui.armorMeter) {
     ui.armorMeter.classList.toggle("hidden", !hasArmor);
@@ -344,18 +348,14 @@ export function updateHud(game) {
       ui.armorMeter.classList.toggle("deployed", curHp > 0 && !player.nanotechArmorSpawning);
       ui.armorMeter.classList.toggle("morphing", !!player.nanotechArmorSpawning);
       ui.armorMeter.classList.toggle("empty", curHp <= 0 && !player.nanotechArmorSpawning);
-      const weaponCost = player.nanotechWeaponCost || 0;
-      const weaponFormed = weaponCost <= 0
-        || (player.nanobotWeapon || 0) >= weaponCost;
-      const armorFull = maxHp > 0 && curHp >= maxHp;
       const recalling = !!player.nanotechChanneling && curHp > 0;
       ui.armorLabel.textContent = player.nanotechArmorSpawning
-        ? "NANO FORM…"
+        ? "ARMOR FORM…"
         : recalling
-          ? "RECALL…"
-          : !weaponFormed
-            ? "WEAPON LOW"
-            : "NANO";
+          ? "ARMOR RECALL…"
+          : curHp <= 0
+            ? "ARMOR 0"
+            : `ARMOR ${curHp}/${maxHp}`;
     } else if (hasArmor) {
       const armorPct = player.retractableMax > 0
         ? (player.retractableHp / player.retractableMax) * 100
@@ -371,6 +371,28 @@ export function updateHud(game) {
           : player.retractableDeployed
             ? "ARMOR ON"
             : "ARMOR OFF";
+    }
+  }
+  if (ui.reserveMeter) {
+    ui.reserveMeter.classList.toggle("hidden", !hasNanoPool);
+    if (hasNanoPool) {
+      const max = player.nanobotMax || 0;
+      const free = Math.max(0, Math.floor(player.nanobotFree || 0));
+      const weapon = Math.max(0, Math.floor(player.nanobotWeapon || 0));
+      const cost = player.nanotechWeaponCost || 0;
+      ui.reserve.style.width = `${max > 0 ? (free / max) * 100 : 0}%`;
+      ui.reserveMeter.classList.toggle("low", cost > 0 && weapon < cost && free < cost - weapon);
+      ui.reserveMeter.classList.toggle("empty", free <= 0);
+      if (player.nanotechWeaponAbsorbing) {
+        ui.reserveLabel.textContent = `RESERVE ${free} · ABSORB…`;
+      } else if (weapon > 0) {
+        const formTag = cost > 0 && weapon < cost ? `W ${weapon}/${cost}` : `W ${weapon}`;
+        ui.reserveLabel.textContent = `RESERVE ${free} · ${formTag}`;
+      } else if (cost > 0) {
+        ui.reserveLabel.textContent = `RESERVE ${free} · W OFF`;
+      } else {
+        ui.reserveLabel.textContent = `RESERVE ${free}`;
+      }
     }
   }
   const hasShield = (player.shieldMaxDurability || 0) > 0;
