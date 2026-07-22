@@ -660,9 +660,9 @@ export function wantAiSecondarySlot(fighter, game, visible, target) {
   if (secondaryId === SHIELD_STEAL_ID) {
     if (
       foe
-      && foe.shieldRaised
       && !foe.shieldBroken
       && (foe.shieldDurability || 0) > 0
+      && (foe.shieldMaxDurability || 0) > 0
       && foeDist < SHIELD_STEAL_RANGE + 40
     ) {
       return "secondaryWeapon";
@@ -723,16 +723,17 @@ export function updateAiMaterialConsumer(fighter, state, game, visible, target) 
 }
 
 /**
- * Shield Steal: hold fire on a close foe with a raised facing shield.
+ * Shield Steal: hold fire on a close foe with a drainable shield pool.
+ * Prefer lowered plates (full transfer); raised plates still work at 75%.
  */
 export function updateAiShieldSteal(fighter, state, game, visible, target) {
   if (!isShieldSteal(fighter) || fighter.dead) return;
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
   if (
     !foe
-    || !foe.shieldRaised
     || foe.shieldBroken
     || !(foe.shieldDurability > 0)
+    || !(foe.shieldMaxDurability > 0)
   ) {
     return;
   }

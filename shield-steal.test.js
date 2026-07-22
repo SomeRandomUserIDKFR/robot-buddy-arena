@@ -5,7 +5,8 @@ import {
 } from "./equipment.js";
 import {
   findShieldStealTarget, isShieldSteal, SHIELD_STEAL_DRAIN_PER_SEC,
-  SHIELD_STEAL_RANGE, SHIELD_STEAL_TRANSFER, tickShieldStealBeam
+  SHIELD_STEAL_RANGE, SHIELD_STEAL_TRANSFER, SHIELD_STEAL_TRANSFER_LOWERED,
+  SHIELD_STEAL_TRANSFER_RAISED, tickShieldStealBeam
 } from "./shield-steal.js";
 import { updateAiShieldSteal } from "./ai.js";
 
@@ -15,9 +16,12 @@ assert.ok(GEAR_BY_ID[SHIELD_STEAL_ID].price > 160);
 assert.ok(GEAR_BY_ID[SHIELD_STEAL_ID].price < 220);
 assert.equal(SHIELD_STEAL_RANGE, 160);
 assert.equal(SHIELD_STEAL_DRAIN_PER_SEC, 90);
-assert.equal(SHIELD_STEAL_TRANSFER, 1);
+assert.equal(SHIELD_STEAL_TRANSFER_RAISED, 0.75);
+assert.equal(SHIELD_STEAL_TRANSFER_LOWERED, 1);
+assert.equal(SHIELD_STEAL_TRANSFER, SHIELD_STEAL_TRANSFER_RAISED);
 
 {
+  // Raised + facing = 75% transfer.
   const stealer = applyLoadout(new Fighter({
     x: 400, y: 700, team: 0, aim: 0, name: "YOU", color: "#fff",
     hp: 500, maxHp: 500
@@ -61,11 +65,11 @@ assert.equal(SHIELD_STEAL_TRANSFER, 1);
   assert.ok(stealer.shieldDurability > beforeS);
   const drained = beforeV - victim.shieldDurability;
   const gained = stealer.shieldDurability - beforeS;
-  assert.ok(Math.abs(gained - drained * SHIELD_STEAL_TRANSFER) < 0.001);
+  assert.ok(Math.abs(gained - drained * SHIELD_STEAL_TRANSFER_RAISED) < 0.001);
 }
 
 {
-  // Lowered shield = no steal.
+  // Lowered shield = steals at 100% transfer (more vulnerable).
   const stealer = applyLoadout(new Fighter({
     x: 400, y: 700, team: 0, aim: 0
   }), {
@@ -74,18 +78,27 @@ assert.equal(SHIELD_STEAL_TRANSFER, 1);
     shield: "light-buckler"
   });
   selectWeaponSlot(stealer, "secondaryWeapon");
+  stealer.shieldDurability = 20;
   const victim = applyLoadout(new Fighter({
     x: 500, y: 700, team: 1, aim: Math.PI
   }), { ...DEFAULT_LOADOUT, shield: "light-buckler" });
   victim.shieldRaised = false;
+  victim.shieldBroken = false;
   victim.shieldDurability = 100;
   const game = { fighters: [stealer, victim], effects: [] };
-  assert.equal(findShieldStealTarget(stealer, game), null);
-  assert.equal(tickShieldStealBeam(stealer, game, 0.2), null);
+  assert.equal(findShieldStealTarget(stealer, game), victim);
+  const beforeV = victim.shieldDurability;
+  const beforeS = stealer.shieldDurability;
+  const result = tickShieldStealBeam(stealer, game, 0.2);
+  assert.ok(result);
+  const drained = beforeV - victim.shieldDurability;
+  const gained = stealer.shieldDurability - beforeS;
+  assert.ok(drained > 0);
+  assert.ok(Math.abs(gained - drained * SHIELD_STEAL_TRANSFER_LOWERED) < 0.001);
 }
 
 {
-  // Facing away = no steal.
+  // Facing away while raised = no steal.
   const stealer = applyLoadout(new Fighter({
     x: 400, y: 700, team: 0, aim: 0
   }), {
@@ -101,6 +114,26 @@ assert.equal(SHIELD_STEAL_TRANSFER, 1);
   victim.shieldDurability = 100;
   const game = { fighters: [stealer, victim], effects: [] };
   assert.equal(findShieldStealTarget(stealer, game), null);
+}
+
+{
+  // Facing away while lowered = still stealable (no facing gate).
+  const stealer = applyLoadout(new Fighter({
+    x: 400, y: 700, team: 0, aim: 0
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: SHIELD_STEAL_ID,
+    shield: "light-buckler"
+  });
+  selectWeaponSlot(stealer, "secondaryWeapon");
+  const victim = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 1, aim: 0
+  }), { ...DEFAULT_LOADOUT, shield: "light-buckler" });
+  victim.shieldRaised = false;
+  victim.shieldBroken = false;
+  victim.shieldDurability = 100;
+  const game = { fighters: [stealer, victim], effects: [] };
+  assert.equal(findShieldStealTarget(stealer, game), victim);
 }
 
 {
@@ -152,6 +185,28 @@ assert.equal(SHIELD_STEAL_TRANSFER, 1);
     x: 620, y: 700, team: 1, aim: Math.PI
   }), { ...DEFAULT_LOADOUT, shield: "kinetic-targe" });
   enemy.shieldRaised = true;
+  enemy.shieldDurability = 200;
+  const state = { plan: "idle", desiredAim: null, attack: false };
+  updateAiShieldSteal(buddy, state, { fighters: [buddy, enemy] }, [enemy], enemy);
+  assert.equal(state.plan, "stealing shield");
+  assert.equal(state.attack, true);
+}
+
+{
+  // AI also engages a lowered shield pool.
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced", aim: 0
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: SHIELD_STEAL_ID,
+    shield: "kinetic-targe"
+  });
+  selectWeaponSlot(buddy, "secondaryWeapon");
+  const enemy = applyLoadout(new Fighter({
+    x: 620, y: 700, team: 1, aim: Math.PI
+  }), { ...DEFAULT_LOADOUT, shield: "kinetic-targe" });
+  enemy.shieldRaised = false;
+  enemy.shieldBroken = false;
   enemy.shieldDurability = 200;
   const state = { plan: "idle", desiredAim: null, attack: false };
   updateAiShieldSteal(buddy, state, { fighters: [buddy, enemy] }, [enemy], enemy);

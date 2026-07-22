@@ -1022,11 +1022,12 @@ function modifierMarkup(gear) {
     if (gear.shieldSteal) {
       return [
         "<span>Secondary · hold fire siphon beam</span>",
-        "<span class=\"stat-up\">Drains raised shield HP into yours</span>",
-        "<span class=\"stat-up\">100% transfer while their shield is up</span>",
-        "<span>Short range · shield must face you</span>",
+        "<span class=\"stat-up\">Drains shield HP into yours</span>",
+        "<span class=\"stat-up\">75% transfer while their shield is up</span>",
+        "<span class=\"stat-up\">100% transfer while lowered</span>",
+        "<span>Raised plates must face you</span>",
         "<span>Drop your Q to fire</span>",
-        "<span class=\"stat-down\">No effect on lowered / broken shields</span>"
+        "<span class=\"stat-down\">No effect on broken shields</span>"
       ].join("");
     }
     const stats = weaponStats(gear);

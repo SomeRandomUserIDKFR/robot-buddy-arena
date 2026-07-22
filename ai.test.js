@@ -1608,5 +1608,30 @@ console.log("Doppel AI suite passed.");
   );
 }
 
+{
+  // Lowered shield pools are also worth drawing Shield Steal for.
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced", aim: 0
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: SHIELD_STEAL_ID,
+    shield: "kinetic-targe"
+  });
+  selectWeaponSlot(buddy, "secondaryWeapon");
+  const enemy = applyLoadout(new Fighter({
+    x: 620, y: 700, team: 1, aim: Math.PI
+  }), { ...DEFAULT_LOADOUT, shield: "kinetic-targe" });
+  enemy.shieldRaised = false;
+  enemy.shieldBroken = false;
+  enemy.shieldDurability = 150;
+  const state = { plan: "idle", desiredAim: null, attack: false };
+  updateAiShieldSteal(buddy, state, { fighters: [buddy, enemy] }, [enemy], enemy);
+  assert.equal(state.plan, "stealing shield");
+  assert.equal(
+    wantAiSecondarySlot(buddy, { fighters: [buddy, enemy] }, [enemy], enemy),
+    "secondaryWeapon"
+  );
+}
+
 console.log("Shield Steal AI suite passed.");
 

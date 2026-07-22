@@ -1,7 +1,11 @@
 /**
  * Shield Steal — secondary weapon.
- * Hold fire for a short-range beam that drains raised shield durability from
- * the victim and transfers it 1:1 to your own shield pool.
+ * Hold fire for a short-range beam that drains shield durability from the
+ * victim and transfers a portion into your own shield pool.
+ *
+ * Raised plate: 75% transfer, only while the plate faces the beam.
+ * Lowered plate: 100% transfer (more vulnerable), no facing check.
+ * Broken shields cannot be drained.
  */
 import { SIZE } from "./config.js";
 import { angleDiff, dist } from "./utils.js";
@@ -23,8 +27,12 @@ export const SHIELD_STEAL_RANGE = 160;
 export const SHIELD_STEAL_HALF_ANGLE = 0.38;
 /** Shield durability drained from the victim per second. */
 export const SHIELD_STEAL_DRAIN_PER_SEC = 90;
-/** Fraction of drained durability added to the stealer when victim shield is up. */
-export const SHIELD_STEAL_TRANSFER = 1;
+/** Transfer while the victim's plate is raised and facing the beam. */
+export const SHIELD_STEAL_TRANSFER_RAISED = 0.75;
+/** Transfer while the victim's shield is lowered (more vulnerable). */
+export const SHIELD_STEAL_TRANSFER_LOWERED = 1;
+/** Alias used by equipment DPS estimates (raised-plate case). */
+export const SHIELD_STEAL_TRANSFER = SHIELD_STEAL_TRANSFER_RAISED;
 
 export function isShieldSteal(fighterOrId) {
   if (typeof fighterOrId === "string") return fighterOrId === SHIELD_STEAL_ID;
@@ -41,8 +49,14 @@ function beamOrigin(fighter) {
   };
 }
 
+function transferRateForVictim(victim) {
+  const raised = !!(victim?.shieldRaised && !victim.shieldBroken);
+  return raised ? SHIELD_STEAL_TRANSFER_RAISED : SHIELD_STEAL_TRANSFER_LOWERED;
+}
+
 /**
- * Closest living enemy in the short cone whose raised shield faces the beam.
+ * Closest living enemy in the short cone with a drainable shield pool.
+ * Raised plates require facing the beam; lowered plates are always vulnerable.
  */
 export function findShieldStealTarget(fighter, game) {
   if (!fighter || !game) return null;
@@ -60,7 +74,7 @@ export function findShieldStealTarget(fighter, game) {
     ) {
       continue;
     }
-    if (!enemy.shieldRaised || enemy.shieldBroken) continue;
+    if (enemy.shieldBroken) continue;
     if (!(enemy.shieldMaxDurability > 0) || !(enemy.shieldDurability > 0)) continue;
 
     const cx = enemy.x + SIZE / 2;
@@ -69,8 +83,9 @@ export function findShieldStealTarget(fighter, game) {
     if (d > SHIELD_STEAL_RANGE || d < 8) continue;
     const ang = Math.atan2(cy - oy, cx - ox);
     if (Math.abs(angleDiff(ang, aim)) > SHIELD_STEAL_HALF_ANGLE) continue;
-    // Only siphon a shield that is facing the beam (same gate as block).
-    if (!shieldFacesBeam(enemy, ang)) continue;
+    const raised = !!(enemy.shieldRaised && !enemy.shieldBroken);
+    // Raised plates only siphon while facing the beam (same gate as block).
+    if (raised && !shieldFacesBeam(enemy, ang)) continue;
     if (d < bestD) {
       bestD = d;
       best = enemy;
@@ -119,6 +134,9 @@ export function tickShieldStealBeam(fighter, game, dt) {
   const taken = Math.min(drain, victim.shieldDurability || 0);
   if (!(taken > 0)) return null;
 
+  // Capture raise state before drain (breaking lowers the plate).
+  const transferRate = transferRateForVictim(victim);
+
   victim.shieldDurability = Math.max(0, (victim.shieldDurability || 0) - taken);
   victim.shieldFlash = Math.max(victim.shieldFlash || 0, 0.1);
   if (victim.shieldDurability <= 0) {
@@ -127,7 +145,7 @@ export function tickShieldStealBeam(fighter, game, dt) {
     victim.shieldRaised = false;
   }
 
-  const gained = taken * SHIELD_STEAL_TRANSFER;
+  const gained = taken * transferRate;
   let applied = 0;
   if ((fighter.shieldMaxDurability || 0) > 0 && gained > 0) {
     const before = fighter.shieldDurability || 0;
