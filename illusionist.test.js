@@ -5,8 +5,9 @@ import {
 } from "./equipment.js";
 import {
   applyPhantomDamage, createFighterIllusion, cycleIllusionistType, displayedHp,
-  ILLUSION_FIGHTER_HITS, ILLUSION_PHANTOM_DAMAGE, isIllusionFighter, isIllusionist,
-  isRealCombatant, registerIllusionFighterHit, tryIllusionistPlant
+  hasIllusionTruthSight, ILLUSION_FIGHTER_HITS, ILLUSION_PHANTOM_DAMAGE,
+  isIllusionFighter, isIllusionist, isRealCombatant, registerIllusionFighterHit,
+  tryIllusionistPlant
 } from "./illusionist.js";
 
 assert.equal(GEAR_BY_ID[ILLUSIONIST_ID].slot, "extensionSecondary");
@@ -60,6 +61,12 @@ assert.equal(ILLUSION_PHANTOM_DAMAGE, 40);
   assert.equal(victim.hp, before);
   assert.ok(victim.phantomDamage >= ILLUSION_PHANTOM_DAMAGE);
   assert.equal(displayedHp(victim), before - victim.phantomDamage);
+  // Illusionist truth sight sees real HP through the gaslight.
+  const seer = applyLoadout(new Fighter({
+    x: 0, y: 0, team: 0, name: "YOU", color: "#fff"
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: ILLUSIONIST_ID });
+  assert.ok(hasIllusionTruthSight(seer));
+  assert.equal(displayedHp(victim, seer), before);
 }
 
 {

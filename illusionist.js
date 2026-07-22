@@ -1,9 +1,11 @@
 /**
  * Illusionist — most expensive extension (key 3).
- * T cycles type (HUD); 3 plants. Strictly deception: no cues, no collision,
- * no LOS block. Fighter decoys are AI clones with the same loadout; their
- * attacks only gaslight (phantom HP). Real shots pass through illusions;
+ * T cycles type (HUD); 3 plants. Strictly deception for everyone else: no cues,
+ * no collision, no LOS block. Fighter decoys are AI clones with the same loadout;
+ * their attacks only gaslight (phantom HP). Real shots pass through illusions;
  * illusion shots vanish on impact.
+ * Illusionists themselves have truth sight: outlined illusions, visible ghost
+ * rounds, and real (non-phantom) enemy HP bars.
  */
 import { SIZE, WORLD } from "./config.js";
 import { applyLoadout, GEAR_BY_ID } from "./equipment.js";
@@ -42,6 +44,11 @@ export function isIllusionist(fighterOrId) {
 
 export function isIllusionFighter(fighter) {
   return !!fighter?.illusion;
+}
+
+/** Illusionists see through gaslight (ghost rounds, real HP, outlined fakes). */
+export function hasIllusionTruthSight(viewer) {
+  return isIllusionist(viewer);
 }
 
 export function normalizeIllusionType(type) {
@@ -89,22 +96,29 @@ function placePoint(fighter, w, h) {
   };
 }
 
-/** Displayed HP after phantom gaslight (never below 0). */
-export function displayedHp(fighter) {
+/**
+ * Displayed HP after phantom gaslight (never below 0).
+ * Pass an Illusionist `viewer` to skip phantom and read real HP.
+ */
+export function displayedHp(fighter, viewer = null) {
   if (!fighter) return 0;
   // Decoys show their fake pool so hits look like real chip damage.
   if (isIllusionFighter(fighter)) {
     return Math.max(0, fighter.illusionFakeHp ?? fighter.hp ?? 0);
   }
+  if (hasIllusionTruthSight(viewer)) {
+    return Math.max(0, fighter.hp || 0);
+  }
   return Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
 }
 
 /** Fake max HP used for decoy bars (falls back to real maxHp). */
-export function displayedMaxHp(fighter) {
+export function displayedMaxHp(fighter, viewer = null) {
   if (!fighter) return 1;
   if (isIllusionFighter(fighter)) {
     return Math.max(1, fighter.illusionFakeMaxHp ?? fighter.maxHp ?? 1);
   }
+  void viewer;
   return Math.max(1, fighter.maxHp || 1);
 }
 

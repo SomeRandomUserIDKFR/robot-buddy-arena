@@ -4,6 +4,9 @@ import {
   ADAPTIVE_MODE_DEFS, ADAPTIVE_NANOTECH_ID, MODULAR_MODE_DEFS, MODULAR_WEAPON_ID,
   nanotechArmorHp, nanotechArmorMaxHp, nanotechWeaponVisibility
 } from "./equipment.js";
+import {
+  displayedHp, displayedMaxHp, hasIllusionTruthSight, isIllusionFighter
+} from "./illusionist.js";
 import { normalizeModularMorphStyle } from "./settings.js";
 import { platformsOf } from "./maps.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
@@ -829,7 +832,7 @@ export function createRenderer(canvas) {
     context.translate(-camera.x, -camera.y);
     drawBackdrop(game, .2);
     drawPlatforms(game, .28);
-    drawIllusions(game, .35);
+    drawIllusions(game, .35, game.fighters?.[0] ?? null);
     drawTraps(game, .35, game.fighters?.[0]?.team ?? 0);
     drawProps(game, .35, false);
     drawGroundDebris(game, .35);
@@ -881,7 +884,7 @@ export function createRenderer(canvas) {
     context.clip();
     drawBackdrop(game, .9);
     drawPlatforms(game, 1);
-    drawIllusions(game, 1);
+    drawIllusions(game, 1, player);
     drawTraps(game, 1, player.team);
     drawProps(game, 1, false);
     drawGroundDebris(game, 1);
@@ -917,11 +920,13 @@ export function createRenderer(canvas) {
       }
     }
     drawEffects(game);
-    drawBullets(game);
+    drawBullets(game, player);
     drawThrownBreakables(game, 1);
     for (const fighter of game.fighters) {
       const enemy = fighter.team !== player.team;
-      if (!enemy || visibleToTeam(game, player, fighter) || fighter.buddy) drawFighter(game, fighter);
+      if (!enemy || visibleToTeam(game, player, fighter) || fighter.buddy) {
+        drawFighter(game, fighter, player);
+      }
     }
     // Held breakables sit on the hand — draw after the body so they read on top.
     for (const fighter of game.fighters) {
@@ -1098,11 +1103,13 @@ export function createRenderer(canvas) {
   }
 
   /**
-   * Illusionist props/platforms — drawn like the real thing with NO tell.
+   * Illusionist props/platforms — drawn like the real thing with NO tell
+   * for everyone except Illusionists, who get a lavender truth-sight outline.
    * Visual only (no collision / LOS). Fighter decoys use drawFighter.
    */
-  function drawIllusions(game, alpha) {
+  function drawIllusions(game, alpha, viewer = null) {
     const colors = platformColors(game);
+    const truth = hasIllusionTruthSight(viewer);
     for (const ill of game.illusions || []) {
       if (!ill || ill.destroyed || !(ill.life > 0)) continue;
       context.globalAlpha = alpha;
@@ -1128,6 +1135,14 @@ export function createRenderer(canvas) {
         context.moveTo(ill.x, ill.y);
         context.lineTo(ill.x + ill.w, ill.y + ill.h);
         context.stroke();
+      }
+      if (truth) {
+        context.strokeStyle = "rgba(210,180,255,.9)";
+        context.lineWidth = 2;
+        context.setLineDash([5, 4]);
+        context.strokeRect(ill.x - 2, ill.y - 2, ill.w + 4, ill.h + 4);
+        context.setLineDash([]);
+        context.lineWidth = 1;
       }
       context.globalAlpha = 1;
     }
@@ -1350,10 +1365,11 @@ export function createRenderer(canvas) {
     context.globalAlpha = 1;
   }
 
-  function drawFighter(game, fighter) {
+  function drawFighter(game, fighter, viewer = null) {
     if (fighter.iframe > 0 && Math.floor(fighter.iframe * 80) % 2) return;
     const centerX = fighter.x + SIZE / 2;
     const centerY = fighter.y + SIZE / 2;
+    const truth = hasIllusionTruthSight(viewer);
     context.save();
     if (fighter.dead) context.globalAlpha = .45;
     if (fighter.buddy) {
@@ -1362,6 +1378,14 @@ export function createRenderer(canvas) {
       context.strokeStyle = "#4df2ff";
       context.lineWidth = 4;
       context.strokeRect(fighter.x - 3, fighter.y - 3, SIZE + 6, SIZE + 6);
+    }
+    if (truth && isIllusionFighter(fighter) && !fighter.dead) {
+      context.strokeStyle = "rgba(210,180,255,.95)";
+      context.lineWidth = 2.5;
+      context.setLineDash([6, 4]);
+      context.strokeRect(fighter.x - 4, fighter.y - 4, SIZE + 8, SIZE + 8);
+      context.setLineDash([]);
+      context.lineWidth = 1;
     }
     context.fillStyle = fighter.hitFlash > 0 ? "#fff" : fighter.color;
     context.fillRect(fighter.x, fighter.y, SIZE, SIZE);
@@ -1446,13 +1470,9 @@ export function createRenderer(canvas) {
     context.fillStyle = "#111c22";
     context.fillRect(fighter.x, fighter.y - 12, SIZE, 5);
     context.fillStyle = fighter.team ? "#ff6259" : "#36dff5";
-    // Decoys use a fake pool; everyone else can be gaslit by phantom damage.
-    const showHp = fighter.illusion
-      ? Math.max(0, fighter.illusionFakeHp ?? fighter.hp ?? 0)
-      : Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
-    const showMax = fighter.illusion
-      ? Math.max(1, fighter.illusionFakeMaxHp ?? fighter.maxHp ?? 1)
-      : Math.max(1, fighter.maxHp || 1);
+    // Decoys use a fake pool; phantom gaslight fools everyone except Illusionists.
+    const showHp = displayedHp(fighter, viewer);
+    const showMax = displayedMaxHp(fighter, viewer);
     const hpFrac = showHp / showMax;
     context.fillRect(fighter.x, fighter.y - 12, SIZE * hpFrac, 5);
     context.fillStyle = "#24343c";
@@ -1875,10 +1895,12 @@ export function createRenderer(canvas) {
     context.restore();
   }
 
-  function drawBullets(game) {
+  function drawBullets(game, viewer = null) {
+    const truth = hasIllusionTruthSight(viewer);
     for (const bullet of game.bullets) {
-      // Ghost rounds: "disappeared" on an illusion but still collide invisibly.
-      if (bullet.ghost || bullet.hidden) continue;
+      // Ghost rounds: invisible to everyone except Illusionist truth sight.
+      const ghosted = !!(bullet.ghost || bullet.hidden);
+      if (ghosted && !truth) continue;
       if (bullet.scrapChuck) {
         const ang = Math.atan2(bullet.vy, bullet.vx) + (bullet.scrapSpin || 0) * 0.08;
         const w = bullet.scrapW || 8;
@@ -1886,24 +1908,34 @@ export function createRenderer(canvas) {
         context.save();
         context.translate(bullet.x, bullet.y);
         context.rotate(ang);
-        context.fillStyle = bullet.color || "#8a7a68";
+        context.globalAlpha = ghosted ? 0.55 : 1;
+        context.fillStyle = ghosted ? "#c8b0ff" : (bullet.color || "#8a7a68");
         context.fillRect(-w / 2, -h / 2, w, h);
-        context.strokeStyle = "rgba(255,255,255,.35)";
+        context.strokeStyle = ghosted ? "rgba(230,210,255,.7)" : "rgba(255,255,255,.35)";
         context.lineWidth = 1;
         context.strokeRect(-w / 2, -h / 2, w, h);
         context.restore();
         continue;
       }
       const hose = bullet.tracer && (bullet.owner?.weaponId === "gattler" || bullet.owner?.weaponStats?.shieldDamageMult);
-      context.lineWidth = hose ? 2.5 : bullet.tracer ? 5 : 3;
-      context.strokeStyle = bullet.owner.team
-        ? (hose ? "#ffb070" : "#ff9b65")
-        : (hose ? "#b8fff4" : "#91f7ff");
+      context.save();
+      if (ghosted) {
+        context.globalAlpha = 0.65;
+        context.setLineDash([4, 5]);
+        context.lineWidth = hose ? 2 : bullet.tracer ? 3.5 : 2.5;
+        context.strokeStyle = "#d8c0ff";
+      } else {
+        context.lineWidth = hose ? 2.5 : bullet.tracer ? 5 : 3;
+        context.strokeStyle = bullet.owner.team
+          ? (hose ? "#ffb070" : "#ff9b65")
+          : (hose ? "#b8fff4" : "#91f7ff");
+      }
       context.beginPath();
       const trail = hose ? .018 : bullet.tracer ? .05 : .022;
       context.moveTo(bullet.x - bullet.vx * trail, bullet.y - bullet.vy * trail);
       context.lineTo(bullet.x, bullet.y);
       context.stroke();
+      context.restore();
     }
   }
 

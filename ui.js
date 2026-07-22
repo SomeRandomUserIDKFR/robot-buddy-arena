@@ -358,7 +358,10 @@ export function updateHud(game) {
     }
   }
   ui.teamBars.innerHTML = game.fighters.filter((f) => !f.illusion).map((fighter) => {
-    const showHp = Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
+    // Illusionists see real HP; everyone else can be gaslit by phantom damage.
+    const showHp = player?.illusionist
+      ? Math.max(0, fighter.hp || 0)
+      : Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
     const pct = fighter.maxHp > 0 ? (showHp / fighter.maxHp) * 100 : 0;
     return `
     <div class="fighter-bar" style="opacity:${fighter.dead ? .38 : 1}">
@@ -928,8 +931,9 @@ function modifierMarkup(gear) {
         "<span>Premium Extension · T cycle · 3 plant</span>",
         "<span class=\"stat-up\">Fighter decoy · kit + fake HP bar</span>",
         "<span class=\"stat-up\">Gaslight hits · ≥40 phantom HP</span>",
+        "<span class=\"stat-up\">Truth sight · outline fakes · ghost rounds · real HP</span>",
         "<span>Shots 'vanish' on decoy · keep going invisible</span>",
-        "<span>Prop / platform · visual only, no cues</span>",
+        "<span>Prop / platform · visual only, no cues to others</span>",
         "<span class=\"stat-down\">No real damage · most expensive</span>"
       ].join("");
     }
