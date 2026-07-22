@@ -14,11 +14,34 @@ export const THROW_BREAKABLE_SPEED = 980;
 export const THROW_BREAKABLE_HOLD_REACH = 34;
 /** Cap held silhouette so trees/pillars still read as handheld. */
 export const THROW_BREAKABLE_HOLD_MAX = 52;
+/** Power crates are only grabbable at or below this fraction of max HP. */
+export const THROW_POWER_CRATE_GRAB_HP_FRAC = 0.5;
+
+/**
+ * Late-bound damager for power crates (avoids throw-breakable ↔ powerups ↔ equipment cycle).
+ * Wired from combat.js once modules load.
+ */
+let damagePowerCrateFn = null;
+export function bindThrowBreakablePowerCrateDamager(fn) {
+  damagePowerCrateFn = typeof fn === "function" ? fn : null;
+}
 
 export function isThrowBreakable(fighterOrId) {
   if (typeof fighterOrId === "string") return fighterOrId === THROW_BREAKABLE_ID;
   return fighterOrId?.weaponId === THROW_BREAKABLE_ID
     || fighterOrId?.throwBreakable === true;
+}
+
+/** Whether Throw Breakable may pick up this prop / metal power crate. */
+export function canGrabBreakable(prop) {
+  if (!prop || prop.destroyed || !prop.breakable) return false;
+  if (prop.heldBy || prop.thrownInFlight) return false;
+  if (prop.armorDummy || prop.forgeHidden) return false;
+  if (prop.powerCrate || prop.kind === "powerCrate") {
+    const maxHp = Math.max(1, prop.maxHp ?? prop.hp ?? 1);
+    return (prop.hp ?? maxHp) <= maxHp * THROW_POWER_CRATE_GRAB_HP_FRAC;
+  }
+  return true;
 }
 
 function realPropCenter(prop) {
@@ -107,7 +130,7 @@ export function dropHeldBreakable(fighter, game = null) {
 }
 
 /**
- * Grab nearest intact breakable map prop in range.
+ * Grab nearest intact breakable map prop (or ≤50% HP power crate) in range.
  * @returns {boolean}
  */
 export function tryGrabBreakable(fighter, game) {
@@ -119,9 +142,12 @@ export function tryGrabBreakable(fighter, game) {
   const cy = fighter.y + SIZE / 2;
   let best = null;
   let bestD = THROW_BREAKABLE_GRAB_RANGE;
-  for (const prop of game.props || []) {
-    if (!prop.breakable || prop.destroyed || prop.heldBy || prop.thrownInFlight) continue;
-    if (prop.powerCrate || prop.armorDummy) continue;
+  const candidates = [
+    ...(game.props || []),
+    ...(game.powerCrates || [])
+  ];
+  for (const prop of candidates) {
+    if (!canGrabBreakable(prop)) continue;
     const pc = realPropCenter(prop);
     const d = Math.hypot(pc.x - cx, pc.y - cy);
     if (d <= bestD) {
@@ -159,8 +185,9 @@ export function tryGrabBreakable(fighter, game) {
  * Shatter a prop at a world point and leave debris for reconquer-at-hit.
  * Snaps the prop slot onto a valid stand surface (same checks as armor dummies)
  * near the impact so rebuild doesn't float mid-air.
+ * @param {*} attacker fighter credited for power-crate loot on kill
  */
-export function shatterBreakableAt(prop, game, impactX, impactY) {
+export function shatterBreakableAt(prop, game, impactX, impactY, attacker = null) {
   if (!prop || !game) return false;
   restoreFullDimensions(prop);
   prop.thrownInFlight = false;
@@ -183,6 +210,17 @@ export function shatterBreakableAt(prop, game, impactX, impactY) {
   prop.x = targetX - prop.w / 2;
   prop.y = targetY - prop.h / 2;
   syncCanopy(prop);
+
+  if (prop.powerCrate || prop.kind === "powerCrate") {
+    if (prop.destroyed || prop.hp <= 0) {
+      prop.destroyed = false;
+      prop.hp = 1;
+      prop.groundDebrisDropped = false;
+    }
+    const amount = Math.max(1, prop.hp || prop.maxHp || 1);
+    if (!damagePowerCrateFn) return false;
+    return damagePowerCrateFn(prop, amount, attacker, game, impactX, impactY);
+  }
 
   // Ensure destroy path runs even if already low HP.
   if (prop.destroyed || prop.hp <= 0) {
@@ -295,7 +333,7 @@ export function stepThrownBreakables(game, dt, onFighterHit = null) {
       if (enemy && typeof onFighterHit === "function") {
         onFighterHit(enemy, thrown.owner, thrown.damage, Math.atan2(thrown.vy, thrown.vx), game);
       }
-      shatterBreakableAt(prop, game, ix, iy);
+      shatterBreakableAt(prop, game, ix, iy, thrown.owner);
       thrown.life = 0;
     };
 
@@ -311,12 +349,24 @@ export function stepThrownBreakables(game, dt, onFighterHit = null) {
     }
     if (impacted) continue;
 
-    for (const other of game.props || []) {
+    const solidTargets = [
+      ...(game.props || []),
+      ...(game.powerCrates || [])
+    ];
+    for (const other of solidTargets) {
       if (other === prop || other.destroyed || !other.breakable) continue;
-      if (other.heldBy || other.thrownInFlight) continue;
+      if (other.heldBy || other.thrownInFlight || other.forgeHidden) continue;
       if (!other.solid && !other.blocksProjectiles) continue;
       if (rectsOverlap(prop.x, prop.y, prop.w, prop.h, other.x, other.y, other.w, other.h)) {
-        damageProp(other, thrown.damage * 0.45, game, thrown.x, thrown.y);
+        if (other.powerCrate || other.kind === "powerCrate") {
+          if (damagePowerCrateFn) {
+            damagePowerCrateFn(
+              other, thrown.damage * 0.45, thrown.owner, game, thrown.x, thrown.y
+            );
+          }
+        } else {
+          damageProp(other, thrown.damage * 0.45, game, thrown.x, thrown.y);
+        }
         finish(thrown.x, thrown.y, null);
         impacted = true;
         break;

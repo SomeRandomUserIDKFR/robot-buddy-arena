@@ -883,7 +883,8 @@ export function createRenderer(canvas) {
       if (enemy && !visibleToTeam(game, player, fighter) && !fighter.buddy) continue;
       const held = fighter.heldProp;
       if (!held || held.destroyed) continue;
-      drawPropBody(held, 1);
+      if (held.powerCrate || held.kind === "powerCrate") drawMetalPowerCrate(held);
+      else drawPropBody(held, 1);
       if (held.canopy) drawCanopy(held, 0.85);
     }
     drawProps(game, 1, true);
@@ -1146,7 +1147,8 @@ export function createRenderer(canvas) {
     for (const thrown of game.thrownBreakables || []) {
       const prop = thrown?.prop;
       if (!prop || prop.destroyed) continue;
-      drawPropBody(prop, alpha);
+      if (prop.powerCrate || prop.kind === "powerCrate") drawMetalPowerCrate(prop);
+      else drawPropBody(prop, alpha);
       if (prop.canopy) drawCanopy(prop, alpha * 0.9);
     }
     context.globalAlpha = 1;
@@ -1322,6 +1324,8 @@ export function createRenderer(canvas) {
   function drawPowerCrates(game, player) {
     for (const crate of game.powerCrates || []) {
       if (crate.destroyed || crate.forgeHidden) continue;
+      // Held / in-flight crates are drawn with the thrower / thrown pass.
+      if (crate.heldBy || crate.thrownInFlight) continue;
       if (!crateVisibleToTeam(game, player, crate)) continue;
       drawMetalPowerCrate(crate);
     }

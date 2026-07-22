@@ -3,10 +3,16 @@ import { applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID, selectWeaponSlot } from "./e
 import { createMapRuntime } from "./maps.js";
 import { damageProp } from "./maps.js";
 import {
-  attackThrowBreakable, dropHeldBreakable, isThrowBreakable, shatterBreakableAt,
+  createPowerCrate, damagePowerCrate, POWER_CRATE_HP
+} from "./powerups.js";
+import {
+  attackThrowBreakable, bindThrowBreakablePowerCrateDamager, canGrabBreakable,
+  dropHeldBreakable, isThrowBreakable, shatterBreakableAt,
   stepThrownBreakables, THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID,
   throwHeldBreakable, tickThrowBreakable, tryGrabBreakable
 } from "./throw-breakable.js";
+
+bindThrowBreakablePowerCrateDamager(damagePowerCrate);
 
 assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].slot, "secondaryWeapon");
 assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].throwBreakable, true);
@@ -206,6 +212,99 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   const cx = crate.x + crate.w / 2;
   assert.ok(cx >= ledge.x + crate.w / 2 - 0.5);
   assert.ok(cx <= ledge.x + ledge.w - crate.w / 2 + 0.5);
+}
+
+// Power crates: only grabbable at ≤50% HP; throw awards loot to thrower.
+{
+  const full = createPowerCrate({ x: 500, y: 400 }, "yard", "industrial", "pc-full");
+  assert.equal(canGrabBreakable(full), false, "full HP metal box locked");
+  full.hp = POWER_CRATE_HP * 0.5;
+  assert.equal(canGrabBreakable(full), true, "exactly 50% is grabbable");
+  full.hp = POWER_CRATE_HP * 0.5 - 1;
+  assert.equal(canGrabBreakable(full), true, "below 50% stays grabbable");
+
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  fighter.x = full.x - 20;
+  fighter.y = full.y;
+  fighter.aim = 0;
+  fighter.hp = 200;
+  fighter.maxHp = 500;
+  selectWeaponSlot(fighter, "secondaryWeapon");
+
+  const game = {
+    props: [],
+    powerCrates: [full],
+    platforms: [{ x: 0, y: 420, w: 800, h: 40 }],
+    fighters: [fighter],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: [],
+    powerCrateState: { pending: [], spawnIndex: 0, nextSpawnCheck: 99 },
+    elapsed: 0,
+    mapId: "yard",
+    theme: "industrial"
+  };
+
+  assert.ok(tryGrabBreakable(fighter, game));
+  assert.equal(fighter.heldProp, full);
+  assert.equal(full.heldBy, fighter);
+  assert.equal(full.solid, false);
+
+  assert.ok(throwHeldBreakable(fighter, game));
+  assert.equal(game.thrownBreakables.length, 1);
+  const thrown = game.thrownBreakables[0];
+  thrown.x = 520;
+  thrown.y = 200;
+  thrown.vx = 0;
+  thrown.vy = 800;
+  // Platform just under the projectile (same geometry as cover-throw test).
+  game.platforms = [{ x: 400, y: 220, w: 200, h: 20 }];
+  stepThrownBreakables(game, 1 / 30, () => {});
+
+  assert.equal(game.thrownBreakables.length, 0);
+  assert.ok(full.destroyed);
+  assert.equal(full.lastDamager, fighter);
+  assert.ok(full.lastAward, "thrower receives power-up on shatter");
+  assert.ok(game.groundDebris.some((p) => p.sourceType === "powerCrate"));
+}
+
+// Full-HP power crate is ignored even when closer than cover.
+{
+  const cover = {
+    kind: "barrel",
+    breakable: true,
+    solid: true,
+    destroyed: false,
+    x: 240,
+    y: 300,
+    w: 34,
+    h: 48,
+    hp: 40,
+    maxHp: 40
+  };
+  const metal = createPowerCrate({ x: 200, y: 340 }, "yard", "industrial", "pc-near");
+  assert.equal(metal.hp, POWER_CRATE_HP);
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  fighter.x = 190;
+  fighter.y = 300;
+  fighter.aim = 0;
+  selectWeaponSlot(fighter, "secondaryWeapon");
+  const game = {
+    props: [cover],
+    powerCrates: [metal],
+    platforms: [],
+    fighters: [fighter],
+    effects: [],
+    groundDebris: []
+  };
+  assert.ok(tryGrabBreakable(fighter, game));
+  assert.equal(fighter.heldProp, cover, "skips full-HP power crate for cover");
 }
 
 console.log("throw-breakable.test.js passed.");

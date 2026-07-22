@@ -18,9 +18,12 @@ import {
   powerCrateBlockers, tryCounterSlash
 } from "./powerups.js";
 import {
-  attackThrowBreakable, isThrowBreakable, stepThrownBreakables
+  attackThrowBreakable, bindThrowBreakablePowerCrateDamager, isThrowBreakable,
+  stepThrownBreakables
 } from "./throw-breakable.js";
 import { angleDiff, clamp, dist, lerp, segmentHitsBox } from "./utils.js";
+
+bindThrowBreakablePowerCrateDamager(damagePowerCrate);
 
 function landableSurfaces(game) {
   return [

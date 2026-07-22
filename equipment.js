@@ -327,7 +327,7 @@ export const GEAR = [
     THROW_BREAKABLE_ID,
     "secondaryWeapon",
     "Throw Breakable",
-    "Grab any breakable cover (click), hold it in hand (enemies can still damage it), then click again to throw. OK impact damage; shatters into debris at the hit — reconquer rebuilds there.",
+    "Grab any breakable cover (click), hold it in hand (enemies can still damage it), then click again to throw. Metal power crates are grabbable only at ≤50% HP. OK impact damage; shatters into debris at the hit — reconquer rebuilds there.",
     {
       damage: THROW_BREAKABLE_DAMAGE / 40,
       fireRate: 90 / 150,
