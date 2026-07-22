@@ -180,24 +180,26 @@ function assertWeaponStatsMatch(a, b) {
   for (let i = 0; i < 30; i++) tickNanotech(sniper, 0.05);
   assert.equal(sniper.nanobotWeapon, 0);
   assert.equal(sniper.nanotechWeaponAbsorbing, false);
-  assert.ok(sniper.nanobotFree >= freeBefore - 20 + 175);
+  assert.ok(sniper.nanobotFree + 1e-6 >= freeBefore - 20 + 175);
 
-  // Slow regen only with weapon absorbed and 2s since last hit.
+  // Slow regen while gun can stay formed — blocked while firing or recently hit.
   fighter.nanobotArmor = 40;
   fighter.nanobotFree = 100;
   fighter.nanobotWeapon = 100;
   fighter.nanotechHitCooldown = 0;
+  fighter.attackCd = 0.5;
   const blockedBefore = fighter.nanobotFree;
-  tickNanotech(fighter, 2);
-  assert.equal(fighter.nanobotFree, blockedBefore, "no regen while weapon formed");
+  tickNanotech(fighter, 0.4);
+  assert.equal(fighter.nanobotFree, blockedBefore, "no regen while attackCd active");
 
-  fighter.nanobotWeapon = 0;
+  fighter.attackCd = 0;
   fighter.nanotechHitCooldown = NANOTECH_REGEN_HIT_DELAY;
   tickNanotech(fighter, 1);
   assert.equal(fighter.nanobotFree, blockedBefore, "no regen during hit lockout");
   tickNanotech(fighter, 1.05);
-  assert.ok(fighter.nanobotFree > blockedBefore, "regen after absorb + 2s clear");
+  assert.ok(fighter.nanobotFree > blockedBefore, "regen when idle + 2s clear");
   assert.equal(fighter.nanobotArmor, 40);
+  assert.equal(fighter.nanobotWeapon, 100, "formed gun does not block regen");
 }
 
 // Incomplete sword slash bleeds 2% of full bot cost.

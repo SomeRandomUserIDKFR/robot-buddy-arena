@@ -270,7 +270,7 @@ export const NANOTECH_ARMOR_PRESS = 100;
 /** Seconds of F held before tap becomes recall-hold. */
 export const NANOTECH_F_HOLD_THRESHOLD = 0.18;
 export const NANOTECH_SLOW_REGEN = 55;
-/** Free-bot regen only after this long without taking a hit, and only while weapon is absorbed. */
+/** Free-bot regen only after this long without taking a hit, and only while not firing. */
 export const NANOTECH_REGEN_HIT_DELAY = 2;
 export const NANOTECH_BOTS_PER_HP = 2;
 export const NANOTECH_ARMOR_BOT_CAP = 500;
@@ -924,8 +924,9 @@ export function tickNanotech(fighter, dt) {
     armor -= flow;
     free += flow;
   } else if (free + armor + weapon < max) {
-    // Rebuild destroyed bots only while weapon is put away and out of combat.
-    const canRegen = weapon <= 0 && (fighter.nanotechHitCooldown || 0) <= 0;
+    // Rebuild destroyed bots while idle (not firing) and out of combat.
+    const canRegen = (fighter.nanotechHitCooldown || 0) <= 0
+      && (fighter.attackCd || 0) <= 0;
     if (canRegen) {
       const room = Math.max(0, max - free - armor - weapon);
       const gain = Math.min(room, NANOTECH_SLOW_REGEN * dt);
