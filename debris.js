@@ -905,6 +905,56 @@ function removeSourcePieces(game, sourceId) {
   game.groundDebris = (game.groundDebris || []).filter((p) => p.sourceId !== sourceId);
 }
 
+/**
+ * Permanently consume a debris source group (no reconquer / forge / dummy rebuild).
+ * @returns {number} pieces removed
+ */
+export function consumeDebrisSource(game, sourceId) {
+  if (!game || !sourceId) return 0;
+  const before = (game.groundDebris || []).length;
+  removeSourcePieces(game, sourceId);
+  const removed = before - (game.groundDebris || []).length;
+  game.reconquerQueue = (game.reconquerQueue || []).filter(
+    (entry) => entry.sourceId !== sourceId
+  );
+  game.forgeCasts = (game.forgeCasts || []).filter(
+    (forge) => forge.sourceId !== sourceId
+  );
+  game.armorDummyBuilds = (game.armorDummyBuilds || []).filter(
+    (build) => build.sourceId !== sourceId
+  );
+  return removed;
+}
+
+/**
+ * Vacuum nearby debris groups into a sink. Whole sourceIds are consumed so
+ * reconquer cannot rebuild from leftovers.
+ * @returns {{ pieces: number, sources: number }}
+ */
+export function vacuumNearbyDebris(game, x, y, radius) {
+  const pieces = game?.groundDebris || [];
+  if (!pieces.length || !(radius > 0)) return { pieces: 0, sources: 0 };
+  const r2 = radius * radius;
+  const hitIds = new Set();
+  for (const piece of pieces) {
+    if (!piece.sourceId || piece.despawnMode === "gone") continue;
+    // Skip scraps already committed to forge / dummy / jigsaw home.
+    if (
+      piece.despawnMode === "forge-ingest"
+      || piece.despawnMode === "build-dummy-melt"
+      || piece.despawnMode === "reconquer-home"
+    ) continue;
+    const dx = piece.x - x;
+    const dy = piece.y - y;
+    if (dx * dx + dy * dy <= r2) hitIds.add(piece.sourceId);
+  }
+  let removed = 0;
+  for (const sourceId of hitIds) {
+    removed += consumeDebrisSource(game, sourceId);
+  }
+  return { pieces: removed, sources: hitIds.size };
+}
+
 /** Restore a destroyed map prop in place. */
 export function restoreMapProp(prop) {
   if (!prop) return false;

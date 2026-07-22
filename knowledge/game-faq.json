@@ -35,7 +35,7 @@
         "keyboard controls",
         "what buttons do I use"
       ],
-      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
+      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. 1 and 2 (or mouse wheel) swap between your primary weapon and secondary when a secondary is equipped. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
     },
     {
       "id": "controls-retractable-armor",
@@ -442,11 +442,25 @@
         "loadout slots",
         "armor helmet weapon jetpack"
       ],
-      "answer": "Five slots: body armor, helmet, weapon, jetpack, and shield. Starters include ten free items (two per slot, including No Shield). Every piece is a tradeoff, not a straight power level."
+      "answer": "Six slots: body armor, helmet, weapon, secondary, jetpack, and shield. Starters include No Secondary plus two free items for most other slots (including No Shield). Every piece is a tradeoff, not a straight power level. Press 1/2 or scroll to swap primary and secondary in a match."
+    },
+    {
+      "id": "equipment-material-consumer",
+      "tags": ["equipment", "nanotech", "secondary", "material consumer", "debris", "sword"],
+      "questions": [
+        "what is material consumer",
+        "material consumer nanotech",
+        "secondary weapon",
+        "how do I vacuum debris",
+        "debris into nanobots",
+        "how do I swap secondary weapon",
+        "1 and 2 weapon swap"
+      ],
+      "answer": "Material Consumer is a secondary-slot nanotech tool-sword. Equip it in the Secondary bay, then press 2 (or scroll) to draw it; 1 returns to your primary. While active it vacuums nearby debris into free nanobots (as if they regenerated, still capped by your pool), and those scraps cannot reconquer. It adds 120 bots to the shared nanotech pool and swings as a physical saber — no E form step."
     },
     {
       "id": "equipment-nanotech",
-      "tags": ["equipment", "nanotech", "nanobot", "channel", "f", "e", "armor"],
+      "tags": ["equipment", "nanotech", "nanobot", "channel", "armor"],
       "questions": [
         "what is nanotech gear",
         "how does nanotech work",
@@ -458,7 +472,7 @@
         "nanotech reserve",
         "partial form sword"
       ],
-      "answer": "Nanotech gear shares one bot reserve (sum of each piece's nanobot cost). Press E to form your nanotech weapon from free bots — sword 100, rifle gun-body 150 (+30 pool ammo), sniper gun-body 175 (+20 pool ammo). Press E again while formed to absorb only the gun/sword body back into free reserve (nanoparticle drain). Formed nanotech weapons (and Adaptive bodies) deal +25% damage vs their dedicated counterparts. Partial form is allowed: damage scales with form %. Incomplete swords lose 2% of their bot cost on each successful fighter slash. Nanotech guns withdraw ammo from free reserve — rifle 2/shot, sniper 20/shot — and cannot fire without enough free bots; the gun body stays formed until you absorb it. Tap F with Nanotech Chestplate to loan +100 free bots into the armor bar (2 bots = 1 HP, cap 500 bots / 250 HP). Hold F to return armor bots to free reserve at 50/s. Destroyed bots from armor/sword losses only regen after 2s without being hit. Gun ammo-bonus bots (rifle +30, sniper +20) refill even while hit — only holding/firing stops that ammo regen. Chestplate adds 750 pool bots. F never steals bots already in the weapon. Nanotech Reserve adds a large tank but slows you 5%. With the chestplate, F channels instead of toggling Retractable Armor."
+      "answer": "Nanotech gear shares one bot reserve (sum of each piece's nanobot cost, including Material Consumer's 120). Press E to form your nanotech weapon from free bots — sword 100, rifle gun-body 150 (+30 pool ammo), sniper gun-body 175 (+20 pool ammo). Press E again while formed to absorb only the gun/sword body back into free reserve (nanoparticle drain). Formed nanotech weapons (and Adaptive bodies) deal +25% damage vs their dedicated counterparts. Partial form is allowed: damage scales with form %. Incomplete swords lose 2% of their bot cost on each successful fighter slash. Nanotech guns withdraw ammo from free reserve — rifle 2/shot, sniper 20/shot — and cannot fire without enough free bots; the gun body stays formed until you absorb it. Tap F with Nanotech Chestplate to loan +100 free bots into the armor bar (2 bots = 1 HP, cap 500 bots / 250 HP). Hold F to return armor bots to free reserve at 50/s. Destroyed bots from armor/sword losses only regen after 2s without being hit. Gun ammo-bonus bots (rifle +30, sniper +20) refill even while hit — only holding/firing stops that ammo regen. Chestplate adds 750 pool bots. F never steals bots already in the weapon. Nanotech Reserve adds a large tank but slows you 5%. Material Consumer stays physical (no form) and converts vacuumed debris into free bots. With the chestplate, F channels instead of toggling Retractable Armor."
     },
     {
       "id": "equipment-shields",

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { DEFAULT_PROFILE } from "./config.js";
 import {
-  applyLoadout, awardConquest, DEFAULT_LOADOUT, effectiveStats, ensureEconomyProfile,
-  ensureEquipmentProfile, equipOwned, GEAR, GEAR_BY_ID, purchaseGear, rankingLossAmount,
-  rankingWinGain, RANKING_FLOOR, setBuddyMode, SLOT_ORDER, STARTER_GEAR, STARTING_CYBER,
-  STARTING_RANKING, suggestBuddyLoadout, trainerLoadout, weaponKind
+  applyLoadout, awardConquest, cycleWeaponSlot, DEFAULT_LOADOUT, effectiveStats,
+  ensureEconomyProfile, ensureEquipmentProfile, equipOwned, GEAR, GEAR_BY_ID,
+  MATERIAL_CONSUMER_ID, nanotechPoolCapacity, NO_SECONDARY_ID, purchaseGear,
+  rankingLossAmount, rankingWinGain, RANKING_FLOOR, selectWeaponSlot, setBuddyMode,
+  SLOT_ORDER, STARTER_GEAR, STARTING_CYBER, STARTING_RANKING, suggestBuddyLoadout,
+  trainerLoadout, weaponKind
 } from "./equipment.js";
 
 const clone = (value) => structuredClone(value);
@@ -28,6 +30,40 @@ const clone = (value) => structuredClone(value);
   assert.equal(eliteTrainer.weapon, "heavy-saber");
   assert.equal(eliteFollower.weapon, "marksman-rifle");
   assert.equal(eliteTrainer.body, "bulwark-frame");
+}
+
+// Secondary slot + Material Consumer: normalize, pool, and 1/2 swap.
+{
+  assert.ok(SLOT_ORDER.includes("secondaryWeapon"));
+  assert.ok(STARTER_GEAR.includes(NO_SECONDARY_ID));
+  assert.equal(DEFAULT_LOADOUT.secondaryWeapon, NO_SECONDARY_ID);
+  assert.equal(GEAR_BY_ID[MATERIAL_CONSUMER_ID].slot, "secondaryWeapon");
+  assert.equal(GEAR_BY_ID[MATERIAL_CONSUMER_ID].materialConsumer, true);
+  assert.equal(weaponKind(MATERIAL_CONSUMER_ID), "saber");
+
+  const profile = clone(DEFAULT_PROFILE);
+  ensureEquipmentProfile(profile, profile);
+  assert.equal(profile.equipment.player.secondaryWeapon, NO_SECONDARY_ID);
+  profile.equipment.owned.push(MATERIAL_CONSUMER_ID);
+  assert.ok(equipOwned(profile, "player", "secondaryWeapon", MATERIAL_CONSUMER_ID));
+  assert.equal(profile.equipment.player.secondaryWeapon, MATERIAL_CONSUMER_ID);
+
+  const fighter = applyLoadout({}, profile.equipment.player);
+  assert.equal(fighter.activeWeaponSlot, "weapon");
+  assert.equal(fighter.weaponId, "pulse-rifle");
+  assert.equal(fighter.materialConsumer, false);
+  assert.equal(nanotechPoolCapacity(fighter.loadout), 120);
+  assert.equal(fighter.nanobotMax, 120);
+  assert.ok(selectWeaponSlot(fighter, "secondaryWeapon"));
+  assert.equal(fighter.weaponId, MATERIAL_CONSUMER_ID);
+  assert.equal(fighter.activeWeaponSlot, "secondaryWeapon");
+  assert.ok(cycleWeaponSlot(fighter));
+  assert.equal(fighter.weaponId, "pulse-rifle");
+  assert.equal(selectWeaponSlot(fighter, "secondaryWeapon"), true);
+  // No secondary equipped → swap is a no-op.
+  const bare = applyLoadout({}, DEFAULT_LOADOUT);
+  assert.equal(cycleWeaponSlot(bare), false);
+  assert.equal(selectWeaponSlot(bare, "secondaryWeapon"), false);
 }
 
 // Catalog modifiers combine into the effective fighter, not just the menu.
@@ -54,7 +90,7 @@ const clone = (value) => structuredClone(value);
   const profile = clone(DEFAULT_PROFILE);
   ensureEquipmentProfile(profile, profile);
   profile.equipment.owned = [
-    "field-frame", "survey-visor", "pulse-rifle", "vector-pack", "no-shield"
+    "field-frame", "survey-visor", "pulse-rifle", "vector-pack", "no-shield", NO_SECONDARY_ID
   ];
   const suggestion = suggestBuddyLoadout(profile);
   assert.ok(SLOT_ORDER.every((slot) => profile.equipment.owned.includes(suggestion.loadout[slot])));
@@ -241,13 +277,18 @@ const clone = (value) => structuredClone(value);
   assert.equal(equipOwned(profile, "buddy", "body", "reactive-frame"), false);
 }
 
-// Every slot has four choices and every weapon variant keeps a known base mechanic.
+// Every slot has enough choices; every primary weapon keeps a known base mechanic.
 {
   for (const slot of SLOT_ORDER) {
-    assert.ok(GEAR.filter((gear) => gear.slot === slot).length >= 4);
+    const min = slot === "secondaryWeapon" ? 2 : 4;
+    assert.ok(
+      GEAR.filter((gear) => gear.slot === slot).length >= min,
+      `${slot} should have >= ${min} options`
+    );
   }
   assert.ok(STARTER_GEAR.includes("no-shield"));
   assert.ok(STARTER_GEAR.includes("light-buckler"));
+  assert.ok(STARTER_GEAR.includes(NO_SECONDARY_ID));
   for (const gear of GEAR.filter((item) => item.slot === "weapon")) {
     const loadout = { ...DEFAULT_LOADOUT, weapon: gear.id };
     const fighter = applyLoadout({}, loadout);

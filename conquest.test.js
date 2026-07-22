@@ -94,7 +94,7 @@ function seeded(seq) {
   assert.equal(encounter.training, "Green");
   assert.ok(encounter.power > 0);
   assert.equal(estimatePower(encounter, encounter.powerJitter), encounter.power);
-  assert.equal(loadoutSummary(encounter.trainer.loadout).length, 5);
+  assert.equal(loadoutSummary(encounter.trainer.loadout).length, 6);
   assert.ok(encounter.colorPair?.id);
   assert.equal(encounter.trainer.color, encounter.colorPair.trainer);
   assert.equal(encounter.follower.color, encounter.colorPair.follower);

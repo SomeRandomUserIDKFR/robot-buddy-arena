@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import {
-  ARMOR_DUMMY_COOL_DURATION, buildPropJigsaw, damageArmorDummy,
+  ARMOR_DUMMY_COOL_DURATION, buildPropJigsaw, consumeDebrisSource, damageArmorDummy,
   forgeCastColor, FORGE_PHASE_DURATIONS, NON_ARMOR_DEBRIS_LIFE, pickNearbyRestoreProp,
   PROP_DEBRIS_COLORS, pullSpawnTowardOrigin, RECONQUER_BONUS_INTERVAL, RECONQUER_NEAR_RANGE,
   restoreMapProp, spawnBrokenArmorDebris, spawnPropDebris, tickGroundDebris,
-  tryReconquerAtSpawn
+  tryReconquerAtSpawn, vacuumNearbyDebris
 } from "./debris.js";
 import { Fighter } from "./combat.js";
-import { applyLoadout, beginRetractableMorph, DEFAULT_LOADOUT, tickRetractableArmor, RETRACTABLE_MORPH_DURATION } from "./equipment.js";
+import {
+  applyLoadout, beginRetractableMorph, DEFAULT_LOADOUT, MATERIAL_CONSUMER_BOTS_PER_PIECE,
+  MATERIAL_CONSUMER_ID, selectWeaponSlot, tickMaterialConsumerVacuum, tickRetractableArmor,
+  RETRACTABLE_MORPH_DURATION
+} from "./equipment.js";
 import { createMapRuntime, damageProp } from "./maps.js";
 import { createPowerCrate } from "./powerups.js";
 import {
@@ -507,5 +511,75 @@ function pointNear(spot, origin) {
 }
 
 assert.equal(restoreMapProp(null), false);
+
+// Vacuum consumes whole source groups and clears reconquer (no rebuild leftovers).
+{
+  const game = {
+    groundDebris: [
+      { x: 10, y: 10, sourceId: "vac-a", despawnMode: null },
+      { x: 12, y: 12, sourceId: "vac-a", despawnMode: null },
+      { x: 500, y: 500, sourceId: "vac-far", despawnMode: null }
+    ],
+    reconquerQueue: [
+      { sourceId: "vac-a", sourceKind: "crate" },
+      { sourceId: "vac-far", sourceKind: "crate" }
+    ],
+    forgeCasts: [],
+    armorDummyBuilds: []
+  };
+  const result = vacuumNearbyDebris(game, 10, 10, 40);
+  assert.equal(result.sources, 1);
+  assert.equal(result.pieces, 2);
+  assert.equal(game.groundDebris.length, 1);
+  assert.equal(game.groundDebris[0].sourceId, "vac-far");
+  assert.equal(game.reconquerQueue.length, 1);
+  assert.equal(game.reconquerQueue[0].sourceId, "vac-far");
+  assert.equal(consumeDebrisSource(game, "vac-far"), 1);
+  assert.equal(game.groundDebris.length, 0);
+  assert.equal(game.reconquerQueue.length, 0);
+}
+
+// Material Consumer turns vacuumed scraps into free bots (capped by pool room).
+{
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: MATERIAL_CONSUMER_ID,
+    body: "nanotech-chestplate"
+  });
+  fighter.x = 100;
+  fighter.y = 200;
+  assert.ok(selectWeaponSlot(fighter, "secondaryWeapon"));
+  assert.equal(fighter.weaponId, MATERIAL_CONSUMER_ID);
+  assert.equal(fighter.materialConsumer, true);
+  assert.equal(fighter.weapon, "saber");
+  // Pool starts full; vacuum only fills missing bots (same cap as regen).
+  fighter.nanobotFree = fighter.nanobotMax - 50;
+  const freeBefore = fighter.nanobotFree;
+  const pieces = 3;
+  const game = {
+    groundDebris: Array.from({ length: pieces }, (_, i) => ({
+      x: fighter.x + 20 + i, y: fighter.y + 20, sourceId: "mc-src", despawnMode: null
+    })),
+    reconquerQueue: [{ sourceId: "mc-src" }],
+    forgeCasts: [],
+    armorDummyBuilds: [],
+    effects: []
+  };
+  const gained = tickMaterialConsumerVacuum(fighter, game, 1 / 60);
+  assert.equal(gained, pieces * MATERIAL_CONSUMER_BOTS_PER_PIECE);
+  assert.equal(fighter.nanobotFree, freeBefore + gained);
+  assert.equal(game.groundDebris.length, 0);
+  assert.equal(game.reconquerQueue.length, 0);
+
+  // Full pool: leave debris alone.
+  fighter.nanobotFree = fighter.nanobotMax;
+  fighter.nanobotArmor = 0;
+  fighter.nanobotWeapon = 0;
+  game.groundDebris = [{ x: fighter.x + 10, y: fighter.y + 10, sourceId: "mc-full", despawnMode: null }];
+  game.reconquerQueue = [{ sourceId: "mc-full" }];
+  assert.equal(tickMaterialConsumerVacuum(fighter, game, 1 / 60), 0);
+  assert.equal(game.groundDebris.length, 1);
+  assert.equal(game.reconquerQueue.length, 1);
+}
 
 console.log("debris.test.js passed.");

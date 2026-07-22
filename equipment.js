@@ -1,5 +1,6 @@
-import { spawnBrokenArmorDebris } from "./debris.js";
+import { spawnBrokenArmorDebris, vacuumNearbyDebris } from "./debris.js";
 import { angleDiff } from "./utils.js";
+import { SIZE } from "./config.js";
 import {
   applyPerkModifiersToStats, CONQUEST_EXP, cyberWinMultiplier, ensureProgressionProfile,
   grantExp, normalizeEquippedPerk, perkCombatExtras
@@ -64,14 +65,22 @@ const shield = (id, name, tradeoff, stats, price) => item(
   }
 );
 
-export const SLOT_ORDER = ["body", "helmet", "weapon", "jetpack", "shield"];
+export const SLOT_ORDER = ["body", "helmet", "weapon", "secondaryWeapon", "jetpack", "shield"];
 export const SLOT_LABELS = {
   body: "Main Armor",
   helmet: "Helmet",
   weapon: "Weapon",
+  secondaryWeapon: "Secondary",
   jetpack: "Jetpack",
   shield: "Shield"
 };
+
+/** Material Consumer vacuum radius (world units). */
+export const MATERIAL_CONSUMER_VACUUM_RADIUS = 150;
+/** Free bots granted per vacuumed debris piece (still clamped by pool room). */
+export const MATERIAL_CONSUMER_BOTS_PER_PIECE = 4;
+export const MATERIAL_CONSUMER_ID = "material-consumer-nanotech";
+export const NO_SECONDARY_ID = "no-secondary";
 
 export const GEAR = [
   item("field-frame", "body", "Field Frame", "Balanced protection and mobility.", {}),
@@ -255,6 +264,43 @@ export const GEAR = [
     { price: 1000, nanotech: true, nanobotCost: 1000 }
   ),
 
+  // Secondary slot: empty default + Material Consumer (sword that eats debris → bots).
+  item(
+    NO_SECONDARY_ID,
+    "secondaryWeapon",
+    "No Secondary",
+    "Primary weapon only — press 1/2 or scroll to swap when a secondary is equipped.",
+    {},
+    { price: 0, baseKind: "gun" }
+  ),
+  item(
+    MATERIAL_CONSUMER_ID,
+    "secondaryWeapon",
+    "Material Consumer",
+    "Nanotech tool-sword. Vacuums nearby debris into free bots (no reconquer). Adds 120 pool bots. Swap with 1/2 or scroll.",
+    {
+      damage: (48 * NANOTECH_DAMAGE_MULT) / 40,
+      fireRate: 150 / 150,
+      range: 110 / 120
+    },
+    {
+      baseKind: "saber",
+      dps: (48 * NANOTECH_DAMAGE_MULT) * 150 / 60,
+      price: 220,
+      nanotech: true,
+      materialConsumer: true,
+      nanobotCost: 120,
+      nanobotFormCost: 0,
+      nanobotShotCost: 0,
+      weaponStats: {
+        kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+        sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+        movementMultiplier: 1.08, iframeMultiplier: 1.05,
+        baseDamage: 48 * NANOTECH_DAMAGE_MULT, rpm: 150, range: 110
+      }
+    }
+  ),
+
   item("vector-pack", "jetpack", "Vector Pack", "Balanced fuel, thrust, and recharge.", {}),
   item("sprinter-pack", "jetpack", "Sprinter Pack", "Hard thrust, smaller tank.",
     { fuel: .82, thrust: 1.2, recharge: 1.08 }),
@@ -322,12 +368,13 @@ export const GEAR_BY_ID = Object.fromEntries(GEAR.map((gear) => [gear.id, gear])
 export const STARTER_GEAR = [
   "field-frame", "scout-frame", "survey-visor", "wideband-array",
   "pulse-rifle", "arc-saber", "vector-pack", "sprinter-pack",
-  "no-shield", "light-buckler"
+  "no-shield", "light-buckler", NO_SECONDARY_ID
 ];
 export const DEFAULT_LOADOUT = {
   body: "field-frame",
   helmet: "survey-visor",
   weapon: "pulse-rifle",
+  secondaryWeapon: NO_SECONDARY_ID,
   jetpack: "vector-pack",
   shield: "no-shield"
 };
@@ -1091,6 +1138,189 @@ function clampNanotechPool(fighter) {
   fighter.nanobotFree = free;
 }
 
+/** Room left in the nanotech pool before hitting nanobotMax. */
+export function nanotechPoolRoom(fighter) {
+  if (!fighter) return 0;
+  return Math.max(
+    0,
+    (fighter.nanobotMax || 0)
+      - (fighter.nanobotFree || 0)
+      - (fighter.nanobotArmor || 0)
+      - (fighter.nanobotWeapon || 0)
+  );
+}
+
+/**
+ * Add free bots as if they regenerated — never exceeds nanobotMax.
+ * @returns {number} bots actually gained
+ */
+export function grantFreeNanobots(fighter, amount) {
+  if (!fighter || !(amount > 0) || !(fighter.nanobotMax > 0)) return 0;
+  const room = nanotechPoolRoom(fighter);
+  const gained = Math.min(amount, room);
+  if (gained <= 0) {
+    clampNanotechPool(fighter);
+    return 0;
+  }
+  fighter.nanobotFree = (fighter.nanobotFree || 0) + gained;
+  clampNanotechPool(fighter);
+  return gained;
+}
+
+export function isMaterialConsumer(fighterOrId) {
+  if (typeof fighterOrId === "string") return fighterOrId === MATERIAL_CONSUMER_ID;
+  return fighterOrId?.weaponId === MATERIAL_CONSUMER_ID
+    || fighterOrId?.materialConsumer === true;
+}
+
+export function hasSecondaryWeapon(fighter) {
+  const id = fighter?.loadout?.secondaryWeapon;
+  return !!id && id !== NO_SECONDARY_ID && !!GEAR_BY_ID[id];
+}
+
+/**
+ * Apply combat stats for a gear id without resetting HP / nanobot pools.
+ * Used for primary ↔ secondary swaps mid-match.
+ */
+export function applyActiveWeaponGear(fighter, gearId) {
+  if (!fighter) return false;
+  const gear = GEAR_BY_ID[gearId];
+  if (!gear || (gear.slot !== "weapon" && gear.slot !== "secondaryWeapon")) return false;
+  if (gear.id === NO_SECONDARY_ID) return false;
+
+  const perkCombat = fighter._modularPerkCombat
+    || fighter._adaptivePerkCombat
+    || perkCombatExtras(fighter.loadout?.perk);
+
+  // Spill formed nanotech body bots back to free when leaving a form weapon.
+  if ((fighter.nanobotWeapon || 0) > 0 && fighter.weaponId !== gear.id) {
+    fighter.nanobotFree = (fighter.nanobotFree || 0) + fighter.nanobotWeapon;
+    fighter.nanobotWeapon = 0;
+  }
+
+  fighter.weaponId = gear.id;
+  fighter.weapon = weaponKind(gear);
+  fighter.weaponStats = { ...weaponStats(gear) };
+  if (gear.weaponStats?.dropoff) {
+    fighter.weaponStats.dropoff = { ...gear.weaponStats.dropoff };
+  }
+  fighter.materialConsumer = !!gear.materialConsumer;
+  fighter.nanotechWeaponCost = gear.nanotech ? nanotechFormCostOf(gear) : 0;
+  fighter.nanobotShotCost = gear.nanotech ? Math.max(0, Number(gear.nanobotShotCost) || 0) : 0;
+  fighter.nanotechAmmoBonus = gear.nanotech ? nanotechAmmoBonusOf(gear) : 0;
+  fighter.nanotechAmmoDebt = Math.min(
+    fighter.nanotechAmmoDebt || 0,
+    fighter.nanotechAmmoBonus || 0
+  );
+
+  if (gear.id === ADAPTIVE_NANOTECH_ID) {
+    fighter.adaptiveNanotechWeapon = true;
+    fighter.adaptiveMode = fighter.adaptiveMode || "sword";
+    fighter._adaptivePerkCombat = perkCombat;
+    applyAdaptiveCombatStats(fighter, fighter.adaptiveMode);
+    syncAdaptiveNanotechCosts(fighter, fighter.adaptiveMode);
+  } else {
+    fighter.adaptiveNanotechWeapon = false;
+    fighter.adaptiveMode = null;
+    fighter.adaptiveMorphing = false;
+  }
+
+  if (gear.id === MODULAR_WEAPON_ID) {
+    fighter.modularWeapon = true;
+    fighter.modularMode = fighter.modularMode || "sword";
+    fighter._modularPerkCombat = perkCombat;
+    applyModularCombatStats(fighter, fighter.modularMode);
+  } else {
+    fighter.modularWeapon = false;
+    fighter.modularMode = null;
+    fighter.modularMorphing = false;
+  }
+
+  if (gear.id !== ADAPTIVE_NANOTECH_ID && gear.id !== MODULAR_WEAPON_ID) {
+    fighter.weaponDamage = (gear.modifiers?.damage || 1) * (perkCombat.damage || 1);
+    fighter.weaponFireRate = (gear.modifiers?.fireRate || 1) * (perkCombat.fireRate || 1);
+    fighter.weaponRange = gear.modifiers?.range || 1;
+    fighter.projectileSpeed = gear.modifiers?.projectileSpeed || 1;
+    fighter.weaponBaseDamage = fighter.weaponStats.baseDamage * (perkCombat.damage || 1);
+    fighter.weaponRpm = fighter.weaponStats.rpm * (perkCombat.fireRate || 1);
+    fighter.weaponReach = fighter.weaponStats.range;
+    fighter.weaponDropoff = fighter.weaponStats.dropoff || null;
+    fighter.aimSettleRequired = fighter.weaponStats.aimSettle || 0;
+    fighter.unsettledSpread = fighter.weaponStats.unsettledSpread || 0;
+    fighter.cameraLead = fighter.weaponStats.cameraLead || 0;
+    fighter.iframeMultiplier = (fighter.weaponStats.iframeMultiplier || 1)
+      * (perkCombat.iframe || 1);
+    fighter.directionalSightRange = Math.min(
+      2400,
+      fighter.weaponStats.range,
+      (fighter.sight || 820) + (fighter.weaponStats.sightExtension || 0)
+    );
+    fighter.sightHalfAngle = fighter.weaponStats.sightHalfAngle || 0;
+    const moveMult = fighter.weaponStats.movementMultiplier || 1;
+    const baseSpeed = fighter._retractableBaseMoveSpeed
+      || fighter._modularBaseMoveSpeed
+      || fighter._adaptiveBaseMoveSpeed
+      || fighter.moveSpeed
+      || 520;
+    fighter.moveSpeed = Math.min(520 * 1.4, Math.round(baseSpeed * moveMult));
+    fighter.acceleration = 1800 * (fighter.moveSpeed / 520);
+  }
+
+  if (fighter.nanotechWeaponCost > 0) {
+    tryFormNanotechWeapon(fighter);
+  }
+  clampNanotechPool(fighter);
+  fighter.attackCd = Math.max(fighter.attackCd || 0, 0.12);
+  return true;
+}
+
+/** Swap to primary (1) or secondary (2). Returns true if the active weapon changed. */
+export function selectWeaponSlot(fighter, slot) {
+  if (!fighter?.loadout) return false;
+  const target = slot === "secondaryWeapon" ? "secondaryWeapon" : "weapon";
+  if (target === "secondaryWeapon" && !hasSecondaryWeapon(fighter)) return false;
+  const gearId = fighter.loadout[target];
+  if (!gearId || gearId === NO_SECONDARY_ID) return false;
+  if (fighter.weaponId === gearId && fighter.activeWeaponSlot === target) return false;
+  const ok = applyActiveWeaponGear(fighter, gearId);
+  if (ok) fighter.activeWeaponSlot = target;
+  return ok;
+}
+
+/** Toggle primary ↔ secondary when a secondary is equipped. */
+export function cycleWeaponSlot(fighter) {
+  if (!hasSecondaryWeapon(fighter)) return false;
+  const next = fighter.activeWeaponSlot === "secondaryWeapon" ? "weapon" : "secondaryWeapon";
+  return selectWeaponSlot(fighter, next);
+}
+
+/**
+ * While Material Consumer is active, suck nearby debris into free nanobots.
+ * Vacuumed scraps are fully removed (reconquer cannot claim them).
+ * @returns {number} bots gained this tick
+ */
+export function tickMaterialConsumerVacuum(fighter, game, dt) {
+  if (!fighter || fighter.dead || !isMaterialConsumer(fighter)) return 0;
+  if (!(dt > 0) || !(fighter.nanobotMax > 0)) return 0;
+  // Leave scraps alone when the pool is already full (still capped normally).
+  if (nanotechPoolRoom(fighter) <= 0) return 0;
+  const cx = fighter.x + SIZE / 2;
+  const cy = fighter.y + SIZE / 2;
+  const result = vacuumNearbyDebris(game, cx, cy, MATERIAL_CONSUMER_VACUUM_RADIUS);
+  if (!(result.pieces > 0)) return 0;
+  const bots = result.pieces * MATERIAL_CONSUMER_BOTS_PER_PIECE;
+  const gained = grantFreeNanobots(fighter, bots);
+  if (result.pieces > 0 && game?.effects) {
+    game.effects.push({
+      type: "propHit",
+      x: cx,
+      y: cy,
+      life: 0.12
+    });
+  }
+  return gained;
+}
+
 /** Nanotech weapon melts when unformed — fully hidden near end of dissolve. */
 export function nanotechSwordHidden(fighter) {
   if (fighter?.weaponId !== "nanotech-sword") return false;
@@ -1418,9 +1648,11 @@ export function normalizeLoadout(loadout, owned = STARTER_GEAR, legacy = null) {
       id = legacyWeapon(id || legacy);
     }
     const gear = GEAR_BY_ID[id];
-    normalized[slot] = gear?.slot === slot && owned.includes(id)
-      ? id
-      : DEFAULT_LOADOUT[slot];
+    // Empty secondary is always valid (same idea as a vacant hands slot).
+    const allowed = gear?.slot === slot && (
+      owned.includes(id) || id === NO_SECONDARY_ID
+    );
+    normalized[slot] = allowed ? id : DEFAULT_LOADOUT[slot];
   }
   return normalized;
 }
@@ -1429,6 +1661,7 @@ export function ensureEquipmentProfile(profile, saved = profile) {
   const owned = Array.from(new Set([
     ...STARTER_GEAR,
     "no-shield",
+    NO_SECONDARY_ID,
     ...(Array.isArray(saved?.equipment?.owned) ? saved.equipment.owned : [])
   ])).filter((id) => !!GEAR_BY_ID[id]);
   const oldPlayer = saved?.playerWeapon || saved?.equipment?.playerWeapon;
@@ -1601,6 +1834,7 @@ function pickOwned(profileOrEquipment, slot, preferences = []) {
 export function suggestBuddyLoadout(profile) {
   const equipment = profile.equipment;
   const style = evidenceStyle(profile, equipment.player);
+  const secondaryPrefs = [NO_SECONDARY_ID, MATERIAL_CONSUMER_ID];
   const preferences = style === "ranged"
     ? {
       body: ["field-frame", "bulwark-frame", "scout-frame", "retractable-armor", "nanotech-chestplate"],
@@ -1610,6 +1844,7 @@ export function suggestBuddyLoadout(profile) {
         "nanotech-sniper", "strong-sniper", "marksman-rifle", "nanotech-rifle", "pulse-rifle",
         "gattler", "burst-carbine", "mechanical-modularity", "arc-saber", "duelist-blade"
       ],
+      secondaryWeapon: secondaryPrefs,
       jetpack: [
         "endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack", "nanotech-reserve"
       ],
@@ -1626,6 +1861,7 @@ export function suggestBuddyLoadout(profile) {
           "duelist-blade", "mechanical-modularity",
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
+        secondaryWeapon: [MATERIAL_CONSUMER_ID, NO_SECONDARY_ID],
         jetpack: [
           "sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack", "nanotech-reserve"
         ],
@@ -1641,6 +1877,7 @@ export function suggestBuddyLoadout(profile) {
           "quick-fire-sniper", "classic-sniper", "nanotech-sniper", "nanotech-rifle",
           "nanotech-sword", "strong-sniper", "daggers"
         ],
+        secondaryWeapon: secondaryPrefs,
         jetpack: [
           "vector-pack", "sprinter-pack", "endurance-pack", "recycler-pack", "nanotech-reserve"
         ],
@@ -1716,9 +1953,11 @@ export function applyLoadout(fighter, loadout) {
     perk: loadout?.perk || null
   };
   fighter.perkId = loadout?.perk || null;
+  fighter.activeWeaponSlot = "weapon";
   fighter.weaponId = weapon.id;
   fighter.weapon = weaponKind(weapon);
   fighter.weaponStats = { ...weaponStats(weapon) };
+  fighter.materialConsumer = !!weapon.materialConsumer;
   fighter.coreMaxHp = stats.hp;
   fighter.coreHp = stats.hp;
   fighter.maxHp = stats.hp;
@@ -1786,6 +2025,8 @@ export function applyLoadout(fighter, loadout) {
     const gear = GEAR_BY_ID[fighter.loadout[slot]];
     return !!gear?.nanotech;
   });
+  // Matches primary start above; Material Consumer is swapped in via 1/2 / scroll.
+  fighter.materialConsumer = false;
   if (weapon.id === ADAPTIVE_NANOTECH_ID) {
     applyAdaptiveCombatStats(fighter, "sword");
     syncAdaptiveNanotechCosts(fighter, "sword");

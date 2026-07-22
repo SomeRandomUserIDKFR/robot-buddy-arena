@@ -35,6 +35,9 @@ const WEAPON_VISUALS = {
   "nanotech-sword": { length: 48, width: 5, gripOffset: 17, ally: "#5cffd8", enemy: "#ff58c8", buddy: "#48fff0" },
   "nanotech-rifle": { length: 32, width: 10, gripOffset: 18, ally: "#4ae8ff", enemy: "#e050c0", buddy: "#3af8ff" },
   "nanotech-sniper": { length: 54, width: 5, gripOffset: 17, ally: "#2ad0ff", enemy: "#d040b8", buddy: "#20e8ff" },
+  "material-consumer-nanotech": {
+    length: 44, width: 6, gripOffset: 17, ally: "#6cffb0", enemy: "#ff6aa8", buddy: "#58ffd0"
+  },
   // Legacy baseKind fallbacks
   gun: { length: 32, width: 10, gripOffset: 18, ally: "#6a8f9c", enemy: "#8a655c", buddy: "#5aa8b4" },
   saber: { length: 48, width: 5, gripOffset: 17, ally: "#70f3ff", enemy: "#ff8279", buddy: "#4df2ff" }

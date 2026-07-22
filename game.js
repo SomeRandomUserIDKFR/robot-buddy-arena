@@ -5,11 +5,11 @@ import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
   acceptSuggestion, applyLoadout, awardConquest, cycleAdaptiveMode, cycleModularMode,
-  equipOwned, hasNanotechChestplate, isAdaptiveNanotechWeapon, isModularWeapon,
-  NANOTECH_F_HOLD_THRESHOLD, pulseNanotechArmor,
-  purchaseGear, reconcileLoadoutsToOwned, setBuddyMode, setNanotechChanneling,
-  tryNanotechWeaponAction, toggleRetractableArmor, toggleShieldRaise,
-  trainerLoadout, weaponKind
+  cycleWeaponSlot, equipOwned, hasNanotechChestplate, isAdaptiveNanotechWeapon,
+  isModularWeapon, NANOTECH_F_HOLD_THRESHOLD, pulseNanotechArmor,
+  purchaseGear, reconcileLoadoutsToOwned, selectWeaponSlot, setBuddyMode,
+  setNanotechChanneling, tickMaterialConsumerVacuum, tryNanotechWeaponAction,
+  toggleRetractableArmor, toggleShieldRaise, trainerLoadout, weaponKind
 } from "./equipment.js";
 import { tickGroundDebris } from "./debris.js";
 import {
@@ -313,6 +313,9 @@ function update(dt) {
     }
   }
   tickGroundDebris(game, dt);
+  for (const fighter of game.fighters) {
+    tickMaterialConsumerVacuum(fighter, game, dt);
+  }
   for (const effect of game.effects) effect.life -= dt;
   for (const ping of game.pings) ping.life -= dt;
   for (const sample of game.beamReveals || []) sample.life -= dt;
@@ -386,6 +389,12 @@ function handleKeyDown(event) {
       cycleAdaptiveMode(player);
     }
   }
+  if (event.code === "Digit1" && !event.repeat) {
+    selectWeaponSlot(game.fighters[0], "weapon");
+  }
+  if (event.code === "Digit2" && !event.repeat) {
+    selectWeaponSlot(game.fighters[0], "secondaryWeapon");
+  }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
   if (event.code === "KeyG") {
     const point = screenToWorld(mouse.x, mouse.y);
@@ -404,7 +413,10 @@ function handleKeyDown(event) {
     }
     showPause(game.paused);
   }
-  if (["Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE", "KeyF", "KeyR"].includes(event.code)) {
+  if ([
+    "Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE", "KeyF", "KeyR",
+    "Digit1", "Digit2"
+  ].includes(event.code)) {
     event.preventDefault();
   }
 }
@@ -412,6 +424,12 @@ function handleKeyDown(event) {
 function handleKeyUp(event) {
   if (!game || game.over) return;
   // Nanotech channel release is handled by per-frame keys.KeyF sync in update().
+}
+
+function handleWheel(event) {
+  if (!game || game.paused || game.over) return;
+  event.preventDefault();
+  cycleWeaponSlot(game.fighters[0]);
 }
 
 function loop(now) {
@@ -422,7 +440,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-installInput(canvas, handleKeyDown, handleKeyUp);
+installInput(canvas, handleKeyDown, handleKeyUp, handleWheel);
 bindUi({
   start,
   openConquest,

@@ -1,7 +1,7 @@
 export const keys = Object.create(null);
 export const mouse = { x: 0, y: 0, down: false };
 
-export function installInput(canvas, onKeyDown, onKeyUp) {
+export function installInput(canvas, onKeyDown, onKeyUp, onWheel) {
   addEventListener("keydown", (event) => {
     keys[event.code] = true;
     onKeyDown?.(event);
@@ -26,4 +26,8 @@ export function installInput(canvas, onKeyDown, onKeyUp) {
     mouse.down = false;
   });
   canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  // Secondary weapon swap: capture so the page does not scroll while fighting.
+  if (onWheel) {
+    canvas.addEventListener("wheel", (event) => onWheel(event), { passive: false });
+  }
 }
