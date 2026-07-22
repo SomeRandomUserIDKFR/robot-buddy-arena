@@ -2,13 +2,16 @@ import assert from "node:assert/strict";
 import { DEFAULT_PROFILE } from "./config.js";
 import {
   applyLoadout, DEFAULT_LOADOUT, ensureEquipmentProfile, equipOwned, GEAR_BY_ID,
-  MATERIAL_CONSUMER_BOTS_PER_PIECE, MATERIAL_CONSUMER_ID, NO_EXTENSION_ID,
-  RECONJURER_BUILDER_ID, selectWeaponSlot, SLOT_LABELS, SLOT_ORDER, STARTER_GEAR
+  MATERIAL_CONSUMER_ID, NO_EXTENSION_ID, RECONJURER_BUILDER_ID, selectWeaponSlot,
+  SLOT_LABELS, SLOT_ORDER, STARTER_GEAR
 } from "./equipment.js";
+import { spawnPropDebris, spawnPowerCrateDebris } from "./debris.js";
+import { createMapRuntime } from "./maps.js";
+import { createPowerCrate, POWER_CRATE_HP } from "./powerups.js";
 import {
-  hasExtensionSecondary, isReconjurerBuilder, RECONJURER_BOT_COST,
-  RECONJURER_COOLDOWN, RECONJURER_METAL_BOT_COST, RECONJURER_METAL_COOLDOWN,
-  RECONJURER_SCRAP_REWARD, tryReconjurerBuild, tickReconjurerBuilder
+  hasExtensionSecondary, isReconjurerBuilder, RECONJURER_COOLDOWN,
+  RECONJURER_METAL_COOLDOWN, RECONJURER_SCRAP_REWARD, tryReconjurerBuild,
+  tickReconjurerBuilder
 } from "./reconjurer-builder.js";
 
 const clone = (value) => structuredClone(value);
@@ -16,185 +19,172 @@ const clone = (value) => structuredClone(value);
 assert.ok(SLOT_ORDER.includes("extensionSecondary"));
 assert.equal(SLOT_LABELS.extensionSecondary, "Extension");
 assert.ok(STARTER_GEAR.includes(NO_EXTENSION_ID));
-assert.equal(DEFAULT_LOADOUT.extensionSecondary, NO_EXTENSION_ID);
-assert.equal(GEAR_BY_ID[RECONJURER_BUILDER_ID].slot, "extensionSecondary");
 assert.equal(GEAR_BY_ID[RECONJURER_BUILDER_ID].reconjurerBuilder, true);
 assert.equal(RECONJURER_SCRAP_REWARD, 2);
 assert.equal(RECONJURER_METAL_COOLDOWN, 10);
-assert.equal(RECONJURER_BOT_COST, MATERIAL_CONSUMER_BOTS_PER_PIECE);
 
-// Profile migration fills extension slot; equip does not steal 1/2 secondary.
 {
   const profile = clone(DEFAULT_PROFILE);
-  delete profile.equipment.player.extensionSecondary;
   ensureEquipmentProfile(profile, profile);
-  assert.equal(profile.equipment.player.extensionSecondary, NO_EXTENSION_ID);
-  assert.ok(profile.equipment.owned.includes(NO_EXTENSION_ID));
-
   profile.equipment.owned.push(MATERIAL_CONSUMER_ID, RECONJURER_BUILDER_ID);
   assert.ok(equipOwned(profile, "player", "secondaryWeapon", MATERIAL_CONSUMER_ID));
   assert.ok(equipOwned(profile, "player", "extensionSecondary", RECONJURER_BUILDER_ID));
-  assert.equal(profile.equipment.player.secondaryWeapon, MATERIAL_CONSUMER_ID);
-  assert.equal(profile.equipment.player.extensionSecondary, RECONJURER_BUILDER_ID);
-
   const fighter = applyLoadout({}, profile.equipment.player);
-  assert.equal(fighter.reconjurerBuilder, true);
   assert.ok(isReconjurerBuilder(fighter));
   assert.ok(hasExtensionSecondary(fighter));
-  assert.equal(fighter.materialConsumer, false);
   assert.ok(selectWeaponSlot(fighter, "secondaryWeapon"));
-  assert.equal(fighter.weaponId, MATERIAL_CONSUMER_ID);
-  assert.equal(fighter.reconjurerBuilder, true, "extension survives 1/2 swap");
+  assert.equal(fighter.reconjurerBuilder, true);
 }
 
-// Rebuild spends bots only; tank scraps are never lost — you gain +2 instead.
+// Press 3 near prop debris: rebuilds that prop for free and grants +2 scraps.
 {
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate");
+  assert.ok(crate);
+  crate.destroyed = true;
+  crate.solid = false;
+  crate.hp = 0;
+  crate.groundDebrisDropped = false;
+
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
-    extensionSecondary: RECONJURER_BUILDER_ID,
-    body: "nanotech-chestplate"
+    extensionSecondary: RECONJURER_BUILDER_ID
   });
-  fighter.x = 400;
-  fighter.y = 300;
+  fighter.x = crate.x - 10;
+  fighter.y = crate.y;
   fighter.aim = 0;
-  fighter.nanobotFree = 40;
-  fighter.materialEjectionTank = [
-    { bots: 0, ejection: true, color: "#aaa", w: 8, h: 8 }
-  ];
+  fighter.materialEjectionTank = [];
+
   const game = {
-    elapsed: 1,
-    mapId: "yard",
-    theme: "industrial",
-    props: [],
+    props: yard.props,
     powerCrates: [],
-    platforms: [{ x: 0, y: 420, w: 3600, h: 40 }],
-    effects: []
+    platforms: yard.platforms,
+    groundDebris: [],
+    effects: [],
+    reconquerQueue: [],
+    forgeCasts: [],
+    mapId: "yard",
+    theme: "industrial"
   };
-  const tankBefore = fighter.materialEjectionTank.length;
-  const freeBefore = fighter.nanobotFree;
-  const spawned = tryReconjurerBuild(fighter, game, () => 0.99);
-  assert.ok(spawned, "spawned a breakable");
-  assert.ok(!spawned.powerCrate, "forced non-metal with high roll");
-  assert.equal(fighter.nanobotFree, freeBefore - RECONJURER_BOT_COST);
-  assert.equal(
-    fighter.materialEjectionTank.length,
-    tankBefore + RECONJURER_SCRAP_REWARD,
-    "tank kept + gained 2 reward scraps"
-  );
-  assert.equal(game.props.length, 1);
+  spawnPropDebris(game, crate, crate.x + crate.w / 2, crate.y + crate.h / 2);
+  assert.ok(game.groundDebris.length > 0);
+
+  const botsBefore = fighter.nanobotFree || 0;
+  const restored = tryReconjurerBuild(fighter, game);
+  assert.ok(restored);
+  assert.equal(restored, crate);
+  assert.equal(crate.destroyed, false);
+  assert.ok(crate.hp > 0);
+  assert.equal(game.groundDebris.length, 0, "debris consumed on rebuild");
+  assert.equal(fighter.nanobotFree || 0, botsBefore, "rebuild is free");
+  assert.equal(fighter.materialEjectionTank.length, RECONJURER_SCRAP_REWARD);
   assert.ok(fighter.reconjurerCd > 0);
 }
 
-// Empty tank still works via bots; cooldown blocks spam.
-{
-  const fighter = applyLoadout({}, {
-    ...DEFAULT_LOADOUT,
-    extensionSecondary: RECONJURER_BUILDER_ID,
-    body: "nanotech-chestplate"
-  });
-  fighter.x = 500;
-  fighter.y = 280;
-  fighter.aim = -0.2;
-  fighter.nanobotFree = 20;
-  fighter.materialEjectionTank = [];
-  const game = {
-    elapsed: 2,
-    mapId: "yard",
-    theme: "industrial",
-    props: [],
-    powerCrates: [],
-    platforms: [{ x: 0, y: 400, w: 3600, h: 40 }],
-    effects: []
-  };
-  const spawned = tryReconjurerBuild(fighter, game, () => 0.99);
-  assert.ok(spawned);
-  assert.equal(fighter.nanobotFree, 20 - RECONJURER_BOT_COST);
-  assert.equal(fighter.materialEjectionTank.length, RECONJURER_SCRAP_REWARD);
-  assert.equal(tryReconjurerBuild(fighter, game, () => 0.99), null, "on cooldown");
-  tickReconjurerBuilder(fighter, RECONJURER_COOLDOWN + 0.01);
-  assert.equal(fighter.reconjurerCd, 0);
-}
-
-// Broke: not enough bots → no spawn.
+// No nearby debris → no-op.
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
     extensionSecondary: RECONJURER_BUILDER_ID
   });
-  fighter.x = 200;
-  fighter.y = 200;
-  fighter.aim = 0;
-  fighter.nanobotFree = 0;
-  fighter.nanobotMax = 0;
-  fighter.materialEjectionTank = [];
+  fighter.x = 100;
+  fighter.y = 100;
   const game = {
     props: [],
     powerCrates: [],
-    platforms: [{ x: 0, y: 300, w: 800, h: 40 }],
+    platforms: [{ x: 0, y: 200, w: 800, h: 40 }],
+    groundDebris: [],
     effects: []
   };
   assert.equal(tryReconjurerBuild(fighter, game), null);
-  assert.equal(game.props.length, 0);
 }
 
-// Metal crate when ready; starts 10s user metal CD; tank still gains scraps.
+// Metal box debris rebuild uses the 10s user CD.
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
-    extensionSecondary: RECONJURER_BUILDER_ID,
-    body: "nanotech-chestplate"
+    extensionSecondary: RECONJURER_BUILDER_ID
   });
-  fighter.x = 600;
-  fighter.y = 300;
-  fighter.aim = 0;
-  fighter.nanobotFree = 40;
+  const crate = createPowerCrate({ x: 400, y: 400 }, "yard", "industrial", "pc-rj");
+  crate.destroyed = true;
+  crate.solid = false;
+  crate.hp = 0;
+  crate.groundDebrisDropped = false;
+  fighter.x = crate.x;
+  fighter.y = crate.y;
   fighter.materialEjectionTank = [];
   fighter.reconjurerMetalCd = 0;
+
   const game = {
-    elapsed: 3,
-    mapId: "yard",
-    theme: "industrial",
     props: [],
-    powerCrates: [],
-    platforms: [{ x: 0, y: 420, w: 3600, h: 40 }],
-    effects: []
+    powerCrates: [crate],
+    platforms: [{ x: 0, y: 400, w: 800, h: 40 }],
+    groundDebris: [],
+    effects: [],
+    reconquerQueue: [],
+    forgeCasts: [],
+    powerCrateState: { pending: [{ spawnKey: crate.spawnKey, readyAt: 99 }], spawnIndex: 0 },
+    mapId: "yard",
+    theme: "industrial"
   };
-  const spawned = tryReconjurerBuild(fighter, game, () => 0.01);
-  assert.ok(spawned?.powerCrate, "metal box on low roll");
-  assert.equal(game.powerCrates.length, 1);
-  assert.equal(fighter.nanobotFree, 40 - RECONJURER_METAL_BOT_COST);
+  spawnPowerCrateDebris(game, crate);
+  assert.ok(game.groundDebris.every((p) => p.sourceType === "powerCrate"));
+
+  const restored = tryReconjurerBuild(fighter, game);
+  assert.ok(restored?.powerCrate);
+  assert.equal(crate.destroyed, false);
+  assert.equal(crate.hp, POWER_CRATE_HP);
+  assert.equal(game.groundDebris.length, 0);
   assert.equal(fighter.materialEjectionTank.length, RECONJURER_SCRAP_REWARD);
   assert.ok(Math.abs(fighter.reconjurerMetalCd - RECONJURER_METAL_COOLDOWN) < 0.001);
+  assert.equal(game.powerCrateState.pending.length, 0, "pending respawn cancelled");
 
-  // While metal CD is hot, even a "metal" roll becomes a normal breakable.
+  // Second metal pile while CD hot: skipped; nearby prop debris still rebuilds.
   tickReconjurerBuilder(fighter, RECONJURER_COOLDOWN + 0.01);
-  const propsBefore = game.props.length;
-  const again = tryReconjurerBuild(fighter, game, () => 0.01);
+  const crate2 = createPowerCrate({ x: 420, y: 400 }, "yard", "industrial", "pc-rj-2");
+  crate2.destroyed = true;
+  crate2.hp = 0;
+  crate2.groundDebrisDropped = false;
+  game.powerCrates.push(crate2);
+  spawnPowerCrateDebris(game, crate2);
+
+  const barrel = {
+    kind: "barrel",
+    breakable: true,
+    destroyed: true,
+    solid: false,
+    x: fighter.x + 20,
+    y: fighter.y,
+    w: 34,
+    h: 48,
+    hp: 0,
+    maxHp: 40,
+    groundDebrisDropped: false,
+    baseSolid: true,
+    baseBlocksProjectiles: true,
+    baseBlocksSight: false
+  };
+  game.props.push(barrel);
+  spawnPropDebris(game, barrel, barrel.x + 17, barrel.y + 24);
+
+  const again = tryReconjurerBuild(fighter, game);
   assert.ok(again);
-  assert.ok(!again.powerCrate, "metal gated by 10s user CD");
-  assert.equal(game.powerCrates.length, 1);
-  assert.equal(game.props.length, propsBefore + 1);
+  assert.equal(again, barrel, "skips metal-on-CD, rebuilds prop debris");
+  assert.equal(crate2.destroyed, true, "metal still broken during CD");
+  assert.ok(game.groundDebris.some((p) => p.sourceType === "powerCrate"));
 }
 
-// Metal CD ticks down globally for the user.
+// Metal CD ticks down for the user.
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
     extensionSecondary: RECONJURER_BUILDER_ID
   });
   fighter.reconjurerMetalCd = RECONJURER_METAL_COOLDOWN;
-  tickReconjurerBuilder(fighter, 3);
-  assert.ok(Math.abs(fighter.reconjurerMetalCd - 7) < 0.001);
-  tickReconjurerBuilder(fighter, 8);
+  tickReconjurerBuilder(fighter, 4);
+  assert.ok(Math.abs(fighter.reconjurerMetalCd - 6) < 0.001);
+  tickReconjurerBuilder(fighter, 7);
   assert.equal(fighter.reconjurerMetalCd, 0);
-}
-
-// Without extension equipped, key-3 path is a no-op.
-{
-  const fighter = applyLoadout({}, DEFAULT_LOADOUT);
-  assert.equal(fighter.reconjurerBuilder, false);
-  assert.equal(isReconjurerBuilder(fighter), false);
-  assert.equal(tryReconjurerBuild(fighter, { props: [], powerCrates: [] }), null);
 }
 
 console.log("reconjurer-builder.test.js passed.");

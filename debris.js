@@ -1083,7 +1083,166 @@ export function restoreMapProp(prop) {
   prop.blocksSight = prop.baseBlocksSight ?? prop.blocksSight;
   prop.hitFlash = .2;
   prop.groundDebrisDropped = false;
+  prop.thrownInFlight = false;
+  prop.heldBy = null;
   return true;
+}
+
+/** Restore a destroyed metal power crate in place. */
+export function restorePowerCrate(crate) {
+  if (!crate) return false;
+  crate.destroyed = false;
+  crate.hp = Math.max(1, crate.maxHp ?? crate.hp ?? 60);
+  crate.solid = true;
+  crate.blocksProjectiles = true;
+  crate.blocksSight = false;
+  crate.forgeHidden = false;
+  crate.hitFlash = 0.2;
+  crate.groundDebrisDropped = false;
+  crate.heldBy = null;
+  crate.thrownInFlight = false;
+  return true;
+}
+
+function groupCentroid(group) {
+  if (!group?.length) return { x: 0, y: 0 };
+  let sx = 0;
+  let sy = 0;
+  for (const p of group) {
+    sx += p.x;
+    sy += p.y;
+  }
+  return { x: sx / group.length, y: sy / group.length };
+}
+
+function isManualRebuildablePiece(piece) {
+  if (!piece?.sourceId) return false;
+  if (piece.sourceType !== "prop" && piece.sourceType !== "powerCrate") return false;
+  if (isVacuumLockedMode(piece.despawnMode)) return false;
+  return true;
+}
+
+/**
+ * Find rebuildable debris source groups near a world point, nearest first.
+ * @returns {Array<{ sourceId, sourceType, sourceKind, group, origin }>}
+ */
+export function listRebuildableDebrisNear(game, x, y, radius) {
+  const pieces = game?.groundDebris || [];
+  if (!pieces.length || !(radius > 0)) return [];
+  const r2 = radius * radius;
+  const bySource = new Map();
+  for (const piece of pieces) {
+    if (!isManualRebuildablePiece(piece)) continue;
+    const dx = piece.x - x;
+    const dy = piece.y - y;
+    if (dx * dx + dy * dy > r2) continue;
+    let list = bySource.get(piece.sourceId);
+    if (!list) {
+      list = [];
+      bySource.set(piece.sourceId, list);
+    }
+    list.push(piece);
+  }
+  const results = [];
+  for (const [sourceId, group] of bySource) {
+    const origin = groupCentroid(group);
+    results.push({
+      sourceId,
+      sourceType: group[0].sourceType,
+      sourceKind: group[0].sourceKind,
+      sourceProp: group[0].sourceProp || null,
+      group,
+      origin,
+      dist: Math.hypot(origin.x - x, origin.y - y)
+    });
+  }
+  results.sort((a, b) => a.dist - b.dist);
+  return results;
+}
+
+/** Nearest rebuildable debris source, or null. */
+export function findRebuildableDebrisNear(game, x, y, radius, options = {}) {
+  const allowPower = options.allowPowerCrate !== false;
+  for (const entry of listRebuildableDebrisNear(game, x, y, radius)) {
+    if (entry.sourceType === "powerCrate" && !allowPower) continue;
+    return entry;
+  }
+  return null;
+}
+
+/**
+ * Manually rebuild a debris pile into its prop / metal power crate (Reconjurer).
+ * Works regardless of the Debris disappear style. Instant restore + scrap cleanup.
+ * @param {{ allowPowerCrate?: boolean, createPowerCrate?: Function }} [options]
+ * @returns {{ target: object, sourceType: string, origin: {x,y} } | null}
+ */
+export function tryManualRebuildNear(game, x, y, radius, options = {}) {
+  if (!game) return null;
+  const found = findRebuildableDebrisNear(game, x, y, radius, options);
+  if (!found) return null;
+
+  if (found.sourceType === "powerCrate") {
+    if (options.allowPowerCrate === false) return null;
+    let crate = null;
+    let bestD = Infinity;
+    for (const c of game.powerCrates || []) {
+      if (!c.destroyed) continue;
+      const d = Math.hypot(
+        (c.x + c.w * 0.5) - found.origin.x,
+        (c.y + c.h * 0.5) - found.origin.y
+      );
+      if (d < bestD) {
+        bestD = d;
+        crate = c;
+      }
+    }
+    if (!crate || bestD > RECONQUER_NEAR_RANGE) {
+      // No destroyed crate nearby — stand a fresh one on the floor under the pile.
+      const w = 40;
+      const h = 40;
+      const stand = resolveStandTarget(game, found.group, found.origin.x, found.origin.y, w, h);
+      const { createPowerCrate } = options;
+      if (typeof createPowerCrate !== "function") return null;
+      crate = createPowerCrate(
+        { x: stand.targetX - w * 0.5, y: stand.targetY + h * 0.5 },
+        game.mapId || "battlefield",
+        game.theme || "battlefield",
+        `rj-rebuild-${found.sourceId}`
+      );
+      game.powerCrates ||= [];
+      game.powerCrates.push(crate);
+    } else {
+      restorePowerCrate(crate);
+      // Cancel a pending respawn for this spawn key so we don't double-drop.
+      if (game.powerCrateState?.pending && crate.spawnKey) {
+        game.powerCrateState.pending = game.powerCrateState.pending.filter(
+          (p) => p.spawnKey !== crate.spawnKey
+        );
+      }
+    }
+    consumeDebrisSource(game, found.sourceId);
+    return { target: crate, sourceType: "powerCrate", origin: found.origin };
+  }
+
+  // Map prop rebuild.
+  const candidates = (game.props || []).filter(
+    (prop) => prop.destroyed && prop.kind === found.sourceKind
+  );
+  let prop = pickNearbyRestoreProp(
+    {
+      sourceProp: found.sourceProp,
+      sourceKind: found.sourceKind,
+      originX: found.origin.x,
+      originY: found.origin.y
+    },
+    candidates,
+    found.group
+  );
+  if (!prop && found.sourceProp?.destroyed) prop = found.sourceProp;
+  if (!prop) return null;
+  restoreMapProp(prop);
+  consumeDebrisSource(game, found.sourceId);
+  return { target: prop, sourceType: "prop", origin: found.origin };
 }
 
 function groupIsMetal(group) {

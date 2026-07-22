@@ -369,7 +369,7 @@ export const GEAR = [
     RECONJURER_BUILDER_ID,
     "extensionSecondary",
     "Reconjurer / Builder",
-    "Extension tool (press 3). Conjure random breakables near you for nanobots — you gain 2 ejection scraps (tank never drained). Metal power crates only every 10s. Does not replace your 1/2 secondary.",
+    "Extension tool (press 3 near debris). Rebuilds that pile into its breakable — free, and you gain 2 ejection scraps. Metal power-crate debris only every 10s. Does not replace your 1/2 secondary.",
     {},
     {
       price: 200,

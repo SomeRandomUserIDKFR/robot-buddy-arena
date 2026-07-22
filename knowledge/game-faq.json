@@ -456,7 +456,7 @@
         "conjure crates",
         "builder tool"
       ],
-      "answer": "Reconjurer / Builder is an Extension-slot tool (not your 1/2 secondary). Buy and Equip it in the Extension bay — then press 3 in a match to conjure a random breakable near you. It costs free nanobots only (your ejection tank is never drained) and grants 2 ejection scraps per successful rebuild. Metal power crates can appear only once every 10 seconds on a personal countdown. It stays on 3 for the whole match and does not replace Material Consumer or Throw Breakable."
+      "answer": "Reconjurer / Builder is an Extension-slot tool (not your 1/2 secondary). Buy and Equip it in the Extension bay — then press 3 near debris in a match to rebuild that pile into its breakable. The rebuild is free and grants 2 ejection scraps. Metal power-crate debris can only be rebuilt once every 10 seconds on a personal countdown. It stays on 3 for the whole match and does not replace Material Consumer or Throw Breakable."
     },
     {
       "id": "equipment-material-consumer",
