@@ -647,9 +647,16 @@ function slotsMarkup(profile, owner) {
     const options = ownedForSlot(profile, slot);
     const hint = slot === "secondaryWeapon"
       ? `<div class="slot-hint">1 / 2 or scroll to swap in a match</div>`
-      : "";
+      : slot === "extensionSecondary"
+        ? `<div class="slot-hint">Bound to 3 in a match · does not replace 1/2</div>`
+        : "";
+    const slotClass = slot === "secondaryWeapon"
+      ? " gear-slot-secondary"
+      : slot === "extensionSecondary"
+        ? " gear-slot-extension"
+        : "";
     return `
-      <div class="gear-slot${slot === "secondaryWeapon" ? " gear-slot-secondary" : ""}">
+      <div class="gear-slot${slotClass}">
         <div class="slot-label-wrap">
           <div class="slot-label">${escapeHtml(SLOT_LABELS[slot])}</div>
           ${hint}
@@ -853,6 +860,18 @@ function modifierMarkup(gear) {
         "<span class=\"stat-down\">Vacuumed scraps cannot reconquer</span>"
       ].filter(Boolean).join("");
     }
+    if (gear.reconjurerBuilder) {
+      return [
+        "<span>Extension · press 3 to conjure</span>",
+        "<span class=\"stat-up\">Random breakables near you</span>",
+        "<span class=\"stat-up\">Low chance metal power crate</span>",
+        "<span>Costs ejection-tank scraps first, else bots</span>",
+        "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"
+      ].join("");
+    }
+    if (gear.id === "no-extension") {
+      return "<span>Empty extension slot · key 3 idle</span>";
+    }
     if (gear.throwBreakable) {
       const stats = weaponStats(gear);
       return [
@@ -924,9 +943,16 @@ export function renderShop(profile) {
   ui.shopCategories.innerHTML = SLOT_ORDER.map((slot) => {
     const slotHint = slot === "secondaryWeapon"
       ? `<p class="shop-slot-hint">Buy here, then Equip — swap with 1/2 or scroll in a match.</p>`
-      : "";
+      : slot === "extensionSecondary"
+        ? `<p class="shop-slot-hint">Buy here, then Equip — press 3 in a match (keeps your 1/2 secondary).</p>`
+        : "";
+    const shopClass = slot === "secondaryWeapon"
+      ? " shop-category-secondary"
+      : slot === "extensionSecondary"
+        ? " shop-category-extension"
+        : "";
     return `
-    <section class="shop-category${slot === "secondaryWeapon" ? " shop-category-secondary" : ""}">
+    <section class="shop-category${shopClass}">
       <div class="slot-label-wrap">
         <div class="slot-label">${escapeHtml(SLOT_LABELS[slot])}</div>
         ${slotHint}

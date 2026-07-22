@@ -748,6 +748,9 @@ button span { opacity: .6; font-size: 11px; }
 .gear-slot-secondary .slot-label {
   color: #8ec4d0;
 }
+.gear-slot-extension .slot-label {
+  color: #c4b08e;
+}
 .scroll-row-shell {
   position: relative;
   display: grid;
@@ -898,6 +901,7 @@ button span { opacity: .6; font-size: 11px; }
 .shop-feedback.error { border-color: #ff665c; color: #ff918a; }
 .shop-category { display: grid; grid-template-columns: 124px minmax(0, 1fr); gap: 9px; margin-top: 12px; }
 .shop-category-secondary .slot-label { color: #8ec4d0; }
+.shop-category-extension .slot-label { color: #c4b08e; }
 .shop-row-shell { min-height: 158px; }
 .shop-row { gap: 9px; }
 .shop-card {

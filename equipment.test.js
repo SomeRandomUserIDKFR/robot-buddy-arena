@@ -3,10 +3,10 @@ import { DEFAULT_PROFILE } from "./config.js";
 import {
   applyLoadout, awardConquest, cycleWeaponSlot, DEFAULT_LOADOUT, effectiveStats,
   ensureEconomyProfile, ensureEquipmentProfile, equipOwned, GEAR, GEAR_BY_ID,
-  MATERIAL_CONSUMER_ID, nanotechPoolCapacity, NO_SECONDARY_ID, purchaseGear,
-  rankingLossAmount, rankingWinGain, RANKING_FLOOR, selectWeaponSlot, setBuddyMode,
-  SLOT_LABELS, SLOT_ORDER, STARTER_GEAR, STARTING_CYBER, STARTING_RANKING,
-  suggestBuddyLoadout, trainerLoadout, weaponKind
+  MATERIAL_CONSUMER_ID, nanotechPoolCapacity, NO_EXTENSION_ID, NO_SECONDARY_ID,
+  purchaseGear, rankingLossAmount, rankingWinGain, RANKING_FLOOR, RECONJURER_BUILDER_ID,
+  selectWeaponSlot, setBuddyMode, SLOT_LABELS, SLOT_ORDER, STARTER_GEAR,
+  STARTING_CYBER, STARTING_RANKING, suggestBuddyLoadout, trainerLoadout, weaponKind
 } from "./equipment.js";
 
 const clone = (value) => structuredClone(value);
@@ -45,6 +45,7 @@ const clone = (value) => structuredClone(value);
   const profile = clone(DEFAULT_PROFILE);
   ensureEquipmentProfile(profile, profile);
   assert.equal(profile.equipment.player.secondaryWeapon, NO_SECONDARY_ID);
+  assert.equal(profile.equipment.player.extensionSecondary, NO_EXTENSION_ID);
   profile.equipment.owned.push(MATERIAL_CONSUMER_ID);
   assert.ok(equipOwned(profile, "player", "secondaryWeapon", MATERIAL_CONSUMER_ID));
   assert.equal(profile.equipment.player.secondaryWeapon, MATERIAL_CONSUMER_ID);
@@ -65,6 +66,20 @@ const clone = (value) => structuredClone(value);
   const bare = applyLoadout({}, DEFAULT_LOADOUT);
   assert.equal(cycleWeaponSlot(bare), false);
   assert.equal(selectWeaponSlot(bare, "secondaryWeapon"), false);
+}
+
+// Extension slot: Reconjurer sits on 3, separate from secondary.
+{
+  assert.ok(SLOT_ORDER.includes("extensionSecondary"));
+  assert.equal(GEAR_BY_ID[RECONJURER_BUILDER_ID].reconjurerBuilder, true);
+  const profile = clone(DEFAULT_PROFILE);
+  ensureEquipmentProfile(profile, profile);
+  profile.equipment.owned.push(RECONJURER_BUILDER_ID);
+  assert.ok(equipOwned(profile, "player", "extensionSecondary", RECONJURER_BUILDER_ID));
+  const fighter = applyLoadout({}, profile.equipment.player);
+  assert.equal(fighter.loadout.extensionSecondary, RECONJURER_BUILDER_ID);
+  assert.equal(fighter.reconjurerBuilder, true);
+  assert.equal(fighter.activeWeaponSlot, "weapon");
 }
 
 // Catalog modifiers combine into the effective fighter, not just the menu.
@@ -91,7 +106,8 @@ const clone = (value) => structuredClone(value);
   const profile = clone(DEFAULT_PROFILE);
   ensureEquipmentProfile(profile, profile);
   profile.equipment.owned = [
-    "field-frame", "survey-visor", "pulse-rifle", "vector-pack", "no-shield", NO_SECONDARY_ID
+    "field-frame", "survey-visor", "pulse-rifle", "vector-pack", "no-shield",
+    NO_SECONDARY_ID, NO_EXTENSION_ID
   ];
   const suggestion = suggestBuddyLoadout(profile);
   assert.ok(SLOT_ORDER.every((slot) => profile.equipment.owned.includes(suggestion.loadout[slot])));
@@ -281,7 +297,11 @@ const clone = (value) => structuredClone(value);
 // Every slot has enough choices; every primary weapon keeps a known base mechanic.
 {
   for (const slot of SLOT_ORDER) {
-    const min = slot === "secondaryWeapon" ? 3 : 4;
+    const min = slot === "secondaryWeapon"
+      ? 3
+      : slot === "extensionSecondary"
+        ? 2
+        : 4;
     assert.ok(
       GEAR.filter((gear) => gear.slot === slot).length >= min,
       `${slot} should have >= ${min} options`
@@ -290,6 +310,7 @@ const clone = (value) => structuredClone(value);
   assert.ok(STARTER_GEAR.includes("no-shield"));
   assert.ok(STARTER_GEAR.includes("light-buckler"));
   assert.ok(STARTER_GEAR.includes(NO_SECONDARY_ID));
+  assert.ok(STARTER_GEAR.includes(NO_EXTENSION_ID));
   for (const gear of GEAR.filter((item) => item.slot === "weapon")) {
     const loadout = { ...DEFAULT_LOADOUT, weapon: gear.id };
     const fighter = applyLoadout({}, loadout);

@@ -13,6 +13,7 @@ import {
 } from "./equipment.js";
 import { tickGroundDebris } from "./debris.js";
 import { tickThrowBreakable } from "./throw-breakable.js";
+import { tickReconjurerBuilder, tryReconjurerBuild } from "./reconjurer-builder.js";
 import {
   getPendingEncounter, rerollEncounter, setPendingEncounter
 } from "./conquest.js";
@@ -303,6 +304,7 @@ function update(dt) {
     stepFighter(fighter, dt, game, profile, keys, humanIntent);
     tickFighterPowerBuffs(fighter, dt);
     tickThrowBreakable(fighter, game, dt);
+    tickReconjurerBuilder(fighter, dt);
   }
   stepBullets(game, dt);
   stepThrownProps(game, dt);
@@ -402,6 +404,9 @@ function handleKeyDown(event) {
   if (event.code === "Digit2" && !event.repeat) {
     selectWeaponSlot(game.fighters[0], "secondaryWeapon");
   }
+  if (event.code === "Digit3" && !event.repeat) {
+    tryReconjurerBuild(game.fighters[0], game);
+  }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
   if (event.code === "KeyG") {
     const point = screenToWorld(mouse.x, mouse.y);
@@ -422,7 +427,7 @@ function handleKeyDown(event) {
   }
   if ([
     "Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE", "KeyF", "KeyR",
-    "Digit1", "Digit2"
+    "Digit1", "Digit2", "Digit3"
   ].includes(event.code)) {
     event.preventDefault();
   }

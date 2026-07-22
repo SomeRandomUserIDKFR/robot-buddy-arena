@@ -87,17 +87,19 @@ export const DEFAULT_PROFILE = {
     owned: [
       "field-frame", "scout-frame", "survey-visor", "wideband-array",
       "pulse-rifle", "arc-saber", "vector-pack", "sprinter-pack",
-      "no-shield", "light-buckler", "no-secondary"
+      "no-shield", "light-buckler", "no-secondary", "no-extension"
     ],
     player: {
       body: "field-frame", helmet: "survey-visor",
       weapon: "pulse-rifle", secondaryWeapon: "no-secondary",
+      extensionSecondary: "no-extension",
       jetpack: "vector-pack", shield: "no-shield",
       perk: null
     },
     buddy: {
       body: "field-frame", helmet: "survey-visor",
       weapon: "pulse-rifle", secondaryWeapon: "no-secondary",
+      extensionSecondary: "no-extension",
       jetpack: "vector-pack", shield: "no-shield",
       perk: null
     },

@@ -70,12 +70,15 @@ const shield = (id, name, tradeoff, stats, price) => item(
   }
 );
 
-export const SLOT_ORDER = ["body", "helmet", "weapon", "secondaryWeapon", "jetpack", "shield"];
+export const SLOT_ORDER = [
+  "body", "helmet", "weapon", "secondaryWeapon", "extensionSecondary", "jetpack", "shield"
+];
 export const SLOT_LABELS = {
   body: "Main Armor",
   helmet: "Helmet",
   weapon: "Weapon",
   secondaryWeapon: "Secondary Weapon",
+  extensionSecondary: "Extension",
   jetpack: "Jetpack",
   shield: "Shield"
 };
@@ -97,6 +100,8 @@ export const MATERIAL_CONSUMER_EJECTION_TANK_CAP = 160;
 export const MATERIAL_CONSUMER_ID = "material-consumer-nanotech";
 export { THROW_BREAKABLE_ID } from "./throw-breakable.js";
 export const NO_SECONDARY_ID = "no-secondary";
+export const NO_EXTENSION_ID = "no-extension";
+export const RECONJURER_BUILDER_ID = "reconjurer-builder";
 
 /** World position of the Material Consumer blade tip (aim-aligned). */
 export function materialConsumerTip(fighter) {
@@ -351,6 +356,28 @@ export const GEAR = [
     }
   ),
 
+  // Extension slot: bound to 3 for the match (does not replace 1/2 secondary).
+  item(
+    NO_EXTENSION_ID,
+    "extensionSecondary",
+    "No Extension",
+    "No extension tool — unlock Reconjurer / Builder to bind ability key 3.",
+    {},
+    { price: 0 }
+  ),
+  item(
+    RECONJURER_BUILDER_ID,
+    "extensionSecondary",
+    "Reconjurer / Builder",
+    "Extension tool (press 3). Conjure random breakables near you — low chance of a metal power crate. Costs ejection-tank scraps first, else nanobots. Does not replace your 1/2 secondary.",
+    {},
+    {
+      price: 200,
+      extensionSecondary: true,
+      reconjurerBuilder: true
+    }
+  ),
+
   item("vector-pack", "jetpack", "Vector Pack", "Balanced fuel, thrust, and recharge.", {}),
   item("sprinter-pack", "jetpack", "Sprinter Pack", "Hard thrust, smaller tank.",
     { fuel: .82, thrust: 1.2, recharge: 1.08 }),
@@ -418,13 +445,14 @@ export const GEAR_BY_ID = Object.fromEntries(GEAR.map((gear) => [gear.id, gear])
 export const STARTER_GEAR = [
   "field-frame", "scout-frame", "survey-visor", "wideband-array",
   "pulse-rifle", "arc-saber", "vector-pack", "sprinter-pack",
-  "no-shield", "light-buckler", NO_SECONDARY_ID
+  "no-shield", "light-buckler", NO_SECONDARY_ID, NO_EXTENSION_ID
 ];
 export const DEFAULT_LOADOUT = {
   body: "field-frame",
   helmet: "survey-visor",
   weapon: "pulse-rifle",
   secondaryWeapon: NO_SECONDARY_ID,
+  extensionSecondary: NO_EXTENSION_ID,
   jetpack: "vector-pack",
   shield: "no-shield"
 };
@@ -1239,6 +1267,26 @@ export function materialDebrisAmmoCount(fighter) {
 }
 
 /**
+ * Spend one ejection-tank scrap (free) else `botCost` free nanobots.
+ * Shared by Material Consumer beam and Reconjurer / Builder.
+ * @returns {{ source: "tank"|"bots", scrap: object|null, botsSpent: number } | null}
+ */
+export function spendTankOrNanobots(fighter, botCost = MATERIAL_CONSUMER_BOTS_PER_PIECE) {
+  if (!fighter) return null;
+  const tank = materialEjectionTank(fighter);
+  if (tank.length) {
+    return { source: "tank", scrap: tank.shift(), botsSpent: 0 };
+  }
+  const cost = Math.max(0, botCost | 0);
+  if (cost > 0 && (fighter.nanobotFree || 0) < cost) return null;
+  if (cost > 0) {
+    fighter.nanobotFree -= cost;
+    clampNanotechPool(fighter);
+  }
+  return { source: "bots", scrap: null, botsSpent: cost };
+}
+
+/**
  * Pull next debris ammo: ejection tank first (no bot cost), then remembered bank.
  * @returns {{ scrap: object, source: "tank"|"bank" } | null}
  */
@@ -1893,9 +1941,9 @@ export function normalizeLoadout(loadout, owned = STARTER_GEAR, legacy = null) {
       id = legacyWeapon(id || legacy);
     }
     const gear = GEAR_BY_ID[id];
-    // Empty secondary is always valid (same idea as a vacant hands slot).
+    // Empty secondary / extension are always valid (vacant slot).
     const allowed = gear?.slot === slot && (
-      owned.includes(id) || id === NO_SECONDARY_ID
+      owned.includes(id) || id === NO_SECONDARY_ID || id === NO_EXTENSION_ID
     );
     normalized[slot] = allowed ? id : DEFAULT_LOADOUT[slot];
   }
@@ -1907,6 +1955,7 @@ export function ensureEquipmentProfile(profile, saved = profile) {
     ...STARTER_GEAR,
     "no-shield",
     NO_SECONDARY_ID,
+    NO_EXTENSION_ID,
     ...(Array.isArray(saved?.equipment?.owned) ? saved.equipment.owned : [])
   ])).filter((id) => !!GEAR_BY_ID[id]);
   const oldPlayer = saved?.playerWeapon || saved?.equipment?.playerWeapon;
@@ -2080,6 +2129,7 @@ export function suggestBuddyLoadout(profile) {
   const equipment = profile.equipment;
   const style = evidenceStyle(profile, equipment.player);
   const secondaryPrefs = [NO_SECONDARY_ID, THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID];
+  const extensionPrefs = [NO_EXTENSION_ID, RECONJURER_BUILDER_ID];
   const preferences = style === "ranged"
     ? {
       body: ["field-frame", "bulwark-frame", "scout-frame", "retractable-armor", "nanotech-chestplate"],
@@ -2090,6 +2140,7 @@ export function suggestBuddyLoadout(profile) {
         "gattler", "burst-carbine", "mechanical-modularity", "arc-saber", "duelist-blade"
       ],
       secondaryWeapon: secondaryPrefs,
+      extensionSecondary: extensionPrefs,
       jetpack: [
         "endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack", "nanotech-reserve"
       ],
@@ -2107,6 +2158,7 @@ export function suggestBuddyLoadout(profile) {
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
         secondaryWeapon: [THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID, NO_SECONDARY_ID],
+        extensionSecondary: [RECONJURER_BUILDER_ID, NO_EXTENSION_ID],
         jetpack: [
           "sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack", "nanotech-reserve"
         ],
@@ -2123,6 +2175,7 @@ export function suggestBuddyLoadout(profile) {
           "nanotech-sword", "strong-sniper", "daggers"
         ],
         secondaryWeapon: secondaryPrefs,
+        extensionSecondary: extensionPrefs,
         jetpack: [
           "vector-pack", "sprinter-pack", "endurance-pack", "recycler-pack", "nanotech-reserve"
         ],
@@ -2279,6 +2332,10 @@ export function applyLoadout(fighter, loadout) {
   fighter.materialEjectHeld = false;
   fighter.materialBeamHeld = false;
   fighter.materialBeamFlash = 0;
+  const extension = GEAR_BY_ID[fighter.loadout.extensionSecondary];
+  fighter.reconjurerBuilder = !!extension?.reconjurerBuilder;
+  fighter.reconjurerCd = 0;
+  fighter.reconjurerFlash = 0;
   if (weapon.id === ADAPTIVE_NANOTECH_ID) {
     applyAdaptiveCombatStats(fighter, "sword");
     syncAdaptiveNanotechCosts(fighter, "sword");

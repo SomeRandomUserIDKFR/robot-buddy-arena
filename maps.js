@@ -68,6 +68,18 @@ const PROP_PRESETS = {
   }
 };
 
+/** Breakable kinds that can be conjured at runtime. */
+export const MAP_PROP_KINDS = Object.freeze(Object.keys(PROP_PRESETS));
+
+/**
+ * @param {keyof typeof PROP_PRESETS} kind
+ * @param {number} x
+ * @param {number} yBottom bottom resting y (prop.y is top of box)
+ */
+export function createMapProp(kind, x, yBottom) {
+  return prop(kind, x, yBottom);
+}
+
 /**
  * @param {keyof typeof PROP_PRESETS} kind
  * @param {number} x

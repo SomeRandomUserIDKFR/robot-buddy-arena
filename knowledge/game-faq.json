@@ -35,7 +35,7 @@
         "keyboard controls",
         "what buttons do I use"
       ],
-      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. 1 and 2 (or mouse wheel) swap between your primary weapon and secondary when a secondary is equipped. Mouse aims; left click fires or swings. Hold right-click on Material Consumer for a debris beam; hold V to vacuum excess scraps into its ejection tank. G pings for me. Escape pauses."
+      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. 1 and 2 (or mouse wheel) swap between your primary weapon and secondary when a secondary is equipped. 3 uses your Extension tool (Reconjurer / Builder when equipped). Mouse aims; left click fires or swings. Hold right-click on Material Consumer for a debris beam; hold V to vacuum excess scraps into its ejection tank. G pings for me. Escape pauses."
     },
     {
       "id": "controls-retractable-armor",
@@ -442,7 +442,21 @@
         "loadout slots",
         "armor helmet weapon jetpack"
       ],
-      "answer": "Six slots: body armor, helmet, weapon, secondary, jetpack, and shield. Starters include No Secondary plus two free items for most other slots (including No Shield). Every piece is a tradeoff, not a straight power level. Press 1/2 or scroll to swap primary and secondary in a match."
+      "answer": "Seven slots: body armor, helmet, weapon, secondary, extension, jetpack, and shield. Starters include No Secondary and No Extension plus two free items for most other slots (including No Shield). Every piece is a tradeoff, not a straight power level. Press 1/2 or scroll to swap primary and secondary in a match; press 3 for your Extension tool."
+    },
+    {
+      "id": "equipment-reconjurer-builder",
+      "tags": ["equipment", "extension", "secondary", "reconjurer", "builder", "breakable", "debris"],
+      "questions": [
+        "what is reconjurer",
+        "reconjurer builder",
+        "extension secondary",
+        "what does 3 do",
+        "place breakables",
+        "conjure crates",
+        "builder tool"
+      ],
+      "answer": "Reconjurer / Builder is an Extension-slot tool (not your 1/2 secondary). Buy and Equip it in the Extension bay — then press 3 in a match to conjure a random breakable near you (low chance of a metal power crate). Each conjure costs ejection-tank scraps first, or free nanobots if the tank is empty. It stays on 3 for the whole match and does not replace Material Consumer or Throw Breakable."
     },
     {
       "id": "equipment-material-consumer",
