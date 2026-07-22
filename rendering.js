@@ -1442,13 +1442,15 @@ export function createRenderer(canvas) {
   }
 
   function drawArmorDummy(dummy, fogAlpha) {
-    const color = armorDummyColor(dummy);
+    if (dummy.destroyed) return;
+    const flash = dummy.hitFlash > 0;
+    const color = flash ? "#f0f4ff" : armorDummyColor(dummy);
     const rim = mixHexColors(color, "#061018", 0.35);
     const highlight = mixHexColors(color, "#ffffff", 0.18);
-    const cx = dummy.x;
-    const cy = dummy.y;
     const w = dummy.w || 36;
     const h = dummy.h || 58;
+    const cx = dummy.x + w / 2;
+    const cy = dummy.y + h / 2;
     context.save();
     context.globalAlpha = Math.max(0, Math.min(1, fogAlpha));
     // Stand / base
@@ -1472,6 +1474,14 @@ export function createRenderer(canvas) {
     context.strokeStyle = rim;
     context.lineWidth = 1.5;
     context.strokeRect(cx - w * 0.28 + 1, cy - h * 0.22 + 1, w * 0.56 - 2, h * 0.34 - 2);
+    if (!flash && dummy.hp < dummy.maxHp) {
+      context.strokeStyle = "rgba(255,255,255,.45)";
+      context.beginPath();
+      context.moveTo(cx - w * 0.18, cy - h * 0.08);
+      context.lineTo(cx + w * 0.1, cy + h * 0.05);
+      context.lineTo(cx + w * 0.2, cy - h * 0.02);
+      context.stroke();
+    }
     context.restore();
   }
 

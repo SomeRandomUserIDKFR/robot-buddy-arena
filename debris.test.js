@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import {
-  ARMOR_DUMMY_MELT_DURATION, buildPropJigsaw, forgeCastColor, FORGE_PHASE_DURATIONS,
-  NON_ARMOR_DEBRIS_LIFE, pickNearbyRestoreProp, PROP_DEBRIS_COLORS, pullSpawnTowardOrigin,
-  RECONQUER_BONUS_INTERVAL, RECONQUER_NEAR_RANGE, restoreMapProp, spawnBrokenArmorDebris,
-  spawnPropDebris, tickGroundDebris, tryReconquerAtSpawn
+  ARMOR_DUMMY_COOL_DURATION, ARMOR_DUMMY_MELT_DURATION, buildPropJigsaw, damageArmorDummy,
+  forgeCastColor, FORGE_PHASE_DURATIONS, NON_ARMOR_DEBRIS_LIFE, pickNearbyRestoreProp,
+  PROP_DEBRIS_COLORS, pullSpawnTowardOrigin, RECONQUER_BONUS_INTERVAL, RECONQUER_NEAR_RANGE,
+  restoreMapProp, spawnBrokenArmorDebris, spawnPropDebris, tickGroundDebris,
+  tryReconquerAtSpawn
 } from "./debris.js";
 import { Fighter } from "./combat.js";
 import { applyLoadout, beginRetractableMorph, DEFAULT_LOADOUT, tickRetractableArmor, RETRACTABLE_MORPH_DURATION } from "./equipment.js";
@@ -220,6 +221,26 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   assert.equal(game.groundDebris.length, 0, "scraps consumed by dummy");
   assert.ok(game.armorDummies.length >= 1, "training dummy spawned");
   assert.equal(game.armorDummyBuilds.length, 0);
+  const dummy = game.armorDummies[0];
+  assert.equal(dummy.maxHp, fighter.retractableMax, "dummy HP matches full armor pool");
+  assert.equal(dummy.hp, fighter.retractableMax);
+
+  // Destroyed dummy drops plates that remelt into a new nearby dummy with same HP.
+  const oldX = dummy.x;
+  const oldY = dummy.y;
+  damageArmorDummy(dummy, dummy.hp, game, dummy.x + 10, dummy.y + 10);
+  assert.equal(game.armorDummies.length, 0);
+  assert.ok(game.groundDebris.length >= 8);
+  assert.ok(game.groundDebris.every((p) => p.armorMaxHp === fighter.retractableMax));
+  for (const piece of game.groundDebris) piece.life = 0.01;
+  tickGroundDebris(game, 0.02);
+  for (let i = 0; i < Math.ceil((ARMOR_DUMMY_MELT_DURATION + ARMOR_DUMMY_COOL_DURATION) * 60) + 5; i++) {
+    tickGroundDebris(game, 1 / 60);
+  }
+  assert.ok(game.armorDummies.length >= 1, "remelted into a new dummy");
+  const rebuilt = game.armorDummies[0];
+  assert.equal(rebuilt.maxHp, fighter.retractableMax);
+  assert.ok(Math.hypot(rebuilt.x - oldX, rebuilt.y - oldY) < 120, "remelt stays nearby");
 }
 
 // Metal reconquer: furnace ingest → cast → cool restores the prop.

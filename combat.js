@@ -7,6 +7,7 @@ import {
   applyHpDamage, modularAttackLocked, retractableSpeedMultiplier, shieldBlocksAttack,
   shieldSpeedMultiplier, tickModularWeapon, tickRetractableArmor
 } from "./equipment.js";
+import { armorDummyBlockers, damageArmorDummy } from "./debris.js";
 import {
   damageProp, platformsOf, projectileBlockers, solidProps
 } from "./maps.js";
@@ -20,12 +21,17 @@ function landableSurfaces(game) {
   return [
     ...platformsOf(game),
     ...solidProps(game),
-    ...powerCrateBlockers(game).filter((c) => c.solid)
+    ...powerCrateBlockers(game).filter((c) => c.solid),
+    ...armorDummyBlockers(game).filter((d) => d.solid)
   ];
 }
 
 function allProjectileBlockers(game) {
-  return [...projectileBlockers(game), ...powerCrateBlockers(game)];
+  return [
+    ...projectileBlockers(game),
+    ...powerCrateBlockers(game),
+    ...armorDummyBlockers(game)
+  ];
 }
 
 export class Fighter {
@@ -226,7 +232,7 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy) {
     })),
     ...allProjectileBlockers(game).map((prop) => ({
       x: prop.x, y: prop.y, w: prop.w, h: prop.h,
-      kind: prop.powerCrate ? "powerCrate" : "prop",
+      kind: prop.armorDummy ? "armorDummy" : prop.powerCrate ? "powerCrate" : "prop",
       prop
     })),
     ...game.fighters
@@ -249,6 +255,14 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy) {
       hitPoint.box.prop,
       dmg,
       fighter,
+      game,
+      hitPoint.x,
+      hitPoint.y
+    );
+  } else if (hitPoint.box?.kind === "armorDummy") {
+    damageArmorDummy(
+      hitPoint.box.prop,
+      dmg,
       game,
       hitPoint.x,
       hitPoint.y
@@ -345,6 +359,8 @@ export function attack(fighter, game, random = Math.random) {
       if (Math.abs(angleDiff(angle, fighter.aim)) < .85) {
         if (prop.powerCrate) {
           damagePowerCrate(prop, swingDmg, fighter, game, px, py);
+        } else if (prop.armorDummy) {
+          damageArmorDummy(prop, swingDmg, game, px, py);
         } else {
           damageProp(prop, swingDmg, game, px, py);
         }
@@ -532,6 +548,8 @@ export function stepBullets(game, dt) {
       const dmg = (bullet.damage ?? 12 * bullet.owner.weaponDamage) * multiplier;
       if (prop.powerCrate) {
         damagePowerCrate(prop, dmg, bullet.owner, game, bullet.x, bullet.y);
+      } else if (prop.armorDummy) {
+        damageArmorDummy(prop, dmg, game, bullet.x, bullet.y);
       } else {
         damageProp(prop, dmg, game, bullet.x, bullet.y);
       }

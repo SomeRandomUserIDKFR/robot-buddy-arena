@@ -38,9 +38,11 @@ function debrisLandables(game) {
   const solids = (game?.props || []).filter(
     (prop) => !prop.destroyed && prop.solid && (prop.hp == null || prop.hp > 0)
   );
+  const dummies = armorDummyBlockers(game).filter((dummy) => dummy.solid);
   return [
     ...platforms,
-    ...solids.map((prop) => ({ x: prop.x, y: prop.y, w: prop.w, h: prop.h }))
+    ...solids.map((prop) => ({ x: prop.x, y: prop.y, w: prop.w, h: prop.h })),
+    ...dummies.map((dummy) => ({ x: dummy.x, y: dummy.y, w: dummy.w, h: dummy.h }))
   ];
 }
 
@@ -57,7 +59,7 @@ function nextSourceId(game) {
 function burstPiece(game, {
   material, kind, x, y, w, h, color, vx = 0, vy = 0, facing = 0, index = 0,
   sourceType = null, sourceKind = null, sourceId = null, sourceProp = null,
-  originX = null, originY = null,
+  originX = null, originY = null, armorMaxHp = null,
   homeLx = 0, homeLy = 0, shape = "rect", detail = null, edge = null
 }) {
   const burst = 100 + (index % 5) * 28;
@@ -99,9 +101,51 @@ function burstPiece(game, {
     sourceProp,
     originX,
     originY,
+    armorMaxHp: armor ? (armorMaxHp || 100) : null,
     homeX: null,
     homeY: null
   });
+}
+
+const ARMOR_PLATE_SPECS = Object.freeze([
+  { kind: "helmet", ox: 0, oy: -20, w: 30, h: 12 },
+  { kind: "crest", ox: 0, oy: -28, w: 10, h: 6 },
+  { kind: "cheekL", ox: -16, oy: -10, w: 10, h: 16 },
+  { kind: "cheekR", ox: 16, oy: -10, w: 10, h: 16 },
+  { kind: "chin", ox: 0, oy: 2, w: 20, h: 10 },
+  { kind: "shoulderL", ox: -20, oy: 6, w: 14, h: 9 },
+  { kind: "shoulderR", ox: 20, oy: 6, w: 14, h: 9 },
+  { kind: "breast", ox: 0, oy: 14, w: 28, h: 16 },
+  { kind: "ab", ox: 0, oy: 24, w: 22, h: 7 }
+]);
+
+function spawnArmorPlateBurst(game, {
+  cx, cy, color, facing = 0, vx = 0, vy = 0, armorMaxHp = 100
+}) {
+  const sourceId = nextSourceId(game);
+  for (let i = 0; i < ARMOR_PLATE_SPECS.length; i++) {
+    const spec = ARMOR_PLATE_SPECS[i];
+    burstPiece(game, {
+      material: "armor",
+      kind: spec.kind,
+      x: cx + spec.ox,
+      y: cy + spec.oy,
+      w: spec.w,
+      h: spec.h,
+      color,
+      vx,
+      vy,
+      facing,
+      index: i,
+      sourceType: "armor",
+      sourceKind: "armor",
+      sourceId,
+      originX: cx,
+      originY: cy,
+      armorMaxHp
+    });
+  }
+  return sourceId;
 }
 
 function armorDebrisColor(fighter) {
@@ -338,40 +382,16 @@ export function spawnBrokenArmorDebris(game, fighter) {
   const cy = fighter.y + SIZE / 2;
   const color = armorDebrisColor(fighter);
   const facing = Math.cos(fighter.aim || 0) >= 0 ? 1 : -1;
-  const sourceId = nextSourceId(game);
-  const specs = [
-    { kind: "helmet", ox: 0, oy: -20, w: 30, h: 12 },
-    { kind: "crest", ox: 0, oy: -28, w: 10, h: 6 },
-    { kind: "cheekL", ox: -16, oy: -10, w: 10, h: 16 },
-    { kind: "cheekR", ox: 16, oy: -10, w: 10, h: 16 },
-    { kind: "chin", ox: 0, oy: 2, w: 20, h: 10 },
-    { kind: "shoulderL", ox: -20, oy: 6, w: 14, h: 9 },
-    { kind: "shoulderR", ox: 20, oy: 6, w: 14, h: 9 },
-    { kind: "breast", ox: 0, oy: 14, w: 28, h: 16 },
-    { kind: "ab", ox: 0, oy: 24, w: 22, h: 7 }
-  ];
-
-  for (let i = 0; i < specs.length; i++) {
-    const spec = specs[i];
-    burstPiece(game, {
-      material: "armor",
-      kind: spec.kind,
-      x: cx + spec.ox,
-      y: cy + spec.oy,
-      w: spec.w,
-      h: spec.h,
-      color,
-      vx: (fighter.vx || 0) * 0.25,
-      vy: (fighter.vy || 0) * 0.15,
-      facing,
-      index: i,
-      sourceType: "armor",
-      sourceKind: "armor",
-      sourceId,
-      originX: cx,
-      originY: cy
-    });
-  }
+  const armorMaxHp = Math.max(1, fighter.retractableMax || 100);
+  spawnArmorPlateBurst(game, {
+    cx,
+    cy,
+    color,
+    facing,
+    vx: (fighter.vx || 0) * 0.25,
+    vy: (fighter.vy || 0) * 0.15,
+    armorMaxHp
+  });
 
   game.effects ||= [];
   game.effects.push({
@@ -382,6 +402,31 @@ export function spawnBrokenArmorDebris(game, fighter) {
     kind: "armor",
     w: SIZE,
     h: SIZE
+  });
+}
+
+/** Drop armor plates from a destroyed training dummy (same full armor HP pool). */
+export function spawnArmorDebrisFromDummy(game, dummy) {
+  if (!game || !dummy || dummy.debrisDropped) return;
+  dummy.debrisDropped = true;
+  const cx = dummy.x + (dummy.w || 36) / 2;
+  const cy = dummy.y + (dummy.h || 58) / 2;
+  spawnArmorPlateBurst(game, {
+    cx,
+    cy,
+    color: dummy.color || ARMOR_DUMMY_METAL,
+    facing: 0,
+    armorMaxHp: Math.max(1, dummy.maxHp || dummy.armorMaxHp || 100)
+  });
+  game.effects ||= [];
+  game.effects.push({
+    type: "debris",
+    x: cx,
+    y: cy,
+    life: .45,
+    kind: "armor",
+    w: dummy.w || 36,
+    h: dummy.h || 58
   });
 }
 
@@ -477,6 +522,7 @@ function beginArmorDespawn(game, piece) {
 
 /**
  * Melt a broken armor set into a metal training dummy near the scrap pile.
+ * Rebuilds in the same general area (slight nearby shift).
  */
 export function beginArmorDummyBuild(game, piece) {
   if (!game || !piece?.sourceId) return null;
@@ -492,15 +538,18 @@ export function beginArmorDummyBuild(game, piece) {
     sx += p.x;
     sy += p.y;
   }
-  const targetX = sx / group.length;
-  const targetY = sy / group.length;
+  // Same / near: keep the pile center, with a slight local nudge.
+  const targetX = sx / group.length + (Math.random() - 0.5) * 40;
+  const targetY = sy / group.length + (Math.random() - 0.5) * 18;
   const color = group[0].color || ARMOR_DUMMY_METAL;
+  const armorMaxHp = Math.max(1, group[0].armorMaxHp || 100);
 
   const build = {
     sourceId: piece.sourceId,
     targetX,
     targetY,
     color,
+    armorMaxHp,
     phase: "melt",
     t: 0,
     cool: 0
@@ -520,17 +569,64 @@ export function beginArmorDummyBuild(game, piece) {
 }
 
 function finishArmorDummyBuild(game, build) {
+  const w = 36;
+  const h = 58;
+  const maxHp = Math.max(1, build.armorMaxHp || 100);
   game.armorDummies ||= [];
   game.armorDummies.push({
-    x: build.targetX,
-    y: build.targetY,
-    w: 36,
-    h: 58,
+    kind: "armorDummy",
+    armorDummy: true,
+    x: build.targetX - w / 2,
+    y: build.targetY - h / 2,
+    w,
+    h,
+    hp: maxHp,
+    maxHp,
+    armorMaxHp: maxHp,
+    breakable: true,
+    solid: true,
+    blocksProjectiles: true,
+    destroyed: false,
+    debrisDropped: false,
     color: build.color || ARMOR_DUMMY_METAL,
+    hitFlash: 0,
     cool: 0,
     phase: "cool"
   });
   removeSourcePieces(game, build.sourceId);
+}
+
+/** Intact training dummies that block shots / melee. */
+export function armorDummyBlockers(game) {
+  return (game?.armorDummies || []).filter(
+    (dummy) => !dummy.destroyed && dummy.blocksProjectiles
+  );
+}
+
+/**
+ * Damage a metal training dummy. On death, plates drop and follow Armor disappear
+ * (Build dummy remelts a new one nearby with the same full armor HP).
+ */
+export function damageArmorDummy(dummy, amount, game, impactX, impactY) {
+  if (!dummy || dummy.destroyed || !dummy.breakable) return false;
+  dummy.hp = Math.max(0, (dummy.hp ?? dummy.maxHp ?? 1) - amount);
+  dummy.hitFlash = 0.14;
+  if (game?.effects) {
+    game.effects.push({
+      type: "propHit",
+      x: impactX ?? dummy.x + dummy.w / 2,
+      y: impactY ?? dummy.y + dummy.h / 2,
+      life: 0.12
+    });
+  }
+  if (dummy.hp <= 0) {
+    dummy.destroyed = true;
+    dummy.solid = false;
+    dummy.blocksProjectiles = false;
+    spawnArmorDebrisFromDummy(game, dummy);
+    game.armorDummies = (game.armorDummies || []).filter((entry) => entry !== dummy);
+  }
+  return true;
 }
 
 /** Tick armor → training-dummy melt / cool sequences. */
@@ -558,6 +654,7 @@ export function tickArmorDummyBuilds(game, dt) {
 
 function tickArmorDummies(game, dt) {
   for (const dummy of game?.armorDummies || []) {
+    if (dummy.hitFlash > 0) dummy.hitFlash -= dt;
     if (dummy.phase !== "cool") continue;
     dummy.cool = Math.min(1, (dummy.cool || 0) + dt / ARMOR_DUMMY_COOL_DURATION);
     if (dummy.cool >= 1) dummy.phase = "idle";
