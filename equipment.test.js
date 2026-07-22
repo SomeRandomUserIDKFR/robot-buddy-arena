@@ -5,8 +5,8 @@ import {
   ensureEconomyProfile, ensureEquipmentProfile, equipOwned, GEAR, GEAR_BY_ID,
   MATERIAL_CONSUMER_ID, nanotechPoolCapacity, NO_SECONDARY_ID, purchaseGear,
   rankingLossAmount, rankingWinGain, RANKING_FLOOR, selectWeaponSlot, setBuddyMode,
-  SLOT_ORDER, STARTER_GEAR, STARTING_CYBER, STARTING_RANKING, suggestBuddyLoadout,
-  trainerLoadout, weaponKind
+  SLOT_LABELS, SLOT_ORDER, STARTER_GEAR, STARTING_CYBER, STARTING_RANKING,
+  suggestBuddyLoadout, trainerLoadout, weaponKind
 } from "./equipment.js";
 
 const clone = (value) => structuredClone(value);
@@ -35,6 +35,7 @@ const clone = (value) => structuredClone(value);
 // Secondary slot + Material Consumer: normalize, pool, and 1/2 swap.
 {
   assert.ok(SLOT_ORDER.includes("secondaryWeapon"));
+  assert.equal(SLOT_LABELS.secondaryWeapon, "Secondary Weapon");
   assert.ok(STARTER_GEAR.includes(NO_SECONDARY_ID));
   assert.equal(DEFAULT_LOADOUT.secondaryWeapon, NO_SECONDARY_ID);
   assert.equal(GEAR_BY_ID[MATERIAL_CONSUMER_ID].slot, "secondaryWeapon");

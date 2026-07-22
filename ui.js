@@ -645,9 +645,15 @@ function slotsMarkup(profile, owner) {
   const locked = owner === "buddy" && equipment.buddyMode === "choice";
   return SLOT_ORDER.map((slot) => {
     const options = ownedForSlot(profile, slot);
+    const hint = slot === "secondaryWeapon"
+      ? `<div class="slot-hint">1 / 2 or scroll to swap in a match</div>`
+      : "";
     return `
-      <div class="gear-slot">
-        <div class="slot-label">${escapeHtml(SLOT_LABELS[slot])}</div>
+      <div class="gear-slot${slot === "secondaryWeapon" ? " gear-slot-secondary" : ""}">
+        <div class="slot-label-wrap">
+          <div class="slot-label">${escapeHtml(SLOT_LABELS[slot])}</div>
+          ${hint}
+        </div>
         <div class="scroll-row-shell">
           <button type="button" class="scroll-arrow prev" data-scroll-dir="-1" aria-label="Previous ${escapeHtml(SLOT_LABELS[slot])} options">‹</button>
           <div class="gear-options hidden-scroll-row" tabindex="0" aria-label="${escapeHtml(SLOT_LABELS[slot])} options">
@@ -814,7 +820,7 @@ function modifierMarkup(gear) {
   const nanoShotLine = gear.nanotech && gear.nanobotShotCost
     ? `<span class="stat-up">${gear.nanobotShotCost} bots/shot from reserve</span>`
     : "";
-  if (gear.slot === "weapon") {
+  if (gear.slot === "weapon" || gear.slot === "secondaryWeapon") {
     if (gear.id === "mechanical-modularity") {
       return [
         "<span>Morph weapon (E)</span>",
@@ -831,6 +837,19 @@ function modifierMarkup(gear) {
         "<span>Rifle ≈ Pulse Rifle</span>",
         "<span>Sniper ≈ Classic Sniper</span>"
       ].join("");
+    }
+    if (gear.id === "no-secondary") {
+      return "<span>Empty secondary slot · primary only</span>";
+    }
+    if (gear.materialConsumer) {
+      const stats = weaponStats(gear);
+      return [
+        nanoCostLine,
+        "<span>Secondary tool-sword · 1/2 or scroll</span>",
+        `<span>${stats.baseDamage} damage · ${stats.rpm} RPM</span>`,
+        "<span class=\"stat-up\">Vacuums debris → free bots</span>",
+        "<span class=\"stat-down\">Vacuumed scraps cannot reconquer</span>"
+      ].filter(Boolean).join("");
     }
     const stats = weaponStats(gear);
     const changes = [
@@ -889,32 +908,55 @@ function modifierMarkup(gear) {
 }
 
 export function renderShop(profile) {
-  ui.shopCategories.innerHTML = SLOT_ORDER.map((slot) => `
-    <section class="shop-category">
-      <div class="slot-label">${escapeHtml(SLOT_LABELS[slot])}</div>
+  ui.shopCategories.innerHTML = SLOT_ORDER.map((slot) => {
+    const slotHint = slot === "secondaryWeapon"
+      ? `<p class="shop-slot-hint">Buy here, then Equip — swap with 1/2 or scroll in a match.</p>`
+      : "";
+    return `
+    <section class="shop-category${slot === "secondaryWeapon" ? " shop-category-secondary" : ""}">
+      <div class="slot-label-wrap">
+        <div class="slot-label">${escapeHtml(SLOT_LABELS[slot])}</div>
+        ${slotHint}
+      </div>
       <div class="scroll-row-shell shop-row-shell">
         <button type="button" class="scroll-arrow prev" data-scroll-dir="-1" aria-label="Previous shop items">‹</button>
         <div class="shop-row hidden-scroll-row" tabindex="0" aria-label="${escapeHtml(SLOT_LABELS[slot])} shop items">
           ${GEAR.filter((gear) => gear.slot === slot).map((gear) => {
             const owned = effectiveOwned(profile).includes(gear.id);
             const permanentlyOwned = profile.equipment.owned.includes(gear.id);
-            const equipped = profile.equipment.player[slot] === gear.id
-              || profile.equipment.buddy[slot] === gear.id;
-            const unlockLabel = owned && !permanentlyOwned ? "TEMP" : owned ? (equipped ? "EQUIPPED" : "OWNED") : `${gear.price}¢`;
-            return `<article class="shop-card ${owned ? "owned" : ""}" data-shop-id="${gear.id}">
+            const playerEquipped = profile.equipment.player[slot] === gear.id;
+            const buddyEquipped = profile.equipment.buddy[slot] === gear.id;
+            const equipped = playerEquipped || buddyEquipped;
+            const unlockLabel = owned && !permanentlyOwned
+              ? "TEMP"
+              : playerEquipped
+                ? "EQUIPPED"
+                : owned
+                  ? "OWNED"
+                  : `${gear.price}¢`;
+            let actionBtn;
+            if (!owned && gear.price) {
+              actionBtn = `<button type="button" data-buy="${gear.id}">Buy · ${gear.price}¢</button>`;
+            } else if (!owned) {
+              actionBtn = `<button type="button" disabled>Unlocked</button>`;
+            } else if (playerEquipped) {
+              actionBtn = `<button type="button" disabled>Equipped</button>`;
+            } else {
+              actionBtn = `<button type="button" data-shop-equip="${gear.id}">Equip</button>`;
+            }
+            return `<article class="shop-card ${owned ? "owned" : ""} ${playerEquipped ? "equipped" : ""}" data-shop-id="${gear.id}">
               <div class="shop-card-top"><strong>${escapeHtml(gear.name)}</strong>
                 <span>${unlockLabel}</span></div>
               <p>${escapeHtml(gear.tradeoff)}</p>
               <div class="modifier-list">${modifierMarkup(gear)}</div>
-              <button type="button" data-buy="${gear.id}" ${owned || !gear.price ? "disabled" : ""}>
-                ${owned ? (permanentlyOwned ? "Unlocked" : "Temp unlock") : `Buy · ${gear.price}¢`}
-              </button>
+              ${actionBtn}
             </article>`;
           }).join("")}
         </div>
         <button type="button" class="scroll-arrow next" data-scroll-dir="1" aria-label="Next shop items">›</button>
       </div>
-    </section>`).join("");
+    </section>`;
+  }).join("");
   requestAnimationFrame(() => refreshBayScrollRows());
 }
 
@@ -1099,6 +1141,7 @@ export function bindUi(handlers) {
     const perkSuggestion = event.target.closest("[data-perk-suggestion]");
     const tab = event.target.closest("[data-bay-tab]");
     const buy = event.target.closest("[data-buy]");
+    const shopEquip = event.target.closest("[data-shop-equip]");
     const arrow = event.target.closest("[data-scroll-dir]");
     if (mode && !perkMode) handlers.buddyMode(mode.dataset.mode);
     if (perkMode) handlers.buddyPerkMode?.(perkMode.dataset.perkMode);
@@ -1134,6 +1177,7 @@ export function bindUi(handlers) {
       refreshBayScrollRows();
     }
     if (buy) handlers.purchase(buy.dataset.buy);
+    if (shopEquip) handlers.shopEquip?.(shopEquip.dataset.shopEquip);
     if (arrow) {
       const row = arrow.parentElement.querySelector(".hidden-scroll-row");
       if (row) scrollRow(row, Number(arrow.dataset.scrollDir));

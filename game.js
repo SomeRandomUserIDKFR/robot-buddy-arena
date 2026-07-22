@@ -5,7 +5,7 @@ import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
   acceptSuggestion, applyLoadout, awardConquest, cycleAdaptiveMode, cycleModularMode,
-  cycleWeaponSlot, equipOwned, hasNanotechChestplate, isAdaptiveNanotechWeapon,
+  cycleWeaponSlot, equipOwned, GEAR_BY_ID, hasNanotechChestplate, isAdaptiveNanotechWeapon,
   isModularWeapon, NANOTECH_F_HOLD_THRESHOLD, pulseNanotechArmor,
   purchaseGear, reconcileLoadoutsToOwned, selectWeaponSlot, setBuddyMode,
   setNanotechChanneling, tickMaterialConsumerVacuum, tryNanotechWeaponAction,
@@ -514,6 +514,15 @@ bindUi({
         : result.reason === "owned" ? "That item is already owned." : "That item is not for sale.";
       ui.shopFeedback.className = "shop-feedback error";
     }
+  },
+  shopEquip(gearId) {
+    const gear = GEAR_BY_ID[gearId];
+    if (!gear) return;
+    if (!equipOwned(profile, "player", gear.slot, gearId)) return;
+    ui.shopFeedback.textContent = `${gear.name} equipped on your loadout.`;
+    ui.shopFeedback.className = "shop-feedback success";
+    saveProfile();
+    refreshMenu(profile);
   },
   buddyMode(mode) {
     setBuddyMode(profile, mode);

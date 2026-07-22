@@ -70,7 +70,7 @@ export const SLOT_LABELS = {
   body: "Main Armor",
   helmet: "Helmet",
   weapon: "Weapon",
-  secondaryWeapon: "Secondary",
+  secondaryWeapon: "Secondary Weapon",
   jetpack: "Jetpack",
   shield: "Shield"
 };
