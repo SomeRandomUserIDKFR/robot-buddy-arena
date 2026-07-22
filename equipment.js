@@ -205,9 +205,9 @@ export const GEAR = [
     "nanotech-chestplate",
     "body",
     "Nanotech Chestplate",
-    "Tap F: +100 bots to armor. Hold F: return 50 bots/s to reserve (2 bots = 1 HP, cap 250). 10% less damage taken.",
+    "Tap F: +100 bots to armor. Hold F: return 50 bots/s to reserve (2 bots = 1 HP, cap 250). Adds 750 pool bots. 10% less damage taken.",
     { damageTaken: 0.9 },
-    { price: 500, nanotech: true, nanobotCost: 500 }
+    { price: 500, nanotech: true, nanobotCost: 750 }
   ),
   item(
     "nanotech-reserve",
@@ -270,6 +270,8 @@ export const NANOTECH_ARMOR_PRESS = 100;
 /** Seconds of F held before tap becomes recall-hold. */
 export const NANOTECH_F_HOLD_THRESHOLD = 0.18;
 export const NANOTECH_SLOW_REGEN = 55;
+/** Free-bot regen only after this long without taking a hit, and only while weapon is absorbed. */
+export const NANOTECH_REGEN_HIT_DELAY = 2;
 export const NANOTECH_BOTS_PER_HP = 2;
 export const NANOTECH_ARMOR_BOT_CAP = 500;
 /** Snap Mark-85 style assemble when armor first appears. */
@@ -913,16 +915,22 @@ export function tickNanotech(fighter, dt) {
     }
   }
 
+  // Hit lockout always ticks; regen only when weapon is away and lockout cleared.
+  fighter.nanotechHitCooldown = Math.max(0, (fighter.nanotechHitCooldown || 0) - dt);
+
   if (fighter.nanotechChanneling && hasNanotechChestplate(fighter)) {
     // Hold F: return armor bots to free reserve (never touches weapon).
     const flow = Math.min(armor, NANOTECH_RECALL_RATE * dt);
     armor -= flow;
     free += flow;
   } else if (free + armor + weapon < max) {
-    // Rebuild free reserve when bots were destroyed (slash bleed / armor damage).
-    const room = Math.max(0, max - free - armor - weapon);
-    const gain = Math.min(room, NANOTECH_SLOW_REGEN * dt);
-    free += gain;
+    // Rebuild destroyed bots only while weapon is put away and out of combat.
+    const canRegen = weapon <= 0 && (fighter.nanotechHitCooldown || 0) <= 0;
+    if (canRegen) {
+      const room = Math.max(0, max - free - armor - weapon);
+      const gain = Math.min(room, NANOTECH_SLOW_REGEN * dt);
+      free += gain;
+    }
   }
 
   fighter.nanobotFree = free;
@@ -1041,6 +1049,9 @@ export function applyHpDamage(fighter, dealt, game = null) {
       syncNanotechDisplayedHp(fighter);
     }
     return 0;
+  }
+  if ((fighter.nanobotMax || 0) > 0) {
+    fighter.nanotechHitCooldown = NANOTECH_REGEN_HIT_DELAY;
   }
 
   // No retractable / nano armor buffer: damage displayed hp (legacy callers reset .hp).
@@ -1462,6 +1473,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.nanotechChanneling = false;
   fighter.nanotechWeaponAbsorbing = false;
   fighter.nanotechAbsorbStart = 0;
+  fighter.nanotechHitCooldown = 0;
   fighter.nanotechArmorSpawning = false;
   fighter.nanotechArmorSpawnT = 1;
   fighter.nanotechSwordDissolveT = 0;

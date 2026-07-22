@@ -5,8 +5,9 @@ import {
   canNanotechAttack, DEFAULT_LOADOUT, GEAR_BY_ID, hasNanotechChestplate, nanotechArmorHp,
   nanotechArmorMaxHp, nanotechCostOf, nanotechFormCostOf, nanotechFormPct, nanotechPoolCapacity,
   NANOTECH_ARMOR_BOT_CAP, NANOTECH_ARMOR_PRESS, NANOTECH_BOTS_PER_HP, NANOTECH_CHANNEL_RATE,
-  NANOTECH_SLOW_REGEN, PRECISION_AIM_WEAPONS, pulseNanotechArmor, setNanotechChanneling,
-  STARTER_GEAR, tickNanotech, tryFormNanotechWeapon, tryNanotechWeaponAction, weaponStats
+  NANOTECH_REGEN_HIT_DELAY, NANOTECH_SLOW_REGEN, PRECISION_AIM_WEAPONS, pulseNanotechArmor,
+  setNanotechChanneling, STARTER_GEAR, tickNanotech, tryFormNanotechWeapon,
+  tryNanotechWeaponAction, weaponStats
 } from "./equipment.js";
 
 const loadout = (overrides = {}) => ({ ...DEFAULT_LOADOUT, ...overrides });
@@ -55,7 +56,7 @@ function assertWeaponStatsMatch(a, b) {
       weapon: "nanotech-sword",
       jetpack: "nanotech-reserve"
     })),
-    500 + 100 + 1000
+    750 + 100 + 1000
   );
 }
 
@@ -66,9 +67,9 @@ function assertWeaponStatsMatch(a, b) {
     weapon: "nanotech-sword",
     jetpack: "nanotech-reserve"
   }));
-  assert.equal(fighter.nanobotMax, 1600);
+  assert.equal(fighter.nanobotMax, 1850);
   assert.equal(fighter.nanobotWeapon, 100);
-  assert.equal(fighter.nanobotFree, 1500);
+  assert.equal(fighter.nanobotFree, 1750);
   assert.equal(fighter.nanobotArmor, 0);
   assert.equal(fighter.nanotechChanneling, false);
   assert.equal(fighter.nanotechWeaponCost, 100);
@@ -87,19 +88,19 @@ function assertWeaponStatsMatch(a, b) {
     weapon: "nanotech-sword"
   }));
   assert.equal(fighter.nanobotWeapon, 100);
-  assert.equal(fighter.nanobotFree, 500);
+  assert.equal(fighter.nanobotFree, 750);
 
   const pulse = pulseNanotechArmor(fighter);
   assert.equal(pulse.ok, true);
   assert.equal(pulse.pulled, NANOTECH_ARMOR_PRESS);
   assert.equal(fighter.nanobotArmor, 100);
-  assert.equal(fighter.nanobotFree, 400);
+  assert.equal(fighter.nanobotFree, 650);
   assert.equal(fighter.nanobotWeapon, 100);
 
   assert.equal(setNanotechChanneling(fighter, true), true);
   tickNanotech(fighter, 1);
   assert.equal(fighter.nanobotArmor, 100 - NANOTECH_CHANNEL_RATE);
-  assert.equal(fighter.nanobotFree, 400 + NANOTECH_CHANNEL_RATE);
+  assert.equal(fighter.nanobotFree, 650 + NANOTECH_CHANNEL_RATE);
   assert.equal(fighter.nanobotWeapon, 100);
 
   setNanotechChanneling(fighter, false);
@@ -181,15 +182,22 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(sniper.nanotechWeaponAbsorbing, false);
   assert.ok(sniper.nanobotFree >= freeBefore - 20 + 175);
 
-  // Slow regen fills unused pool capacity; does not pull from armor or weapon.
+  // Slow regen only with weapon absorbed and 2s since last hit.
   fighter.nanobotArmor = 40;
   fighter.nanobotFree = 100;
   fighter.nanobotWeapon = 100;
-  const regenBefore = fighter.nanobotFree;
+  fighter.nanotechHitCooldown = 0;
+  const blockedBefore = fighter.nanobotFree;
   tickNanotech(fighter, 2);
-  assert.ok(fighter.nanobotFree > regenBefore);
+  assert.equal(fighter.nanobotFree, blockedBefore, "no regen while weapon formed");
+
+  fighter.nanobotWeapon = 0;
+  fighter.nanotechHitCooldown = NANOTECH_REGEN_HIT_DELAY;
+  tickNanotech(fighter, 1);
+  assert.equal(fighter.nanobotFree, blockedBefore, "no regen during hit lockout");
+  tickNanotech(fighter, 1.05);
+  assert.ok(fighter.nanobotFree > blockedBefore, "regen after absorb + 2s clear");
   assert.equal(fighter.nanobotArmor, 40);
-  assert.equal(fighter.nanobotWeapon, 100);
 }
 
 // Incomplete sword slash bleeds 2% of full bot cost.
@@ -222,7 +230,7 @@ function assertWeaponStatsMatch(a, b) {
     weapon: "nanotech-sword"
   }));
   assert.equal(fighter.nanobotWeapon, 100);
-  assert.equal(fighter.nanobotFree, 500);
+  assert.equal(fighter.nanobotFree, 750);
   assert.equal(nanotechSwordHidden(fighter), false);
 
   const absorb = tryNanotechWeaponAction(fighter);
@@ -315,9 +323,11 @@ function syncDisplay(fighter) {
 // Channel / regen rates.
 {
   assert.equal(NANOTECH_SLOW_REGEN, 55);
+  assert.equal(NANOTECH_REGEN_HIT_DELAY, 2);
   assert.equal(NANOTECH_CHANNEL_RATE, 50);
   assert.equal(NANOTECH_ARMOR_PRESS, 100);
   assert.equal(NANOTECH_BOTS_PER_HP, 2);
+  assert.equal(nanotechCostOf("nanotech-chestplate"), 750);
 }
 
 console.log("nanotech.test.js: ok");
