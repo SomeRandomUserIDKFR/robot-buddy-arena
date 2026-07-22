@@ -263,6 +263,8 @@ export const NANOTECH_CHANNEL_RATE = 220;
 export const NANOTECH_SLOW_REGEN = 35;
 export const NANOTECH_BOTS_PER_HP = 2;
 export const NANOTECH_ARMOR_BOT_CAP = 500;
+/** Particle armor assemble when channeling starts from empty (≤ 0.5s). */
+export const NANOTECH_ARMOR_SPAWN_DURATION = 0.45;
 
 export const GEAR_BY_ID = Object.fromEntries(GEAR.map((gear) => [gear.id, gear]));
 export const STARTER_GEAR = [
@@ -651,12 +653,31 @@ export function canNanotechAttack(fighter) {
   return (fighter.nanobotFree || 0) >= cost;
 }
 
+/** Nanotech sword dissolves into armor — hide while bots are armored or spawning. */
+export function nanotechSwordHidden(fighter) {
+  if (fighter?.weaponId !== "nanotech-sword") return false;
+  return (fighter.nanobotArmor || 0) > 0 || !!fighter.nanotechArmorSpawning;
+}
+
+function beginNanotechArmorSpawn(fighter) {
+  if (!fighter || !hasNanotechChestplate(fighter)) return false;
+  fighter.nanotechArmorSpawning = true;
+  fighter.nanotechArmorSpawnT = 0;
+  return true;
+}
+
 export function setNanotechChanneling(fighter, on) {
   if (!fighter || !hasNanotechChestplate(fighter) || fighter.dead) {
     if (fighter) fighter.nanotechChanneling = false;
     return false;
   }
-  fighter.nanotechChanneling = !!on;
+  const want = !!on;
+  const was = !!fighter.nanotechChanneling;
+  fighter.nanotechChanneling = want;
+  // Fresh channel from empty armor → particle suit spawn (sword dissolves into it).
+  if (want && !was && (fighter.nanobotArmor || 0) <= 0) {
+    beginNanotechArmorSpawn(fighter);
+  }
   return true;
 }
 
@@ -682,6 +703,7 @@ export function tickNanotech(fighter, dt) {
   const max = fighter.nanobotMax;
   let free = Math.max(0, fighter.nanobotFree || 0);
   let armor = Math.max(0, fighter.nanobotArmor || 0);
+  const armorBefore = armor;
 
   if (fighter.nanotechChanneling && hasNanotechChestplate(fighter)) {
     const room = Math.max(0, NANOTECH_ARMOR_BOT_CAP - armor);
@@ -704,6 +726,28 @@ export function tickNanotech(fighter, dt) {
   if (fighter.nanobotFree + fighter.nanobotArmor > max) {
     fighter.nanobotFree = Math.max(0, max - fighter.nanobotArmor);
   }
+
+  // Rising edge into armor while already channeling (e.g. bots arrive mid-hold).
+  if (
+    armorBefore <= 0
+    && fighter.nanobotArmor > 0
+    && fighter.nanotechChanneling
+    && !fighter.nanotechArmorSpawning
+  ) {
+    beginNanotechArmorSpawn(fighter);
+  }
+
+  if (fighter.nanotechArmorSpawning) {
+    fighter.nanotechArmorSpawnT = Math.min(
+      1,
+      (fighter.nanotechArmorSpawnT || 0) + dt / NANOTECH_ARMOR_SPAWN_DURATION
+    );
+    if (fighter.nanotechArmorSpawnT >= 1) {
+      fighter.nanotechArmorSpawning = false;
+      fighter.nanotechArmorSpawnT = 1;
+    }
+  }
+
   syncNanotechDisplayedHp(fighter);
 }
 
@@ -1194,6 +1238,8 @@ export function applyLoadout(fighter, loadout) {
   fighter.nanobotFree = nanobotMax;
   fighter.nanobotArmor = 0;
   fighter.nanotechChanneling = false;
+  fighter.nanotechArmorSpawning = false;
+  fighter.nanotechArmorSpawnT = 1;
   fighter.nanotechWeaponCost = weapon.nanotech ? nanotechCostOf(weapon) : 0;
   fighter.hasNanotechChestplate = fighter.loadout.body === "nanotech-chestplate";
   fighter.forceNanotechMorph = SLOT_ORDER.some((slot) => {

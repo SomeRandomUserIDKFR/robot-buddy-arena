@@ -160,6 +160,46 @@ function syncDisplay(fighter) {
   assert.equal(chest.nanotechChanneling, false);
 }
 
+// Armor spawn ≤0.5s with particles; nanotech sword hides while bots are in armor.
+{
+  const {
+    NANOTECH_ARMOR_SPAWN_DURATION, nanotechSwordHidden
+  } = await import("./equipment.js");
+  assert.ok(NANOTECH_ARMOR_SPAWN_DURATION > 0 && NANOTECH_ARMOR_SPAWN_DURATION <= 0.5);
+
+  const fighter = applyLoadout(new Fighter({}), loadout({
+    body: "nanotech-chestplate",
+    weapon: "nanotech-sword"
+  }));
+  assert.equal(nanotechSwordHidden(fighter), false);
+  assert.equal(setNanotechChanneling(fighter, true), true);
+  assert.equal(fighter.nanotechArmorSpawning, true);
+  assert.equal(nanotechSwordHidden(fighter), true, "sword gone during spawn");
+
+  tickNanotech(fighter, 0.05);
+  assert.ok(fighter.nanobotArmor > 0);
+  assert.equal(nanotechSwordHidden(fighter), true, "sword gone while armor has bots");
+
+  for (let i = 0; i < 40; i++) tickNanotech(fighter, 0.05);
+  assert.equal(fighter.nanotechArmorSpawning, false, "spawn finishes within 0.5s window");
+  assert.ok((fighter.nanotechArmorSpawnT || 0) >= 1);
+  assert.equal(nanotechSwordHidden(fighter), true);
+
+  // Drain armor — sword returns.
+  fighter.nanobotArmor = 0;
+  fighter.nanotechChanneling = false;
+  syncDisplay(fighter);
+  assert.equal(nanotechSwordHidden(fighter), false);
+
+  const rifle = applyLoadout(new Fighter({}), loadout({
+    body: "nanotech-chestplate",
+    weapon: "nanotech-rifle"
+  }));
+  setNanotechChanneling(rifle, true);
+  tickNanotech(rifle, 0.1);
+  assert.equal(nanotechSwordHidden(rifle), false, "rifle stays visible");
+}
+
 // Slow regen rate constant is wired.
 {
   assert.equal(NANOTECH_SLOW_REGEN, 35);

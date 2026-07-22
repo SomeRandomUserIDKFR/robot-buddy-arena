@@ -341,16 +341,18 @@ export function updateHud(game) {
       const curHp = nanotechArmorHp(player);
       const armorPct = maxHp > 0 ? (curHp / maxHp) * 100 : 0;
       ui.armor.style.width = `${armorPct}%`;
-      ui.armorMeter.classList.toggle("deployed", curHp > 0 && !player.nanotechChanneling);
-      ui.armorMeter.classList.toggle("morphing", !!player.nanotechChanneling);
-      ui.armorMeter.classList.toggle("empty", curHp <= 0);
+      ui.armorMeter.classList.toggle("deployed", curHp > 0 && !player.nanotechArmorSpawning);
+      ui.armorMeter.classList.toggle("morphing", !!player.nanotechArmorSpawning);
+      ui.armorMeter.classList.toggle("empty", curHp <= 0 && !player.nanotechArmorSpawning);
       const weaponCost = player.nanotechWeaponCost || 0;
       const freeLow = weaponCost > 0 && (player.nanobotFree || 0) < weaponCost;
-      ui.armorLabel.textContent = player.nanotechChanneling
-        ? "CHANNEL…"
-        : freeLow
-          ? "NANO LOW"
-          : "NANO";
+      ui.armorLabel.textContent = player.nanotechArmorSpawning
+        ? "NANO FORM…"
+        : player.nanotechChanneling
+          ? "CHANNEL…"
+          : freeLow
+            ? "NANO LOW"
+            : "NANO";
     } else if (hasArmor) {
       const armorPct = player.retractableMax > 0
         ? (player.retractableHp / player.retractableMax) * 100

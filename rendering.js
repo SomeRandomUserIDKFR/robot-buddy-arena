@@ -1,6 +1,6 @@
 import { CEILING, SIGHT, SIZE, WORLD } from "./config.js";
 import { armorDummyColor, FORGE_PHASE_DURATIONS, forgeCastColor } from "./debris.js";
-import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID, nanotechArmorHp, nanotechArmorMaxHp } from "./equipment.js";
+import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID, nanotechArmorHp, nanotechArmorMaxHp, nanotechSwordHidden } from "./equipment.js";
 import { normalizeModularMorphStyle } from "./settings.js";
 import { platformsOf } from "./maps.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
@@ -582,12 +582,23 @@ function drawRetractableArmorPlates(context, game, fighter, centerX, centerY, bo
   context.restore();
 }
 
-/** Nanotech chestplate buffer: suit scales with channeled armor HP. */
+/** Nanotech chestplate buffer: short particle spawn, then suit scales with armor HP. */
 function drawNanotechChestplateArmor(context, game, fighter, centerX, centerY, bodyAlpha) {
-  if (!fighter.hasNanotechChestplate || !(fighter.nanobotArmor > 0)) return;
+  if (!fighter.hasNanotechChestplate) return;
+  const spawning = !!fighter.nanotechArmorSpawning;
+  const armorBots = fighter.nanobotArmor || 0;
+  if (!spawning && !(armorBots > 0)) return;
+
   const maxHp = nanotechArmorMaxHp(fighter);
-  if (maxHp <= 0) return;
-  const u = clamp(nanotechArmorHp(fighter) / maxHp, 0, 1);
+  if (maxHp <= 0 && !spawning) return;
+
+  const fillU = maxHp > 0 ? clamp(nanotechArmorHp(fighter) / maxHp, 0, 1) : 0;
+  const spawnT = spawning
+    ? clamp(fighter.nanotechArmorSpawnT ?? 0, 0, 1)
+    : 1;
+  const spawnEase = 1 - (1 - spawnT) * (1 - spawnT);
+  // During spawn, particles assemble; afterward suit fill tracks armor HP.
+  const u = spawning ? Math.max(0.08, spawnEase) : fillU;
   if (u <= 0.02) return;
 
   const faction = fighter.buddy ? "buddy" : fighter.team ? "enemy" : "ally";
@@ -597,14 +608,15 @@ function drawNanotechChestplateArmor(context, game, fighter, centerX, centerY, b
   }
   const glow = mixHexColors(color, "#ffffff", 0.4);
   const half = SIZE / 2 + 4;
-  const morphing = !!fighter.nanotechChanneling;
   context.save();
   context.translate(centerX, centerY);
-  drawNanotechArmorSuit(context, color, glow, half, u, bodyAlpha, morphing);
+  drawNanotechArmorSuit(context, color, glow, half, u, bodyAlpha, spawning);
   context.restore();
 }
 
 function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
+  // Nanotech sword becomes the armor swarm while bots are channeled.
+  if (nanotechSwordHidden(fighter)) return;
   const alpha = bodyAlpha * (shieldUp ? .38 : 1);
   const morphStyle = morphStyleFor(fighter, game);
   const canMorph = fighter.weaponId === MODULAR_WEAPON_ID
