@@ -3,13 +3,12 @@ import { DEFAULT_PROFILE } from "./config.js";
 import {
   applyLoadout, DEFAULT_LOADOUT, ensureEquipmentProfile, equipOwned, GEAR_BY_ID,
   MATERIAL_CONSUMER_BOTS_PER_PIECE, MATERIAL_CONSUMER_ID, NO_EXTENSION_ID,
-  NO_SECONDARY_ID, RECONJURER_BUILDER_ID, selectWeaponSlot, SLOT_LABELS, SLOT_ORDER,
-  STARTER_GEAR
+  RECONJURER_BUILDER_ID, selectWeaponSlot, SLOT_LABELS, SLOT_ORDER, STARTER_GEAR
 } from "./equipment.js";
 import {
   hasExtensionSecondary, isReconjurerBuilder, RECONJURER_BOT_COST,
-  RECONJURER_COOLDOWN, RECONJURER_METAL_SCRAP_COST, RECONJURER_SCRAP_COST,
-  tryReconjurerBuild, tickReconjurerBuilder
+  RECONJURER_COOLDOWN, RECONJURER_METAL_BOT_COST, RECONJURER_METAL_COOLDOWN,
+  RECONJURER_SCRAP_REWARD, tryReconjurerBuild, tickReconjurerBuilder
 } from "./reconjurer-builder.js";
 
 const clone = (value) => structuredClone(value);
@@ -20,8 +19,8 @@ assert.ok(STARTER_GEAR.includes(NO_EXTENSION_ID));
 assert.equal(DEFAULT_LOADOUT.extensionSecondary, NO_EXTENSION_ID);
 assert.equal(GEAR_BY_ID[RECONJURER_BUILDER_ID].slot, "extensionSecondary");
 assert.equal(GEAR_BY_ID[RECONJURER_BUILDER_ID].reconjurerBuilder, true);
-assert.equal(RECONJURER_SCRAP_COST, 1);
-assert.equal(RECONJURER_METAL_SCRAP_COST, 2);
+assert.equal(RECONJURER_SCRAP_REWARD, 2);
+assert.equal(RECONJURER_METAL_COOLDOWN, 10);
 assert.equal(RECONJURER_BOT_COST, MATERIAL_CONSUMER_BOTS_PER_PIECE);
 
 // Profile migration fills extension slot; equip does not steal 1/2 secondary.
@@ -48,7 +47,7 @@ assert.equal(RECONJURER_BOT_COST, MATERIAL_CONSUMER_BOTS_PER_PIECE);
   assert.equal(fighter.reconjurerBuilder, true, "extension survives 1/2 swap");
 }
 
-// Tank scraps pay first; bots untouched.
+// Rebuild spends bots only; tank scraps are never lost — you gain +2 instead.
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
@@ -71,17 +70,22 @@ assert.equal(RECONJURER_BOT_COST, MATERIAL_CONSUMER_BOTS_PER_PIECE);
     platforms: [{ x: 0, y: 420, w: 3600, h: 40 }],
     effects: []
   };
+  const tankBefore = fighter.materialEjectionTank.length;
   const freeBefore = fighter.nanobotFree;
   const spawned = tryReconjurerBuild(fighter, game, () => 0.99);
   assert.ok(spawned, "spawned a breakable");
   assert.ok(!spawned.powerCrate, "forced non-metal with high roll");
-  assert.equal(fighter.materialEjectionTank.length, 0);
-  assert.equal(fighter.nanobotFree, freeBefore, "tank paid, bots untouched");
+  assert.equal(fighter.nanobotFree, freeBefore - RECONJURER_BOT_COST);
+  assert.equal(
+    fighter.materialEjectionTank.length,
+    tankBefore + RECONJURER_SCRAP_REWARD,
+    "tank kept + gained 2 reward scraps"
+  );
   assert.equal(game.props.length, 1);
   assert.ok(fighter.reconjurerCd > 0);
 }
 
-// Empty tank spends nanobots; cooldown blocks spam.
+// Empty tank still works via bots; cooldown blocks spam.
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
@@ -105,12 +109,13 @@ assert.equal(RECONJURER_BOT_COST, MATERIAL_CONSUMER_BOTS_PER_PIECE);
   const spawned = tryReconjurerBuild(fighter, game, () => 0.99);
   assert.ok(spawned);
   assert.equal(fighter.nanobotFree, 20 - RECONJURER_BOT_COST);
+  assert.equal(fighter.materialEjectionTank.length, RECONJURER_SCRAP_REWARD);
   assert.equal(tryReconjurerBuild(fighter, game, () => 0.99), null, "on cooldown");
   tickReconjurerBuilder(fighter, RECONJURER_COOLDOWN + 0.01);
   assert.equal(fighter.reconjurerCd, 0);
 }
 
-// Broke: no tank scraps and not enough bots → no spawn.
+// Broke: not enough bots → no spawn.
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
@@ -132,7 +137,7 @@ assert.equal(RECONJURER_BOT_COST, MATERIAL_CONSUMER_BOTS_PER_PIECE);
   assert.equal(game.props.length, 0);
 }
 
-// Low roll can spawn a metal power crate (costs 2 scrap units).
+// Metal crate when ready; starts 10s user metal CD; tank still gains scraps.
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
@@ -143,10 +148,8 @@ assert.equal(RECONJURER_BOT_COST, MATERIAL_CONSUMER_BOTS_PER_PIECE);
   fighter.y = 300;
   fighter.aim = 0;
   fighter.nanobotFree = 40;
-  fighter.materialEjectionTank = [
-    { bots: 0, ejection: true, color: "#aaa", w: 8, h: 8 },
-    { bots: 0, ejection: true, color: "#bbb", w: 8, h: 8 }
-  ];
+  fighter.materialEjectionTank = [];
+  fighter.reconjurerMetalCd = 0;
   const game = {
     elapsed: 3,
     mapId: "yard",
@@ -159,8 +162,31 @@ assert.equal(RECONJURER_BOT_COST, MATERIAL_CONSUMER_BOTS_PER_PIECE);
   const spawned = tryReconjurerBuild(fighter, game, () => 0.01);
   assert.ok(spawned?.powerCrate, "metal box on low roll");
   assert.equal(game.powerCrates.length, 1);
-  assert.equal(fighter.materialEjectionTank.length, 0, "spent 2 tank scraps");
-  assert.equal(fighter.nanobotFree, 40);
+  assert.equal(fighter.nanobotFree, 40 - RECONJURER_METAL_BOT_COST);
+  assert.equal(fighter.materialEjectionTank.length, RECONJURER_SCRAP_REWARD);
+  assert.ok(Math.abs(fighter.reconjurerMetalCd - RECONJURER_METAL_COOLDOWN) < 0.001);
+
+  // While metal CD is hot, even a "metal" roll becomes a normal breakable.
+  tickReconjurerBuilder(fighter, RECONJURER_COOLDOWN + 0.01);
+  const propsBefore = game.props.length;
+  const again = tryReconjurerBuild(fighter, game, () => 0.01);
+  assert.ok(again);
+  assert.ok(!again.powerCrate, "metal gated by 10s user CD");
+  assert.equal(game.powerCrates.length, 1);
+  assert.equal(game.props.length, propsBefore + 1);
+}
+
+// Metal CD ticks down globally for the user.
+{
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: RECONJURER_BUILDER_ID
+  });
+  fighter.reconjurerMetalCd = RECONJURER_METAL_COOLDOWN;
+  tickReconjurerBuilder(fighter, 3);
+  assert.ok(Math.abs(fighter.reconjurerMetalCd - 7) < 0.001);
+  tickReconjurerBuilder(fighter, 8);
+  assert.equal(fighter.reconjurerMetalCd, 0);
 }
 
 // Without extension equipped, key-3 path is a no-op.

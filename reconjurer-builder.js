@@ -1,13 +1,14 @@
 /**
  * Reconjurer / Builder — extension secondary (key 3).
- * Conjure random breakables near the fighter; rare metal power crates.
- * Cost: ejection-tank scraps first, else free nanobots.
+ * Conjure random breakables near the fighter; metal power crates on a 10s user CD.
+ * Costs free nanobots only (tank scraps are never spent — manual rebuild).
+ * Successful builds grant +2 ejection-tank scraps.
  */
 import { SIZE, WORLD } from "./config.js";
 import { resolveStandTarget } from "./debris.js";
 import {
-  GEAR_BY_ID, MATERIAL_CONSUMER_BOTS_PER_PIECE, NO_EXTENSION_ID,
-  RECONJURER_BUILDER_ID, spendTankOrNanobots
+  GEAR_BY_ID, MATERIAL_CONSUMER_BOTS_PER_PIECE, MATERIAL_CONSUMER_EJECTION_TANK_CAP,
+  materialEjectionTank, NO_EXTENSION_ID, RECONJURER_BUILDER_ID
 } from "./equipment.js";
 import { createMapProp, MAP_PROP_KINDS } from "./maps.js";
 import { createPowerCrate } from "./powerups.js";
@@ -17,16 +18,23 @@ export { RECONJURER_BUILDER_ID };
 
 /** Seconds between successful builds. */
 export const RECONJURER_COOLDOWN = 2.8;
+/** Global per-user cooldown between metal power-crate conjures. */
+export const RECONJURER_METAL_COOLDOWN = 10;
 /** World radius around the fighter for placement. */
 export const RECONJURER_PLACE_RADIUS = 140;
-/** Chance a conjure is a metal power crate instead of cover. */
+/** Chance a conjure is a metal power crate when the metal CD is ready. */
 export const RECONJURER_METAL_CRATE_CHANCE = 0.08;
-/** Tank scraps (or scrap-equivalents in bots) per normal breakable. */
-export const RECONJURER_SCRAP_COST = 1;
-/** Extra scrap units for a metal power crate. */
-export const RECONJURER_METAL_SCRAP_COST = 2;
-/** Free nanobots charged per missing tank scrap. */
+/** Ejection-tank scraps granted after a successful manual rebuild. */
+export const RECONJURER_SCRAP_REWARD = 2;
+/** Free nanobots charged for a normal breakable. */
 export const RECONJURER_BOT_COST = MATERIAL_CONSUMER_BOTS_PER_PIECE;
+/** Free nanobots charged for a metal power crate. */
+export const RECONJURER_METAL_BOT_COST = MATERIAL_CONSUMER_BOTS_PER_PIECE * 2;
+
+/** @deprecated kept for tests / FAQ wording — tank scraps are no longer spent. */
+export const RECONJURER_SCRAP_COST = 0;
+/** @deprecated metal no longer spends tank scraps. */
+export const RECONJURER_METAL_SCRAP_COST = 0;
 
 const THEME_KINDS = Object.freeze({
   desert: ["cactus", "bush", "crate", "barrel"],
@@ -64,22 +72,34 @@ function pickKind(game, random) {
   return pool[Math.floor(random() * pool.length) % pool.length];
 }
 
-function affordUnits(fighter, units) {
-  const tankLen = fighter.materialEjectionTank?.length || 0;
-  const fromTank = Math.min(tankLen, units);
-  const botsNeeded = (units - fromTank) * RECONJURER_BOT_COST;
-  return (fighter.nanobotFree || 0) >= botsNeeded;
+function affordBots(fighter, cost) {
+  return (fighter.nanobotFree || 0) >= Math.max(0, cost | 0);
 }
 
-function payUnits(fighter, units) {
-  if (!affordUnits(fighter, units)) return null;
-  const paid = [];
-  for (let i = 0; i < units; i++) {
-    const result = spendTankOrNanobots(fighter, RECONJURER_BOT_COST);
-    if (!result) return null;
-    paid.push(result);
+function spendBots(fighter, cost) {
+  const need = Math.max(0, cost | 0);
+  if (!affordBots(fighter, need)) return false;
+  if (need > 0) fighter.nanobotFree -= need;
+  return true;
+}
+
+/** Push reward scraps into the ejection tank (manual rebuild — you don't lose tank ammo). */
+function grantRebuildScraps(fighter, count = RECONJURER_SCRAP_REWARD) {
+  const tank = materialEjectionTank(fighter);
+  let gained = 0;
+  for (let i = 0; i < count; i++) {
+    if (tank.length >= MATERIAL_CONSUMER_EJECTION_TANK_CAP) break;
+    tank.push({
+      bots: 0,
+      ejection: true,
+      reconjurerReward: true,
+      color: "#8ec4d0",
+      w: 8,
+      h: 8
+    });
+    gained += 1;
   }
-  return paid;
+  return gained;
 }
 
 function placePoint(fighter, random) {
@@ -95,7 +115,8 @@ function placePoint(fighter, random) {
 }
 
 /**
- * Press 3: spend tank scraps (else nanobots) and conjure a breakable nearby.
+ * Press 3: spend nanobots, conjure a breakable nearby, gain +2 ejection scraps.
+ * Metal power crates only when the user's 10s metal countdown is ready.
  * @returns {object|null} spawned prop / power crate
  */
 export function tryReconjurerBuild(fighter, game, random = Math.random) {
@@ -103,9 +124,10 @@ export function tryReconjurerBuild(fighter, game, random = Math.random) {
   if (!isReconjurerBuilder(fighter)) return null;
   if ((fighter.reconjurerCd || 0) > 0) return null;
 
-  const wantMetal = random() < RECONJURER_METAL_CRATE_CHANCE;
-  const units = wantMetal ? RECONJURER_METAL_SCRAP_COST : RECONJURER_SCRAP_COST;
-  if (!affordUnits(fighter, units)) return null;
+  const metalReady = (fighter.reconjurerMetalCd || 0) <= 0;
+  const wantMetal = metalReady && random() < RECONJURER_METAL_CRATE_CHANCE;
+  const botCost = wantMetal ? RECONJURER_METAL_BOT_COST : RECONJURER_BOT_COST;
+  if (!affordBots(fighter, botCost)) return null;
 
   const rough = placePoint(fighter, random);
   let spawned = null;
@@ -116,7 +138,7 @@ export function tryReconjurerBuild(fighter, game, random = Math.random) {
     const stand = resolveStandTarget(game, [], rough.x, rough.y, w, h);
     const x = stand.targetX - w * 0.5;
     const yBottom = stand.targetY + h * 0.5;
-    if (!payUnits(fighter, units)) return null;
+    if (!spendBots(fighter, botCost)) return null;
     spawned = createPowerCrate(
       { x, y: yBottom },
       game.mapId || "battlefield",
@@ -125,19 +147,22 @@ export function tryReconjurerBuild(fighter, game, random = Math.random) {
     );
     game.powerCrates ||= [];
     game.powerCrates.push(spawned);
+    fighter.reconjurerMetalCd = RECONJURER_METAL_COOLDOWN;
   } else {
     const kind = pickKind(game, random);
-    // Probe size from a temp prop for stand snap.
     const probe = createMapProp(kind, 0, 0);
     const stand = resolveStandTarget(game, [], rough.x, rough.y, probe.w, probe.h);
     const x = stand.targetX - probe.w * 0.5;
     const yBottom = stand.targetY + probe.h * 0.5;
-    if (!payUnits(fighter, units)) return null;
+    if (!spendBots(fighter, botCost)) return null;
     spawned = createMapProp(kind, x, yBottom);
     spawned.x = clamp(spawned.x, 0, WORLD.w - spawned.w);
     game.props ||= [];
     game.props.push(spawned);
   }
+
+  // Manual rebuild: never drain the ejection tank — award scraps instead.
+  grantRebuildScraps(fighter, RECONJURER_SCRAP_REWARD);
 
   fighter.reconjurerCd = RECONJURER_COOLDOWN;
   fighter.reconjurerFlash = 0.22;
@@ -161,10 +186,14 @@ export function tryReconjurerBuild(fighter, game, random = Math.random) {
 
 export function tickReconjurerBuilder(fighter, dt) {
   if (!fighter) return;
+  const step = dt || 0;
   if (fighter.reconjurerCd > 0) {
-    fighter.reconjurerCd = Math.max(0, fighter.reconjurerCd - (dt || 0));
+    fighter.reconjurerCd = Math.max(0, fighter.reconjurerCd - step);
+  }
+  if (fighter.reconjurerMetalCd > 0) {
+    fighter.reconjurerMetalCd = Math.max(0, fighter.reconjurerMetalCd - step);
   }
   if (fighter.reconjurerFlash > 0) {
-    fighter.reconjurerFlash = Math.max(0, fighter.reconjurerFlash - (dt || 0));
+    fighter.reconjurerFlash = Math.max(0, fighter.reconjurerFlash - step);
   }
 }

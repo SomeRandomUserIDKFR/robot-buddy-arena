@@ -863,9 +863,9 @@ function modifierMarkup(gear) {
     if (gear.reconjurerBuilder) {
       return [
         "<span>Extension · press 3 to conjure</span>",
-        "<span class=\"stat-up\">Random breakables near you</span>",
-        "<span class=\"stat-up\">Low chance metal power crate</span>",
-        "<span>Costs ejection-tank scraps first, else bots</span>",
+        "<span class=\"stat-up\">+2 ejection scraps per rebuild</span>",
+        "<span class=\"stat-up\">Metal crate every 10s (user CD)</span>",
+        "<span>Costs nanobots · tank scraps never spent</span>",
         "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"
       ].join("");
     }

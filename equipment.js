@@ -369,7 +369,7 @@ export const GEAR = [
     RECONJURER_BUILDER_ID,
     "extensionSecondary",
     "Reconjurer / Builder",
-    "Extension tool (press 3). Conjure random breakables near you — low chance of a metal power crate. Costs ejection-tank scraps first, else nanobots. Does not replace your 1/2 secondary.",
+    "Extension tool (press 3). Conjure random breakables near you for nanobots — you gain 2 ejection scraps (tank never drained). Metal power crates only every 10s. Does not replace your 1/2 secondary.",
     {},
     {
       price: 200,
@@ -2335,6 +2335,7 @@ export function applyLoadout(fighter, loadout) {
   const extension = GEAR_BY_ID[fighter.loadout.extensionSecondary];
   fighter.reconjurerBuilder = !!extension?.reconjurerBuilder;
   fighter.reconjurerCd = 0;
+  fighter.reconjurerMetalCd = 0;
   fighter.reconjurerFlash = 0;
   if (weapon.id === ADAPTIVE_NANOTECH_ID) {
     applyAdaptiveCombatStats(fighter, "sword");
