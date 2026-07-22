@@ -106,9 +106,11 @@ export function evidenceReliability(record) {
  * Scale for AI aim-error cone while the buddy holds a marksman/sniper.
  * Returns 1 (no bonus) for other weapons or empty precisionAim evidence.
  * At full reliability: multiply aim error by (1 - PRECISION_AIM_MAX_REDUCTION).
+ * Accepts a weapon id string or a fighter object (for Adaptive Nanotech Unit's
+ * mode-dependent sniper gimmick).
  */
-export function precisionAimErrorScale(learned, weaponId) {
-  if (!isPrecisionAimWeapon(weaponId)) return 1;
+export function precisionAimErrorScale(learned, weaponIdOrFighter) {
+  if (!isPrecisionAimWeapon(weaponIdOrFighter)) return 1;
   const profile = ensureLearningProfile(learned);
   const reliability = evidenceReliability(profile.capabilities.precisionAim);
   return 1 - reliability * PRECISION_AIM_MAX_REDUCTION;
@@ -460,7 +462,7 @@ export function updateLearning(game, profile) {
     // Precision gimmick: only Training matches where the buddy fought with a
     // marksman/sniper accrue this domain. Pulse/carbine practice never does.
     const buddy = game.fighters.find((fighter) => fighter.buddy) || game.fighters[1];
-    if (buddy && isPrecisionAimWeapon(buddy.weaponId)) {
+    if (buddy && isPrecisionAimWeapon(buddy)) {
       recordEvidence(learned.capabilities.precisionAim, aimOk);
       changed.push("precisionAim");
     }

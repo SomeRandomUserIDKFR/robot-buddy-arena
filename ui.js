@@ -6,8 +6,9 @@ import { defaultQuickReplies, ensureCoaching } from "./coaching.js";
 import { FAQ_TOPIC_CHIPS } from "./game-faq.js";
 import { analyzerStatus, initializeLanguageAnalyzer } from "./language-analyzer.js";
 import {
-  effectiveStats, effectiveOwned, GEAR, GEAR_BY_ID, nanotechArmorHp, nanotechArmorMaxHp, ownedForSlot,
-  shieldStats, SLOT_LABELS, SLOT_ORDER, theoreticalDps, weaponKind, weaponStats
+  ADAPTIVE_NANOTECH_ID, effectiveStats, effectiveOwned, GEAR, GEAR_BY_ID, nanotechArmorHp,
+  nanotechArmorMaxHp, ownedForSlot, shieldStats, SLOT_LABELS, SLOT_ORDER, theoreticalDps,
+  weaponKind, weaponStats
 } from "./equipment.js";
 import {
   beginConquestSelect, getPendingEncounter, hasFreeReroll, loadoutSummary,
@@ -424,7 +425,14 @@ export function updateHud(game) {
     const modeTag = player.modularMorphing
       ? "MORPH…"
       : ({ sword: "SWORD", shield: "SHIELD", rifle: "RIFLE" }[player.modularMode] || "MOD");
-    const base = ui.modeLabel.textContent.replace(/\s*·\s*(SWORD|SHIELD|RIFLE|MORPH…)\s*$/, "");
+    const base = ui.modeLabel.textContent.replace(/\s*·\s*(SWORD|SHIELD|RIFLE|SNIPER|MORPH…)\s*$/, "");
+    ui.modeLabel.textContent = `${base} · ${modeTag}`;
+  }
+  if (ui.modeLabel && player.adaptiveNanotechWeapon) {
+    const modeTag = player.adaptiveMorphing
+      ? "MORPH…"
+      : ({ sword: "SWORD", rifle: "RIFLE", sniper: "SNIPER" }[player.adaptiveMode] || "ADAPT");
+    const base = ui.modeLabel.textContent.replace(/\s*·\s*(SWORD|SHIELD|RIFLE|SNIPER|MORPH…)\s*$/, "");
     ui.modeLabel.textContent = `${base} · ${modeTag}`;
   }
   const dodgeBase = 1.2 * (player.dodgeCooldownMult || 1);
@@ -813,6 +821,15 @@ function modifierMarkup(gear) {
         "<span>Sword ≈ Arc Saber</span>",
         "<span class=\"stat-down\">Rifle ~92% Pulse</span>",
         "<span class=\"stat-down\">Plate &lt; Light Buckler</span>"
+      ].join("");
+    }
+    if (gear.id === ADAPTIVE_NANOTECH_ID) {
+      return [
+        "<span>Morph body (R) · E forms/absorbs</span>",
+        "<span class=\"stat-up\">195 nanobot pool</span>",
+        "<span>Sword ≈ Arc Saber</span>",
+        "<span>Rifle ≈ Pulse Rifle</span>",
+        "<span>Sniper ≈ Classic Sniper</span>"
       ].join("");
     }
     const stats = weaponStats(gear);

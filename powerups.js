@@ -5,7 +5,7 @@
 
 import { SIZE, SIGHT } from "./config.js";
 import { spawnPowerCrateDebris, tryReconquerAtSpawn } from "./debris.js";
-import { healFighter, syncRetractableDisplayedHp } from "./equipment.js";
+import { ADAPTIVE_NANOTECH_ID, healFighter, syncRetractableDisplayedHp } from "./equipment.js";
 import { POWER_CRATE_MAP, POWER_CRATE_SPAWNS } from "./maps.js";
 import { inBeamReveal, inDirectionalSight, hasLineOfSight } from "./vision.js";
 import { clamp, dist } from "./utils.js";
@@ -158,6 +158,9 @@ export function themeForMap(mapId, theme) {
 export function isMeleeFighter(fighter) {
   if (fighter?.weaponId === "mechanical-modularity") {
     return fighter.modularMode === "sword" && !fighter.modularMorphing;
+  }
+  if (fighter?.weaponId === ADAPTIVE_NANOTECH_ID) {
+    return fighter.adaptiveMode === "sword" && !fighter.adaptiveMorphing;
   }
   return fighter?.weapon === "saber"
     || fighter?.weaponStats?.kind === "melee";

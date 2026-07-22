@@ -4,8 +4,9 @@ import { Fighter, hit, stepBullets, stepFighter, triggerDodge } from "./combat.j
 import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
-  acceptSuggestion, applyLoadout, awardConquest, cycleModularMode, equipOwned,
-  hasNanotechChestplate, isModularWeapon, NANOTECH_F_HOLD_THRESHOLD, pulseNanotechArmor,
+  acceptSuggestion, applyLoadout, awardConquest, cycleAdaptiveMode, cycleModularMode,
+  equipOwned, hasNanotechChestplate, isAdaptiveNanotechWeapon, isModularWeapon,
+  NANOTECH_F_HOLD_THRESHOLD, pulseNanotechArmor,
   purchaseGear, reconcileLoadoutsToOwned, setBuddyMode, setNanotechChanneling,
   tryNanotechWeaponAction, toggleRetractableArmor, toggleShieldRaise,
   trainerLoadout, weaponKind
@@ -379,6 +380,12 @@ function handleKeyDown(event) {
       tryNanotechWeaponAction(player);
     }
   }
+  if (event.code === "KeyR" && !event.repeat) {
+    const player = game.fighters[0];
+    if (isAdaptiveNanotechWeapon(player)) {
+      cycleAdaptiveMode(player);
+    }
+  }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
   if (event.code === "KeyG") {
     const point = screenToWorld(mouse.x, mouse.y);
@@ -397,7 +404,7 @@ function handleKeyDown(event) {
     }
     showPause(game.paused);
   }
-  if (["Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE", "KeyF"].includes(event.code)) {
+  if (["Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE", "KeyF", "KeyR"].includes(event.code)) {
     event.preventDefault();
   }
 }

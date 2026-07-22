@@ -5,8 +5,9 @@ import {
 import { updateAI } from "./ai.js";
 import {
   applyHpDamage, applyNanotechSlashBotLoss, canNanotechAttack, consumeNanotechShot,
-  modularAttackLocked, nanotechFormPct, retractableSpeedMultiplier, shieldBlocksAttack,
-  shieldSpeedMultiplier, tickModularWeapon, tickNanotech, tickRetractableArmor
+  nanotechFormPct, retractableSpeedMultiplier, shieldBlocksAttack,
+  shieldSpeedMultiplier, tickAdaptiveWeapon, tickModularWeapon, tickNanotech,
+  tickRetractableArmor, weaponAttackLocked
 } from "./equipment.js";
 import { armorDummyBlockers, damageArmorDummy } from "./debris.js";
 import {
@@ -304,7 +305,7 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct = 1) {
 export function attack(fighter, game, random = Math.random) {
   if (fighter.attackCd > 0 || fighter.dead) return;
   if (fighter.shieldRaised && !fighter.shieldBroken) return;
-  if (modularAttackLocked(fighter)) return;
+  if (weaponAttackLocked(fighter)) return;
   if (!canNanotechAttack(fighter)) return;
   const spread = weaponAccuracySpread(fighter);
   const shotAngle = fighter.aim + (random() - .5) * spread * 2;
@@ -430,6 +431,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   fighter.spotted -= dt;
   fighter.shieldFlash -= dt;
   tickModularWeapon(fighter, dt);
+  tickAdaptiveWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
   // Humans: know fire intent before nanotech tick so hold-to-shoot blocks regen.
   let intent = null;

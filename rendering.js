@@ -1,6 +1,9 @@
 import { CEILING, SIGHT, SIZE, WORLD } from "./config.js";
 import { armorDummyColor, FORGE_PHASE_DURATIONS, forgeCastColor } from "./debris.js";
-import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID, nanotechArmorHp, nanotechArmorMaxHp, nanotechWeaponVisibility } from "./equipment.js";
+import {
+  ADAPTIVE_MODE_DEFS, ADAPTIVE_NANOTECH_ID, MODULAR_MODE_DEFS, MODULAR_WEAPON_ID,
+  nanotechArmorHp, nanotechArmorMaxHp, nanotechWeaponVisibility
+} from "./equipment.js";
 import { normalizeModularMorphStyle } from "./settings.js";
 import { platformsOf } from "./maps.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
@@ -99,6 +102,52 @@ export function weaponVisual(weaponId, holder = {}) {
       gripOffset: from.gripOffset + (to.gripOffset - from.gripOffset) * u,
       color,
       morphing: !!holder.modularMorphing,
+      morphU: u,
+      fromShape: {
+        length: from.length,
+        width: from.width,
+        gripOffset: from.gripOffset,
+        color: holder.color && faction === "enemy"
+          ? mixHexColors(fromColor, holder.color, 0.62)
+          : fromColor
+      },
+      toShape: {
+        length: to.length,
+        width: to.width,
+        gripOffset: to.gripOffset,
+        color: holder.color && faction === "enemy"
+          ? mixHexColors(toColor, holder.color, 0.62)
+          : toColor
+      }
+    };
+  }
+
+  if (weaponId === ADAPTIVE_NANOTECH_ID) {
+    const mode = holder.adaptiveMode || "sword";
+    const fromId = holder.adaptiveMorphing
+      ? (holder.adaptiveMorphFrom || mode)
+      : mode;
+    const toId = holder.adaptiveMorphing
+      ? (holder.adaptiveMorphTo || mode)
+      : mode;
+    const from = ADAPTIVE_MODE_DEFS[fromId]?.visual || ADAPTIVE_MODE_DEFS.sword.visual;
+    const to = ADAPTIVE_MODE_DEFS[toId]?.visual || from;
+    const t = holder.adaptiveMorphing
+      ? Math.max(0, Math.min(1, holder.adaptiveMorphT ?? 0))
+      : 1;
+    const u = 1 - (1 - t) * (1 - t);
+    const fromColor = from[faction];
+    const toColor = to[faction];
+    let color = mixHexColors(fromColor, toColor, u);
+    if (holder.color && faction === "enemy") {
+      color = mixHexColors(color, holder.color, 0.62);
+    }
+    return {
+      length: from.length + (to.length - from.length) * u,
+      width: from.width + (to.width - from.width) * u,
+      gripOffset: from.gripOffset + (to.gripOffset - from.gripOffset) * u,
+      color,
+      morphing: !!holder.adaptiveMorphing,
       morphU: u,
       fromShape: {
         length: from.length,
@@ -623,13 +672,13 @@ function drawNanotechChestplateArmor(context, game, fighter, centerX, centerY, b
 
 function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
   const isNanoWeapon = (fighter.nanotechWeaponCost || 0) > 0
-    && !!fighter.weaponId?.startsWith?.("nanotech-");
+    && (!!fighter.weaponId?.startsWith?.("nanotech-") || fighter.weaponId === ADAPTIVE_NANOTECH_ID);
   const weaponVis = isNanoWeapon ? nanotechWeaponVisibility(fighter) : 1;
   if (isNanoWeapon && weaponVis <= 0.02) return;
 
   const alpha = bodyAlpha * (shieldUp ? .38 : 1) * weaponVis;
   const morphStyle = morphStyleFor(fighter, game);
-  const canMorph = fighter.weaponId === MODULAR_WEAPON_ID
+  const canMorph = (fighter.weaponId === MODULAR_WEAPON_ID || fighter.weaponId === ADAPTIVE_NANOTECH_ID)
     && visual.morphing
     && visual.fromShape
     && visual.toShape;
@@ -647,7 +696,9 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
     return;
   }
 
-  const scale = fighter.weaponId === "nanotech-sword"
+  const swordLikeDissolve = fighter.weaponId === "nanotech-sword"
+    || (fighter.weaponId === ADAPTIVE_NANOTECH_ID && fighter.weapon === "saber");
+  const scale = swordLikeDissolve
     ? 0.55 + 0.45 * weaponVis
     : isNanoWeapon
       ? 0.7 + 0.3 * weaponVis

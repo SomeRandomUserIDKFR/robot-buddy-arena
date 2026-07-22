@@ -4,9 +4,9 @@ import {
 import { platformsOf } from "./maps.js";
 import { directiveStrength } from "./coaching.js";
 import {
-  beginModularMorph, beginRetractableMorph, hasNanotechChestplate, hasRetractableArmor,
-  isModularWeapon, nanotechFormPct, pulseNanotechArmor, setNanotechChanneling,
-  tryFormNanotechWeapon
+  beginAdaptiveMorph, beginModularMorph, beginRetractableMorph, hasNanotechChestplate,
+  hasRetractableArmor, isAdaptiveNanotechWeapon, isModularWeapon, nanotechFormPct,
+  pulseNanotechArmor, setNanotechChanneling, tryFormNanotechWeapon
 } from "./equipment.js";
 import {
   ensureLearningProfile, evidenceReliability, evidenceState, mimicBlendFactor,
@@ -1019,7 +1019,7 @@ export function updateAI(fighter, dt, game, profile) {
     // (evidence from those Training fights); pulse/carbine and enemy trainers skip it.
     let aimError = preset.aim;
     if (fighter.buddy) {
-      aimError *= precisionAimErrorScale(learned, fighter.weaponId);
+      aimError *= precisionAimErrorScale(learned, fighter);
     }
     let aimAngle = Math.atan2(ty - fighter.y - SIZE / 2, tx - fighter.x - SIZE / 2)
       + (Math.random() - .5) * aimError;
@@ -1313,6 +1313,23 @@ export function updateAI(fighter, dt, game, profile) {
     }
   }
   if (fighter.modularMorphing || fighter.modularMode === "shield") {
+    state.attack = false;
+  }
+
+  // Adaptive Nanotech Unit: sword close, sniper long range, rifle mid — R cycles.
+  if (isAdaptiveNanotechWeapon(fighter) && !fighter.adaptiveMorphing) {
+    let wantMode = fighter.adaptiveMode || "sword";
+    if (target && visible.includes(target)) {
+      const d = dist(fighter, target);
+      if (d < 160) wantMode = "sword";
+      else if (d > 500) wantMode = "sniper";
+      else wantMode = "rifle";
+    }
+    if (wantMode !== fighter.adaptiveMode) {
+      beginAdaptiveMorph(fighter, wantMode);
+    }
+  }
+  if (fighter.adaptiveMorphing) {
     state.attack = false;
   }
 

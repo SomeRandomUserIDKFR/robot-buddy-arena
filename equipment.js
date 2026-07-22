@@ -201,6 +201,37 @@ export const GEAR = [
   }, 175, {
     nanotech: true, nanobotCost: 195, nanobotFormCost: 175, nanobotShotCost: 20
   }),
+  // Ultimate: R cycles Sword/Rifle/Sniper bodies from one shared 195-bot pool.
+  // Catalog defaults (baseKind + weaponStats + nanobotFormCost) describe sword
+  // mode — matches Arc Saber / nanotech-sword — so shop math and the generic
+  // nanotech loadout path already agree before syncAdaptiveNanotechCosts runs.
+  item(
+    "adaptive-nanotech-unit",
+    "weapon",
+    "Adaptive Nanotech Unit",
+    "Ultimate morph: R cycles Sword ↔ Rifle ↔ Sniper bodies from a shared 195-bot pool. E still forms/absorbs the active body like other nanotech gear.",
+    {
+      damage: 55 / 40,
+      fireRate: 150 / 150,
+      range: 120 / 120
+    },
+    {
+      baseKind: "saber",
+      dps: 55 * 150 / 60,
+      price: 400,
+      nanotech: true,
+      adaptiveNanotech: true,
+      nanobotCost: 195,
+      nanobotFormCost: 100,
+      nanobotShotCost: 0,
+      weaponStats: {
+        kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+        sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+        movementMultiplier: 1.1, iframeMultiplier: 1,
+        baseDamage: 55, rpm: 150, range: 120
+      }
+    }
+  ),
   item(
     "nanotech-chestplate",
     "body",
@@ -534,6 +565,198 @@ export function modularAttackLocked(fighter) {
     && (!!fighter.modularMorphing || fighter.modularMode === "shield");
 }
 
+/** Morph order for the Adaptive Nanotech Unit (R cycles). E still forms/absorbs. */
+export const ADAPTIVE_MODE_ORDER = Object.freeze(["sword", "rifle", "sniper"]);
+export const ADAPTIVE_MORPH_DURATION = 0.32;
+export const ADAPTIVE_MODE_COOLDOWN = 0.42;
+export const ADAPTIVE_NANOTECH_ID = "adaptive-nanotech-unit";
+
+/**
+ * Per-mode combat + visual targets, plus the nanotech form/ammo split for that
+ * body. Sword/Rifle/Sniper stats match Arc Saber / Pulse Rifle / Classic Sniper
+ * exactly — the ultimate's cost is paid in bots (195 pool), not weaker stats.
+ * Visuals reuse the nanotech sword/rifle/sniper palette from rendering.js.
+ */
+export const ADAPTIVE_MODE_DEFS = Object.freeze({
+  sword: Object.freeze({
+    baseKind: "saber",
+    formCost: 100,
+    shotCost: 0,
+    modifiers: Object.freeze({ damage: 55 / 40, fireRate: 1, range: 1 }),
+    weaponStats: Object.freeze({
+      kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+      sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+      movementMultiplier: 1.1, iframeMultiplier: 1,
+      baseDamage: 55, rpm: 150, range: 120
+    }),
+    visual: Object.freeze({
+      length: 48, width: 5, gripOffset: 17,
+      ally: "#5cffd8", enemy: "#ff58c8", buddy: "#48fff0"
+    })
+  }),
+  rifle: Object.freeze({
+    baseKind: "gun",
+    formCost: 150,
+    shotCost: 2,
+    modifiers: Object.freeze({ damage: 1, fireRate: 1, range: 1, projectileSpeed: 1 }),
+    weaponStats: Object.freeze({
+      kind: "gun",
+      baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
+      dropoff: Object.freeze({ start: 300, end: 1200, minMultiplier: 10 / 12 }),
+      aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
+      movementMultiplier: 1, iframeMultiplier: 1
+    }),
+    visual: Object.freeze({
+      length: 32, width: 10, gripOffset: 18,
+      ally: "#4ae8ff", enemy: "#e050c0", buddy: "#3af8ff"
+    })
+  }),
+  sniper: Object.freeze({
+    baseKind: "gun",
+    formCost: 175,
+    shotCost: 20,
+    modifiers: Object.freeze({
+      damage: 180 / 12, fireRate: 30 / 500, range: 2450 / 1317.5, projectileSpeed: 3200 / 1550
+    }),
+    weaponStats: Object.freeze({
+      kind: "gun",
+      baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
+      dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
+      sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
+      iframeMultiplier: 1, tracer: true
+    }),
+    visual: Object.freeze({
+      length: 54, width: 5, gripOffset: 17,
+      ally: "#2ad0ff", enemy: "#d040b8", buddy: "#20e8ff"
+    })
+  })
+});
+
+export function isAdaptiveNanotechWeapon(fighterOrId) {
+  if (typeof fighterOrId === "string") return fighterOrId === ADAPTIVE_NANOTECH_ID;
+  return fighterOrId?.weaponId === ADAPTIVE_NANOTECH_ID
+    || fighterOrId?.adaptiveNanotechWeapon === true;
+}
+
+export function nextAdaptiveMode(mode) {
+  const idx = ADAPTIVE_MODE_ORDER.indexOf(mode);
+  return ADAPTIVE_MODE_ORDER[(idx + 1) % ADAPTIVE_MODE_ORDER.length];
+}
+
+/** Apply combat stats for the active adaptive body (nanotech costs synced separately). */
+export function applyAdaptiveCombatStats(fighter, mode = fighter.adaptiveMode) {
+  const def = ADAPTIVE_MODE_DEFS[mode] || ADAPTIVE_MODE_DEFS.sword;
+  const perkCombat = fighter._adaptivePerkCombat || {
+    damage: 1, fireRate: 1, iframe: 1, shieldDurability: 1, shieldRaisedSpeed: 1
+  };
+  fighter.adaptiveMode = mode;
+  fighter.weapon = def.baseKind;
+  fighter.weaponStats = { ...def.weaponStats };
+  if (def.weaponStats.dropoff) {
+    fighter.weaponStats.dropoff = { ...def.weaponStats.dropoff };
+  }
+  fighter.weaponDamage = (def.modifiers.damage || 0) * perkCombat.damage;
+  fighter.weaponFireRate = (def.modifiers.fireRate || 1) * perkCombat.fireRate;
+  fighter.weaponRange = def.modifiers.range || 1;
+  fighter.projectileSpeed = def.modifiers.projectileSpeed || 1;
+  fighter.weaponBaseDamage = def.weaponStats.baseDamage * perkCombat.damage;
+  fighter.weaponRpm = Math.max(1, def.weaponStats.rpm * perkCombat.fireRate);
+  fighter.weaponReach = def.weaponStats.range;
+  fighter.weaponDropoff = def.weaponStats.dropoff
+    ? { ...def.weaponStats.dropoff }
+    : null;
+  fighter.aimSettleRequired = def.weaponStats.aimSettle || 0;
+  fighter.unsettledSpread = def.weaponStats.unsettledSpread || 0;
+  fighter.cameraLead = def.weaponStats.cameraLead || 0;
+  fighter.iframeMultiplier = (def.weaponStats.iframeMultiplier || 1) * perkCombat.iframe;
+  fighter.directionalSightRange = Math.min(
+    2400,
+    def.weaponStats.range,
+    fighter.sight + (def.weaponStats.sightExtension || 0)
+  );
+  fighter.sightHalfAngle = def.weaponStats.sightHalfAngle || 0;
+  const baseSpeed = fighter._adaptiveBaseMoveSpeed || 520;
+  const moveMult = def.weaponStats.movementMultiplier || 1;
+  fighter.moveSpeed = Math.min(520 * 1.4, Math.round(baseSpeed * moveMult));
+  fighter.acceleration = 1800 * (fighter.moveSpeed / 520);
+  return fighter;
+}
+
+/**
+ * Recompute nanotech form/ammo costs for the active body from the equipped
+ * gear's 195-bot pool. Excess committed bots spill back to free reserve when
+ * shrinking form cost; accumulated ammo debt clamps to the new bonus.
+ */
+export function syncAdaptiveNanotechCosts(fighter, mode = fighter.adaptiveMode) {
+  const def = ADAPTIVE_MODE_DEFS[mode] || ADAPTIVE_MODE_DEFS.sword;
+  const gear = GEAR_BY_ID[fighter.weaponId] || GEAR_BY_ID[ADAPTIVE_NANOTECH_ID];
+  const pool = nanotechCostOf(gear);
+  fighter.nanotechWeaponCost = def.formCost;
+  fighter.nanobotShotCost = def.shotCost;
+  fighter.nanotechAmmoBonus = Math.max(0, pool - def.formCost);
+  if ((fighter.nanobotWeapon || 0) > def.formCost) {
+    const excess = fighter.nanobotWeapon - def.formCost;
+    fighter.nanobotWeapon = def.formCost;
+    fighter.nanobotFree = (fighter.nanobotFree || 0) + excess;
+  }
+  fighter.nanotechAmmoDebt = Math.min(fighter.nanotechAmmoDebt || 0, fighter.nanotechAmmoBonus);
+  clampNanotechPool(fighter);
+  return fighter;
+}
+
+function finishAdaptiveMorph(fighter) {
+  const to = fighter.adaptiveMorphTo || fighter.adaptiveMode;
+  applyAdaptiveCombatStats(fighter, to);
+  syncAdaptiveNanotechCosts(fighter, to);
+  fighter.adaptiveMorphing = false;
+  fighter.adaptiveMorphT = 1;
+  fighter.adaptiveModeCd = ADAPTIVE_MODE_COOLDOWN;
+}
+
+/**
+ * Begin a morph to `targetMode` (or the next mode in the cycle). Returns false if locked.
+ */
+export function beginAdaptiveMorph(fighter, targetMode = null) {
+  if (!isAdaptiveNanotechWeapon(fighter) || fighter.dead) return false;
+  if (fighter.adaptiveMorphing) return false;
+  if ((fighter.adaptiveModeCd || 0) > 0) return false;
+  const next = targetMode && ADAPTIVE_MODE_DEFS[targetMode]
+    ? targetMode
+    : nextAdaptiveMode(fighter.adaptiveMode || "sword");
+  if (next === fighter.adaptiveMode) return false;
+  fighter.adaptiveMorphFrom = fighter.adaptiveMode || "sword";
+  fighter.adaptiveMorphTo = next;
+  fighter.adaptiveMorphT = 0;
+  fighter.adaptiveMorphing = true;
+  fighter.attackCd = Math.max(fighter.attackCd || 0, ADAPTIVE_MORPH_DURATION);
+  return true;
+}
+
+export function cycleAdaptiveMode(fighter) {
+  return beginAdaptiveMorph(fighter, null);
+}
+
+/** Advance morph animation / cooldowns. Call from stepFighter. */
+export function tickAdaptiveWeapon(fighter, dt) {
+  if (!isAdaptiveNanotechWeapon(fighter)) return;
+  if ((fighter.adaptiveModeCd || 0) > 0) {
+    fighter.adaptiveModeCd = Math.max(0, fighter.adaptiveModeCd - dt);
+  }
+  if (!fighter.adaptiveMorphing) return;
+  fighter.adaptiveMorphT = Math.min(1, (fighter.adaptiveMorphT || 0) + dt / ADAPTIVE_MORPH_DURATION);
+  if (fighter.adaptiveMorphT >= 1) finishAdaptiveMorph(fighter);
+}
+
+/** True while transforming — no attacks. */
+export function adaptiveAttackLocked(fighter) {
+  return isAdaptiveNanotechWeapon(fighter) && !!fighter.adaptiveMorphing;
+}
+
+/** Combined morph attack-lock: modular shield/morph OR adaptive R-cycle morph. */
+export function weaponAttackLocked(fighter) {
+  return modularAttackLocked(fighter) || adaptiveAttackLocked(fighter);
+}
+
 /** Marksman / sniper IDs that can earn and use the tiny precision-aim gimmick. */
 export const PRECISION_AIM_WEAPONS = Object.freeze([
   "marksman-rifle",
@@ -543,8 +766,18 @@ export const PRECISION_AIM_WEAPONS = Object.freeze([
   "strong-sniper"
 ]);
 
-export function isPrecisionAimWeapon(gearOrId) {
-  const id = typeof gearOrId === "string" ? gearOrId : gearOrId?.id;
+/**
+ * Accepts a gear id/object (checked against PRECISION_AIM_WEAPONS) or a
+ * fighter-like object with `weaponId` — the Adaptive Nanotech Unit only
+ * earns the gimmick while its active body is sniper mode.
+ */
+export function isPrecisionAimWeapon(gearOrIdOrFighter) {
+  if (gearOrIdOrFighter && typeof gearOrIdOrFighter === "object" && "weaponId" in gearOrIdOrFighter) {
+    const fighter = gearOrIdOrFighter;
+    if (fighter.weaponId === ADAPTIVE_NANOTECH_ID) return fighter.adaptiveMode === "sniper";
+    return PRECISION_AIM_WEAPONS.includes(fighter.weaponId);
+  }
+  const id = typeof gearOrIdOrFighter === "string" ? gearOrIdOrFighter : gearOrIdOrFighter?.id;
   return PRECISION_AIM_WEAPONS.includes(id);
 }
 
@@ -854,14 +1087,18 @@ export function nanotechSwordHidden(fighter) {
 /** 1 = weapon out, 0 = fully dissolved into particles (sword + guns). */
 export function nanotechWeaponVisibility(fighter) {
   const cost = fighter?.nanotechWeaponCost || 0;
-  if (cost <= 0 || !fighter?.weaponId?.startsWith?.("nanotech-")) return 1;
+  const isNanotechId = !!fighter?.weaponId?.startsWith?.("nanotech-")
+    || fighter?.weaponId === ADAPTIVE_NANOTECH_ID;
+  if (cost <= 0 || !isNanotechId) return 1;
   const form = nanotechFormPct(fighter);
   const t = Math.max(0, Math.min(1, fighter.nanotechSwordDissolveT ?? 0));
   const eased = t * t * (3 - 2 * t);
   if (fighter.nanotechWeaponAbsorbing) {
     return Math.max(0, form * (1 - eased * 0.98));
   }
-  if (fighter.weaponId === "nanotech-sword") {
+  const swordLike = fighter.weaponId === "nanotech-sword"
+    || (fighter.weaponId === ADAPTIVE_NANOTECH_ID && fighter.weapon === "saber");
+  if (swordLike) {
     return form * (1 - eased * 0.15);
   }
   // Guns: hide when absorbed/empty; otherwise hold shape at form %.
@@ -1356,9 +1593,9 @@ export function suggestBuddyLoadout(profile) {
       body: ["field-frame", "bulwark-frame", "scout-frame", "retractable-armor", "nanotech-chestplate"],
       helmet: ["wideband-array", "survey-visor", "guard-helm"],
       weapon: [
-        "laser", "quick-fire-sniper", "classic-sniper", "nanotech-sniper", "strong-sniper",
-        "marksman-rifle", "nanotech-rifle", "pulse-rifle", "gattler", "burst-carbine",
-        "mechanical-modularity", "arc-saber", "duelist-blade"
+        "adaptive-nanotech-unit", "laser", "quick-fire-sniper", "classic-sniper",
+        "nanotech-sniper", "strong-sniper", "marksman-rifle", "nanotech-rifle", "pulse-rifle",
+        "gattler", "burst-carbine", "mechanical-modularity", "arc-saber", "duelist-blade"
       ],
       jetpack: [
         "endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack", "nanotech-reserve"
@@ -1372,8 +1609,8 @@ export function suggestBuddyLoadout(profile) {
         body: ["scout-frame", "field-frame", "bulwark-frame", "retractable-armor", "nanotech-chestplate"],
         helmet: ["survey-visor", "wideband-array", "guard-helm"],
         weapon: [
-          "daggers", "heavy-saber", "arc-saber", "nanotech-sword", "duelist-blade",
-          "mechanical-modularity",
+          "adaptive-nanotech-unit", "daggers", "heavy-saber", "arc-saber", "nanotech-sword",
+          "duelist-blade", "mechanical-modularity",
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
         jetpack: [
@@ -1385,8 +1622,8 @@ export function suggestBuddyLoadout(profile) {
         body: ["field-frame", "scout-frame", "bulwark-frame", "retractable-armor", "nanotech-chestplate"],
         helmet: ["survey-visor", "wideband-array", "guard-helm"],
         weapon: [
-          "pulse-rifle", "arc-saber", "mechanical-modularity", "burst-carbine",
-          "duelist-blade",
+          "pulse-rifle", "arc-saber", "mechanical-modularity", "adaptive-nanotech-unit",
+          "burst-carbine", "duelist-blade",
           "gattler", "laser", "marksman-rifle", "heavy-saber",
           "quick-fire-sniper", "classic-sniper", "nanotech-sniper", "nanotech-rifle",
           "nanotech-sword", "strong-sniper", "daggers"
@@ -1496,6 +1733,24 @@ export function applyLoadout(fighter, loadout) {
     fighter._retractableBaseMoveSpeed = null;
   }
   syncRetractableDisplayedHp(fighter);
+  fighter.sight = stats.sight;
+  if (weapon.id === ADAPTIVE_NANOTECH_ID) {
+    const moveMult = weapon.weaponStats?.movementMultiplier || 1;
+    fighter.adaptiveNanotechWeapon = true;
+    fighter.adaptiveMode = "sword";
+    fighter.adaptiveMorphing = false;
+    fighter.adaptiveMorphT = 1;
+    fighter.adaptiveMorphFrom = "sword";
+    fighter.adaptiveMorphTo = "sword";
+    fighter.adaptiveModeCd = 0;
+    fighter._adaptiveBaseMoveSpeed = stats.speed / moveMult;
+    fighter._adaptivePerkCombat = perkCombat;
+  } else {
+    fighter.adaptiveNanotechWeapon = false;
+    fighter.adaptiveMode = null;
+    fighter.adaptiveMorphing = false;
+    fighter.adaptiveModeCd = 0;
+  }
   const nanobotMax = nanotechPoolCapacity(fighter.loadout);
   fighter.nanobotMax = nanobotMax;
   fighter.nanobotFree = nanobotMax;
@@ -1518,13 +1773,16 @@ export function applyLoadout(fighter, loadout) {
     const gear = GEAR_BY_ID[fighter.loadout[slot]];
     return !!gear?.nanotech;
   });
+  if (weapon.id === ADAPTIVE_NANOTECH_ID) {
+    applyAdaptiveCombatStats(fighter, "sword");
+    syncAdaptiveNanotechCosts(fighter, "sword");
+  }
   // Start with a formed weapon when reserve allows (E still tops up after bleeds).
   if (fighter.nanotechWeaponCost > 0) {
     tryFormNanotechWeapon(fighter);
   }
   syncNanotechDisplayedHp(fighter);
   fighter.damageTaken = stats.damageTaken / 100;
-  fighter.sight = stats.sight;
   fighter.jetFuelCapacity = stats.fuel / 3;
   fighter.jetThrust = stats.thrust;
   fighter.jetRechargeScale = 5 / stats.recharge;

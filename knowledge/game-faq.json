@@ -35,7 +35,7 @@
         "keyboard controls",
         "what buttons do I use"
       ],
-      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
+      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
     },
     {
       "id": "controls-retractable-armor",
@@ -62,6 +62,18 @@
         "shield controls"
       ],
       "answer": "Press Q to raise or lower an equipped shield. While raised you cannot fire. It only blocks attacks from the front cone aligned with your aim; rear and flank hits still hurt. Durability is a per-match pool that normally does not recharge until the next match (Protective Rebuilding can refill it). If you equip Mechanical Modularity and morph to shield mode with E, Q raises the modular plate the same way."
+    },
+    {
+      "id": "controls-adaptive-nanotech",
+      "tags": ["controls", "weapon", "adaptive", "nanotech", "morph", "r"],
+      "questions": [
+        "how do I use the adaptive nanotech unit",
+        "R key weapon",
+        "adaptive nanotech controls",
+        "how does the adaptive nanotech unit work",
+        "ultimate weapon controls"
+      ],
+      "answer": "The Adaptive Nanotech Unit is the ultimate morph weapon: press R to cycle its active body between Sword, Rifle, and Sniper (a short transform animation; no attacking mid-morph, then a brief cooldown). E still forms or absorbs that active body from the shared 195-bot nanotech pool, exactly like other nanotech gear. Sword form costs 100 bots (95 left over for regen), Rifle 150 (45 bots of ammo, 2/shot), Sniper 175 (20 bots of ammo, 20/shot). Each body matches its dedicated counterpart's stats exactly — Arc Saber, Pulse Rifle, Classic Sniper — so the cost is paid in bots and morph downtime, not weaker numbers."
     },
     {
       "id": "controls-modular",
@@ -521,7 +533,7 @@
         "what about daggers",
         "weapon families"
       ],
-      "answer": "Weapons are guns or melee. Guns include rifles/carbines, snipers that need aim settle, plus next-gen options like the Gattler spray hose and the hitscan Laser beam. Melee includes sabers and short-reach daggers with speed and dodge i-frame bonuses. Mechanical Modularity (shop) morphs with E between Sword, Shield plate, and Pulse Rifle; learning still keys off the active mode's gun vs saber family."
+      "answer": "Weapons are guns or melee. Guns include rifles/carbines, snipers that need aim settle, plus next-gen options like the Gattler spray hose and the hitscan Laser beam. Melee includes sabers and short-reach daggers with speed and dodge i-frame bonuses. Mechanical Modularity (shop) morphs with E between Sword, Shield plate, and Pulse Rifle; the Adaptive Nanotech Unit (shop ultimate) morphs with R between nanotech Sword, Rifle, and Sniper bodies. Learning still keys off the active mode's gun vs saber family."
     },
     {
       "id": "weapons-mechanical-modularity",
@@ -534,6 +546,18 @@
         "how does mechanical modularity work"
       ],
       "answer": "Mechanical Modularity is a purchasable morph weapon. Press E to cycle Sword → Shield → Pulse Rifle with a short transform animation (no attacking mid-morph; short cooldown after). Sword mode matches Arc Saber damage, RPM, and reach. Shield mode uses a modular plate slightly weaker than Light Buckler (less block HP / narrower cone); raise it with Q. Rifle mode is a slightly weaker Pulse Rifle. Counter Slash and blade loot rules apply only in sword mode."
+    },
+    {
+      "id": "weapons-adaptive-nanotech-unit",
+      "tags": ["weapons", "adaptive", "nanotech", "morph", "ultimate", "r"],
+      "questions": [
+        "what is the adaptive nanotech unit",
+        "adaptive nanotech unit",
+        "ultimate weapon",
+        "sword rifle sniper morph weapon",
+        "how does the adaptive nanotech unit work"
+      ],
+      "answer": "The Adaptive Nanotech Unit is the ultimate weapon (400¢): a nanotech morph weapon with its own shared 195-bot pool. Press R to cycle its active body Sword → Rifle → Sniper → Sword with a short transform animation (no attacking mid-morph; short cooldown after). E still forms/absorbs the active body from that pool, like other nanotech gear. Each body costs bots to form — Sword 100 (95 bots left for regen), Rifle 150 (45 bots of ammo, 2/shot), Sniper 175 (20 bots of ammo, 20/shot) — and matches its dedicated counterpart's exact stats (Arc Saber / Pulse Rifle / Classic Sniper), so switching costs bots and downtime, not weaker numbers. Counter Slash, blade loot rules, and the precision-aim sniper gimmick apply only while its active body matches (sword, or sniper respectively)."
     },
     {
       "id": "weapons-next-gen",
