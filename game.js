@@ -1,11 +1,12 @@
 import { SIZE, WORLD } from "./config.js";
 import { updateCamera } from "./camera.js";
 import {
-  Fighter, hit, stepBullets, stepFighter, stepThrownProps, triggerDodge
+  Fighter, hit, refreshCombatCaches, stepBullets, stepFighter, stepThrownProps,
+  triggerDodge
 } from "./combat.js";
 import {
-  cycleIllusionistType, isIllusionist, isRealCombatant, tickIllusionistWorld,
-  tryIllusionistPlant
+  cycleIllusionistType, isIllusionFighter, isIllusionist, isRealCombatant,
+  refreshIllusionCaches, tickIllusionistWorld, tryIllusionistPlant
 } from "./illusionist.js";
 import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
@@ -314,10 +315,14 @@ function update(dt) {
     nanoFHoldT = 0;
     nanoFHoldLatched = false;
   }
+  refreshCombatCaches(game);
+  refreshIllusionCaches(game);
   const trapPrevY = new Map();
   for (const fighter of game.fighters) {
     stepFighter(fighter, dt, game, profile, keys, humanIntent);
     if (fighter._trapPrevY != null) trapPrevY.set(fighter, fighter._trapPrevY);
+    // Decoys skip secondary/extension world ticks — they only gaslight-fight.
+    if (isIllusionFighter(fighter)) continue;
     tickFighterPowerBuffs(fighter, dt);
     tickThrowBreakable(fighter, game, dt);
     tickReconjurerBuilder(fighter, dt);

@@ -72,17 +72,42 @@ export function cycleIllusionistType(fighter) {
 }
 
 export function listIllusionObjects(game) {
+  if (game?._livingIllusionObjects) return game._livingIllusionObjects;
   return (game?.illusions || []).filter((i) => i && !i.destroyed && (i.life == null || i.life > 0));
 }
 
 export function listIllusionFighters(game) {
+  if (game?._livingIllusionFighters) return game._livingIllusionFighters;
   return (game?.fighters || []).filter((f) => isIllusionFighter(f) && !f.dead);
 }
 
+/**
+ * Rebuild per-frame living-illusion arrays so AI / combat avoid re-filtering.
+ * Safe to call once at the start of a sim tick (and again after world cleanup).
+ */
+export function refreshIllusionCaches(game) {
+  if (!game) return;
+  const objs = [];
+  for (const i of game.illusions || []) {
+    if (i && !i.destroyed && (i.life == null || i.life > 0)) objs.push(i);
+  }
+  const fighters = [];
+  for (const f of game.fighters || []) {
+    if (isIllusionFighter(f) && !f.dead) fighters.push(f);
+  }
+  game._livingIllusionObjects = objs;
+  game._livingIllusionFighters = fighters;
+}
+
 function ownIllusionCount(game, fighter) {
-  const objs = listIllusionObjects(game).filter((i) => i.owner === fighter).length;
-  const fighters = listIllusionFighters(game).filter((f) => f.illusionOwner === fighter).length;
-  return objs + fighters;
+  let n = 0;
+  for (const i of listIllusionObjects(game)) {
+    if (i.owner === fighter) n++;
+  }
+  for (const f of listIllusionFighters(game)) {
+    if (f.illusionOwner === fighter) n++;
+  }
+  return n;
 }
 
 function placePoint(fighter, w, h) {
@@ -378,10 +403,20 @@ export function tickIllusionistWorld(game, dt) {
     if (ill.life > 0) keep.push(ill);
   }
   game.illusions = keep;
-  // Drop faded decoys so they don't clutter the fighter list forever.
+  // Drop faded decoys only when needed (avoid reallocating fighters every frame).
   if (Array.isArray(game.fighters)) {
-    game.fighters = game.fighters.filter((f) => !isIllusionFighter(f) || !f.dead);
+    let drop = false;
+    for (const f of game.fighters) {
+      if (isIllusionFighter(f) && f.dead) {
+        drop = true;
+        break;
+      }
+    }
+    if (drop) {
+      game.fighters = game.fighters.filter((f) => !isIllusionFighter(f) || !f.dead);
+    }
   }
+  refreshIllusionCaches(game);
 }
 
 /** Axis-aligned overlap test for illusion objects vs a segment (bullet). */

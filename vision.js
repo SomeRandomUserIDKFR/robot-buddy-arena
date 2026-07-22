@@ -1,7 +1,15 @@
 import { SIGHT, SIZE } from "./config.js";
+import { isIllusionFighter } from "./illusionist.js";
 import { inLightCondensationReveal } from "./light-condensation.js";
 import { sightBlockers } from "./maps.js";
 import { angleDiff, dist, segmentHitsBox } from "./utils.js";
+
+function cachedSightBlockers(game) {
+  if (game?._sightBlockers) return game._sightBlockers;
+  const blockers = sightBlockers(game);
+  if (game) game._sightBlockers = blockers;
+  return blockers;
+}
 
 export function inDirectionalSight(observer, target) {
   const range = observer.directionalSightRange || 0;
@@ -33,7 +41,7 @@ export function hasLineOfSight(game, from, to) {
   const y1 = from.y + SIZE / 2;
   const x2 = to.x + SIZE / 2;
   const y2 = to.y + SIZE / 2;
-  const blockers = sightBlockers(game);
+  const blockers = cachedSightBlockers(game);
   for (const box of blockers) {
     if (segmentHitsBox(x1, y1, x2, y2, box.x, box.y, box.w, box.h)) return false;
   }
@@ -48,9 +56,13 @@ function canSeeTarget(game, observer, target) {
 }
 
 export function visibleToTeam(game, observer, target) {
+  // Decoys are visual gaslights — they must not act as extra team eyes
+  // (that squared LOS cost when Illusionist swarms get large).
   return game.fighters.some(
     (fighter) => (
-      !fighter.dead && fighter.team === observer.team
+      !fighter.dead
+      && !isIllusionFighter(fighter)
+      && fighter.team === observer.team
       && canSeeTarget(game, fighter, target)
     )
   )

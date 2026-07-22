@@ -26,15 +26,15 @@ import {
   canGrabBreakable, isThrowBreakable, THROW_BREAKABLE_GRAB_RANGE, THROW_BREAKABLE_ID
 } from "./throw-breakable.js";
 import {
-  cycleIllusionistType, isIllusionist, listIllusionFighters, listIllusionObjects,
-  tryIllusionistPlant
+  cycleIllusionistType, isIllusionFighter, isIllusionist, listIllusionFighters,
+  listIllusionObjects, tryIllusionistPlant
 } from "./illusionist.js";
 import {
   cycleTrapperType, isTrapper, listTrapperTraps, tryTrapperPlant
 } from "./trapper.js";
 import { angleDiff, clamp, dist, formatTime, lerp } from "./utils.js";
 import { crateVisibleToTeam } from "./powerups.js";
-import { hasLineOfSight, visibleToTeam } from "./vision.js";
+import { hasLineOfSight, visibleToSelf, visibleToTeam } from "./vision.js";
 import { Fighter } from "./combat.js";
 
 /** Min seconds between AI primary ↔ secondary swaps. */
@@ -914,8 +914,13 @@ function normalizeTrapTypeSafe(fighter) {
 export function updateAiIllusionist(fighter, state, game, visible, target) {
   if (!isIllusionist(fighter) || fighter.dead || !game) return;
   if ((fighter.illusionistCd || 0) > 0) return;
-  const owned = listIllusionObjects(game).filter((i) => i.owner === fighter).length
-    + listIllusionFighters(game).filter((f) => f.illusionOwner === fighter).length;
+  let owned = 0;
+  for (const i of listIllusionObjects(game)) {
+    if (i.owner === fighter) owned++;
+  }
+  for (const f of listIllusionFighters(game)) {
+    if (f.illusionOwner === fighter) owned++;
+  }
   if (owned >= 2) return;
 
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
@@ -1235,7 +1240,77 @@ export function buddySkill(preset, learned, aiId = "balanced") {
   };
 }
 
+/**
+ * Lightweight combat brain for fighter decoys.
+ * Keeps chase / shoot / jet / nested Illusionist planting; skips learning,
+ * Mimic, shield policy, and every other extension (huge win under swarm loads).
+ */
+export function updateAIDecoy(fighter, dt, game) {
+  const state = fighter.aiState;
+  const preset = AI_PRESETS[fighter.ai] || AI_PRESETS.balanced;
+  const turnRate = preset.aimTurnRate ?? AI_PRESETS.balanced.aimTurnRate;
+  if (fighter.jetLocked) state.jet = false;
+  state.timer -= dt;
+  if (state.timer > 0) {
+    stepAimSmoothing(fighter, dt, turnRate);
+    return state;
+  }
+  state.timer = (preset.reaction || 0.25) * (1 + 0.3 * Math.random());
+  state.chuck = false;
+  state.ejectVacuum = false;
+  state.dodge = false;
+  state.shield = false;
+
+  let target = null;
+  let best = Infinity;
+  // Prefer real foes; fall back to any living enemy (including other decoys).
+  for (const enemy of game.fighters) {
+    if (!enemy || enemy.dead || enemy.team === fighter.team || enemy === fighter) continue;
+    const d = dist(fighter, enemy);
+    const weight = isIllusionFighter(enemy) ? d + 80 : d;
+    if (weight < best) {
+      best = weight;
+      target = enemy;
+    }
+  }
+
+  const reach = fighter.weaponReach || (fighter.weapon === "saber" ? 120 : 920);
+  const desired = fighter.weapon === "saber" ? 80 : Math.min(420, reach * 0.4);
+  if (target) {
+    const dx = (target.x + SIZE / 2) - (fighter.x + SIZE / 2);
+    const dy = (target.y + SIZE / 2) - (fighter.y + SIZE / 2);
+    const distance = Math.hypot(dx, dy);
+    state.desiredAim = Math.atan2(dy, dx);
+    const canSee = visibleToSelf(fighter, target, game);
+    state.attack = canSee && distance < reach;
+    let goalX = target.x;
+    if (distance < desired - 50) goalX = fighter.x - Math.sign(dx || 1) * 120;
+    else if (distance > desired + 70) goalX = target.x;
+    state.mx = Math.abs(goalX - fighter.x) > 28 ? Math.sign(goalX - fighter.x) : 0;
+    state.jump = !!fighter.grounded && target.y < fighter.y - 140;
+    const needLift = target.y < fighter.y - 90;
+    state.jet = !fighter.grounded && needLift && fighter.fuel > 0.18 && !fighter.jetLocked;
+    state.jetHeld = state.jet;
+    state.plan = "illusion pressing";
+  } else {
+    state.attack = false;
+    state.mx = 0;
+    state.jump = false;
+    state.jet = false;
+    state.jetHeld = false;
+    state.plan = "illusion idle";
+  }
+
+  const visible = target ? [target] : [];
+  updateAiIllusionist(fighter, state, game, visible, target);
+  stepAimSmoothing(fighter, dt, turnRate);
+  return state;
+}
+
 export function updateAI(fighter, dt, game, profile) {
+  if (isIllusionFighter(fighter)) {
+    return updateAIDecoy(fighter, dt, game);
+  }
   const state = fighter.aiState;
   const priorRetreatDecision = state.plan === "covering retreat";
   const basePreset = AI_PRESETS[fighter.ai] || AI_PRESETS.balanced;
