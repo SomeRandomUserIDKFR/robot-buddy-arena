@@ -119,13 +119,14 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(nanotechArmorMaxHp(fighter), Math.floor(NANOTECH_ARMOR_BOT_CAP / 2));
 }
 
-// E forms weapon (partial OK); attack needs committed bots; damage scales.
+// E forms weapon (partial OK); guns spend bots per shot; damage scales.
 {
   const fighter = applyLoadout(new Fighter({
     x: 100, y: 400, team: 0, aim: 0
   }), loadout({ weapon: "nanotech-rifle", jetpack: "nanotech-reserve" }));
   assert.equal(fighter.nanobotMax, 1150);
   assert.equal(fighter.nanobotWeapon, 150);
+  assert.equal(fighter.nanobotShotCost, 2);
   fighter.nanobotWeapon = 0;
   fighter.nanobotFree = 149;
   assert.equal(canNanotechAttack(fighter), false);
@@ -143,6 +144,26 @@ function assertWeaponStatsMatch(a, b) {
   attack(fighter, game);
   assert.equal(game.bullets.length, 1);
   assert.ok(Math.abs(game.bullets[0].damage - fighter.weaponBaseDamage * (149 / 150)) < 1e-6);
+  assert.equal(fighter.nanobotWeapon, 147, "rifle spends 2 bots/shot");
+
+  fighter.nanobotWeapon = 1;
+  fighter.attackCd = 0;
+  assert.equal(canNanotechAttack(fighter), false, "need 2 bots to fire rifle");
+  attack(fighter, game);
+  assert.equal(game.bullets.length, 1);
+
+  const sniper = applyLoadout(new Fighter({
+    x: 100, y: 400, team: 0, aim: 0
+  }), loadout({ weapon: "nanotech-sniper", jetpack: "nanotech-reserve" }));
+  assert.equal(sniper.nanobotShotCost, 20);
+  assert.equal(sniper.nanobotWeapon, 175);
+  const sniperGame = { bullets: [], effects: [], fighters: [sniper] };
+  attack(sniper, sniperGame);
+  assert.equal(sniperGame.bullets.length, 1);
+  assert.equal(sniper.nanobotWeapon, 155, "sniper spends 20 bots/shot");
+  sniper.nanobotWeapon = 19;
+  sniper.attackCd = 0;
+  assert.equal(canNanotechAttack(sniper), false);
 
   // Slow regen fills unused pool capacity; does not pull from armor or weapon.
   fighter.nanobotArmor = 40;

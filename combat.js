@@ -4,9 +4,9 @@ import {
 } from "./config.js";
 import { updateAI } from "./ai.js";
 import {
-  applyHpDamage, applyNanotechSlashBotLoss, canNanotechAttack, modularAttackLocked,
-  nanotechFormPct, retractableSpeedMultiplier, shieldBlocksAttack, shieldSpeedMultiplier,
-  tickModularWeapon, tickNanotech, tickRetractableArmor
+  applyHpDamage, applyNanotechSlashBotLoss, canNanotechAttack, consumeNanotechShot,
+  modularAttackLocked, nanotechFormPct, retractableSpeedMultiplier, shieldBlocksAttack,
+  shieldSpeedMultiplier, tickModularWeapon, tickNanotech, tickRetractableArmor
 } from "./equipment.js";
 import { armorDummyBlockers, damageArmorDummy } from "./debris.js";
 import {
@@ -222,11 +222,11 @@ function pushBeamReveals(game, team, x1, y1, x2, y2, radius) {
   }
 }
 
-function fireHitscanLaser(fighter, game, shotAngle, ox, oy) {
+function fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct = 1) {
   const reach = fighter.weaponReach || 1720;
   const ex = ox + Math.cos(shotAngle) * reach;
   const ey = oy + Math.sin(shotAngle) * reach;
-  const dmg = fighter.weaponBaseDamage * consumeOvercharge(fighter) * nanotechFormPct(fighter);
+  const dmg = fighter.weaponBaseDamage * consumeOvercharge(fighter) * formPct;
   const boxes = [
     ...platformsOf(game).map((platform) => ({
       x: platform.x, y: platform.y, w: platform.w, h: platform.h, kind: "platform"
@@ -316,7 +316,7 @@ export function attack(fighter, game, random = Math.random) {
   if (fighter.weapon === "gun") {
     fighter.attackCd = attackInterval;
     if (fighter.weaponStats?.hitscan) {
-      fireHitscanLaser(fighter, game, shotAngle, ox, oy);
+      fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct);
     } else {
       const speed = fighter.weaponStats?.projectileSpeed || 1550 * fighter.projectileSpeed;
       const shotDmg = fighter.weaponBaseDamage * consumeOvercharge(fighter) * formPct;
@@ -335,6 +335,7 @@ export function attack(fighter, game, random = Math.random) {
         angle: shotAngle, report: !!fighter.weaponStats?.tracer
       });
     }
+    consumeNanotechShot(fighter);
   } else {
     fighter.attackCd = attackInterval;
     const swingDmg = fighter.weaponBaseDamage * consumeOvercharge(fighter) * formPct;

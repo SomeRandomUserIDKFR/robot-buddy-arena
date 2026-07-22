@@ -185,18 +185,18 @@ export const GEAR = [
   melee("nanotech-sword", "Nanotech Sword", "Arc Saber. E forms from bots (partial OK). Incomplete swings bleed 2% bots.", {
     baseDamage: 55, rpm: 150, range: 120
   }, 100, { nanotech: true, nanobotCost: 100 }),
-  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle. E forms from bots; damage scales with form %.", {
+  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle. E forms from bots; 2 bots/shot; damage scales with form %.", {
     baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
     dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
     aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
     movementMultiplier: 1, iframeMultiplier: 1
-  }, 150, { nanotech: true, nanobotCost: 150 }),
-  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper. E forms from bots; damage scales with form %.", {
+  }, 150, { nanotech: true, nanobotCost: 150, nanobotShotCost: 2 }),
+  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper. E forms from bots; 20 bots/shot; damage scales with form %.", {
     baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
     dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
     sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
     iframeMultiplier: 1, tracer: true
-  }, 175, { nanotech: true, nanobotCost: 175 }),
+  }, 175, { nanotech: true, nanobotCost: 175, nanobotShotCost: 20 }),
   item(
     "nanotech-chestplate",
     "body",
@@ -659,7 +659,28 @@ export function nanotechArmorMaxHp(fighter) {
 export function canNanotechAttack(fighter) {
   const cost = fighter?.nanotechWeaponCost || 0;
   if (cost <= 0) return true;
+  if (fighter.nanotechWeaponAbsorbing) return false;
+  const shot = nanotechShotCost(fighter);
+  if (shot > 0) return (fighter.nanobotWeapon || 0) >= shot;
   return (fighter.nanobotWeapon || 0) > 0;
+}
+
+/** Bots spent per gun shot (0 for melee / non-nanotech). */
+export function nanotechShotCost(fighter) {
+  if ((fighter?.nanotechWeaponCost || 0) <= 0) return 0;
+  if (fighter.weapon !== "gun") return 0;
+  return Math.max(0, Number(fighter.nanobotShotCost) || 0);
+}
+
+/** Spend formed weapon bots as projectile mass. Returns bots consumed. */
+export function consumeNanotechShot(fighter) {
+  const shot = nanotechShotCost(fighter);
+  if (shot <= 0) return 0;
+  const before = fighter.nanobotWeapon || 0;
+  if (before < shot) return 0;
+  fighter.nanobotWeapon = before - shot;
+  clampNanotechPool(fighter);
+  return shot;
 }
 
 /** 0–1 how fully the nanotech weapon is formed. */
@@ -1420,6 +1441,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.nanotechArmorSpawnT = 1;
   fighter.nanotechSwordDissolveT = 0;
   fighter.nanotechWeaponCost = weapon.nanotech ? nanotechCostOf(weapon) : 0;
+  fighter.nanobotShotCost = weapon.nanotech ? Math.max(0, Number(weapon.nanobotShotCost) || 0) : 0;
   fighter.hasNanotechChestplate = fighter.loadout.body === "nanotech-chestplate";
   fighter.forceNanotechMorph = SLOT_ORDER.some((slot) => {
     const gear = GEAR_BY_ID[fighter.loadout[slot]];

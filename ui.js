@@ -791,6 +791,9 @@ function modifierMarkup(gear) {
   const nanoCostLine = gear.nanotech && gear.nanobotCost
     ? `<span class="stat-up">${gear.nanobotCost} nanobot pool</span>`
     : "";
+  const nanoShotLine = gear.nanotech && gear.nanobotShotCost
+    ? `<span class="stat-up">${gear.nanobotShotCost} bots/shot</span>`
+    : "";
   if (gear.slot === "weapon") {
     if (gear.id === "mechanical-modularity") {
       return [
@@ -809,6 +812,7 @@ function modifierMarkup(gear) {
       `<span>${Math.round(stats.range)} reach</span>`
     ];
     if (nanoCostLine) changes.unshift(nanoCostLine);
+    if (nanoShotLine) changes.unshift(nanoShotLine);
     if ((stats.movementMultiplier || 1) > 1) {
       changes.push(`<span class="stat-up">Base speed +${Math.round((stats.movementMultiplier - 1) * 100)}%</span>`);
     }
