@@ -243,6 +243,81 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   assert.ok(Math.hypot(rebuilt.x - oldX, rebuilt.y - oldY) < 120, "remelt stays nearby");
 }
 
+// Dummy stands on a real platform, not the mid-air average of multi-height scraps.
+{
+  const upper = { x: 0, y: 400, w: 800, h: 40 };
+  const lower = { x: 0, y: 900, w: 800, h: 40 };
+  const game = {
+    elapsed: 0,
+    settings: {
+      visual: {
+        armorDespawnStyle: "buildDummy",
+        armorDespawnTimer: 0.2
+      }
+    },
+    platforms: [upper, lower],
+    props: [],
+    groundDebris: [],
+    effects: [],
+    armorDummyBuilds: [],
+    armorDummies: []
+  };
+  const sourceId = "test-multi-height";
+  // Most scraps on the upper ledge; a few on the lower — old average Y was mid-air (~650).
+  for (let i = 0; i < 6; i++) {
+    game.groundDebris.push({
+      material: "armor",
+      sourceId,
+      x: 200 + i * 12,
+      y: upper.y - 6,
+      w: 12,
+      h: 12,
+      life: 0.01,
+      immortal: false,
+      armorMaxHp: 80,
+      color: "#7a848e",
+      grounded: true,
+      vx: 0,
+      vy: 0,
+      scale: 1,
+      alpha: 1
+    });
+  }
+  for (let i = 0; i < 2; i++) {
+    game.groundDebris.push({
+      material: "armor",
+      sourceId,
+      x: 220 + i * 12,
+      y: lower.y - 6,
+      w: 12,
+      h: 12,
+      life: 0.01,
+      immortal: false,
+      armorMaxHp: 80,
+      color: "#7a848e",
+      grounded: true,
+      vx: 0,
+      vy: 0,
+      scale: 1,
+      alpha: 1
+    });
+  }
+  tickGroundDebris(game, 0.02);
+  assert.ok(game.armorDummyBuilds.length >= 1, "multi-height melt starts");
+  const build = game.armorDummyBuilds[0];
+  assert.ok(
+    Math.abs(build.targetY - (upper.y - 58 * 0.5)) < 1,
+    "build target snaps to upper floor, not scrap average"
+  );
+  for (let i = 0; i < Math.ceil(ARMOR_DUMMY_MELT_DURATION * 60) + 5; i++) {
+    tickGroundDebris(game, 1 / 60);
+  }
+  const dummy = game.armorDummies[0];
+  assert.ok(dummy, "dummy spawned on floor");
+  assert.ok(Math.abs((dummy.y + dummy.h) - upper.y) < 1, "dummy feet on upper platform");
+  assert.ok(dummy.y + dummy.h < lower.y - 40, "dummy is not mid-air between platforms");
+}
+
 // Metal reconquer: furnace ingest → cast → cool restores the prop.
 {
   const yard = createMapRuntime("yard");

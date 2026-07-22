@@ -46,6 +46,85 @@ function debrisLandables(game) {
   ];
 }
 
+/** Floors a training dummy can stand on (platforms + solid props — not other dummies). */
+function dummyStandSurfaces(game) {
+  const platforms = game?.platforms?.length ? game.platforms : [];
+  const solids = (game?.props || []).filter(
+    (prop) => !prop.destroyed && prop.solid && (prop.hp == null || prop.hp > 0)
+  );
+  return [
+    ...platforms,
+    ...solids.map((prop) => ({ x: prop.x, y: prop.y, w: prop.w, h: prop.h }))
+  ];
+}
+
+/**
+ * Snap a dummy stand center onto a real floor near the scrap pile.
+ * Prefers the surface most scraps already rest on; otherwise the first floor
+ * under the pile (avoids mid-air averages between stacked platforms).
+ */
+function resolveDummyStandTarget(game, group, roughX, roughY, w, h) {
+  const surfaces = dummyStandSurfaces(game);
+  const halfW = w * 0.5;
+  const clampXOnto = (surface, x) => {
+    if (surface.w <= w) return surface.x + surface.w * 0.5;
+    return clamp(x, surface.x + halfW, surface.x + surface.w - halfW);
+  };
+
+  if (!surfaces.length) {
+    return { targetX: roughX, targetY: WORLD.h - h * 0.5 };
+  }
+
+  // Vote for platforms scraps are already sitting on.
+  const votes = new Map();
+  for (const scrap of group) {
+    const scale = scrap.scale || 1;
+    const halfScrapW = (scrap.w || 10) * scale * 0.5;
+    const halfScrapH = (scrap.h || 10) * scale * 0.5;
+    const bottom = scrap.y + halfScrapH;
+    for (const surface of surfaces) {
+      if (
+        scrap.x + halfScrapW > surface.x
+        && scrap.x - halfScrapW < surface.x + surface.w
+        && Math.abs(bottom - surface.y) < 14
+      ) {
+        votes.set(surface, (votes.get(surface) || 0) + 1);
+      }
+    }
+  }
+  let winner = null;
+  let bestVotes = 0;
+  for (const [surface, count] of votes) {
+    if (count > bestVotes) {
+      bestVotes = count;
+      winner = surface;
+    }
+  }
+  if (winner) {
+    return {
+      targetX: clampXOnto(winner, roughX),
+      targetY: winner.y - h * 0.5
+    };
+  }
+
+  const overlaps = (surface) =>
+    roughX + halfW > surface.x && roughX - halfW < surface.x + surface.w;
+  const overlapping = surfaces.filter(overlaps);
+  const pool = overlapping.length ? overlapping : surfaces;
+  // First floor at or below the pile center (Y grows downward).
+  const below = pool
+    .filter((surface) => surface.y >= roughY - 4)
+    .sort((a, b) => a.y - b.y);
+  const nearest = [...pool].sort(
+    (a, b) => Math.abs(a.y - (roughY + h * 0.5)) - Math.abs(b.y - (roughY + h * 0.5))
+  );
+  const chosen = below[0] || nearest[0];
+  return {
+    targetX: clampXOnto(chosen, roughX),
+    targetY: chosen.y - h * 0.5
+  };
+}
+
 function pushPiece(game, piece) {
   game.groundDebris ||= [];
   game.groundDebris.push(piece);
@@ -522,7 +601,7 @@ function beginArmorDespawn(game, piece) {
 
 /**
  * Melt a broken armor set into a metal training dummy near the scrap pile.
- * Rebuilds in the same general area (slight nearby shift).
+ * Stands on a real floor (not the mid-air average of multi-height debris).
  */
 export function beginArmorDummyBuild(game, piece) {
   if (!game || !piece?.sourceId) return null;
@@ -532,15 +611,19 @@ export function beginArmorDummyBuild(game, piece) {
   const group = piecesForSource(game, piece.sourceId).filter((p) => p.material === "armor");
   if (!group.length) return null;
 
+  const dummyW = 36;
+  const dummyH = 58;
   let sx = 0;
   let sy = 0;
   for (const p of group) {
     sx += p.x;
     sy += p.y;
   }
-  // Same / near: keep the pile center, with a slight local nudge.
-  const targetX = sx / group.length + (Math.random() - 0.5) * 40;
-  const targetY = sy / group.length + (Math.random() - 0.5) * 18;
+  const roughX = sx / group.length + (Math.random() - 0.5) * 40;
+  const roughY = sy / group.length;
+  const { targetX, targetY } = resolveDummyStandTarget(
+    game, group, roughX, roughY, dummyW, dummyH
+  );
   const color = group[0].color || ARMOR_DUMMY_METAL;
   const armorMaxHp = Math.max(1, group[0].armorMaxHp || 100);
 
