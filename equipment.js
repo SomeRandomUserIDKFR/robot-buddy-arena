@@ -408,7 +408,7 @@ export const GEAR = [
     ILLUSIONIST_ID,
     "extensionSecondary",
     "Illusionist",
-    "Premium Extension: T cycles illusion type (HUD), 3 plants. Fighter decoys clone your kit and fight as AI gaslights; prop/platform illusions are visual-only with no cues. No collision or sight block. Real shots pass through (fighter decoys take 10 hits); illusion shots vanish and only phantom-damage bars (≥40). Most expensive extension.",
+    "Premium Extension: T cycles illusion type (HUD), 3 plants. Fighter decoys clone your kit with a fake HP bar (10 hits to fade) and AI-fight as gaslights; prop/platform illusions are visual-only with no cues. No collision or sight block. Real shots look like they die on the decoy but keep going invisible; illusion shots vanish and only phantom-damage bars (≥40). Most expensive extension.",
     {},
     {
       price: 320,
