@@ -22,6 +22,9 @@ import {
   stepThrownBreakables
 } from "./throw-breakable.js";
 import {
+  isShieldSteal, tickShieldStealBeam, tickShieldStealFighter
+} from "./shield-steal.js";
+import {
   isCombatClone, tickCombatCloneFighter
 } from "./combat-clone.js";
 import {
@@ -376,6 +379,10 @@ export function attack(fighter, game, random = Math.random) {
   if (fighter.shieldRaised && !fighter.shieldBroken) return;
   if (weaponAttackLocked(fighter)) return;
   if (!canNanotechAttack(fighter)) return;
+  if (isShieldSteal(fighter)) {
+    // Continuous drain is handled in stepFighter while attack is held.
+    return;
+  }
   if (isThrowBreakable(fighter)) {
     attackThrowBreakable(fighter, game);
     if (fighter.buddy && game.mode === "training") {
@@ -536,6 +543,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   if (!decoy && !clone) tickTrapperFighter(fighter, dt);
   tickIllusionistFighter(fighter, dt);
   tickCombatCloneFighter(fighter, dt);
+  tickShieldStealFighter(fighter, dt);
   // Humans: know fire intent before nanotech tick so hold-to-shoot blocks regen.
   let intent = null;
   if (fighter.human && getHumanIntent) {
@@ -622,8 +630,13 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   if (fighter.y > WORLD.h + 100) hit(fighter, fighter, 999, -Math.PI / 2, game);
   fighter.materialEjectHeld = !!intent.ejectVacuum;
   fighter.materialBeamHeld = !!(intent.chuck && fighter.materialConsumer);
+  fighter.shieldStealHeld = !!(intent.attack && isShieldSteal(fighter));
   if (intent.chuck) chuckMaterialConsumerScrap(fighter, game);
-  if (intent.attack) attack(fighter, game);
+  if (fighter.shieldStealHeld) {
+    tickShieldStealBeam(fighter, game, dt);
+  } else if (intent.attack) {
+    attack(fighter, game);
+  }
 }
 
 export function stepBullets(game, dt) {

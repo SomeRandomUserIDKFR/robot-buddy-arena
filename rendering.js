@@ -45,6 +45,9 @@ const WEAPON_VISUALS = {
   "throw-breakable": {
     length: 22, width: 8, gripOffset: 16, ally: "#c4a878", enemy: "#d88868", buddy: "#d0b888"
   },
+  "shield-steal": {
+    length: 36, width: 5, gripOffset: 17, ally: "#7ec8ff", enemy: "#ff9a70", buddy: "#6ad8ff"
+  },
   // Legacy baseKind fallbacks
   gun: { length: 32, width: 10, gripOffset: 18, ally: "#6a8f9c", enemy: "#8a655c", buddy: "#5aa8b4" },
   saber: { length: 48, width: 5, gripOffset: 17, ally: "#70f3ff", enemy: "#ff8279", buddy: "#4df2ff" }
@@ -802,6 +805,36 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
         const py = Math.sin(t * 22 + i * 1.7) * (4 + i);
         context.fillStyle = i % 2 ? "#d8c4a0" : "#9a8a78";
         context.fillRect(px - 2.5, py - 2, 5, 4);
+      }
+    }
+    context.restore();
+  }
+
+  // Shield Steal: short cyan siphon beam along aim while fire is held.
+  if (fighter.shieldSteal && (fighter.shieldStealHeld || (fighter.shieldStealFlash || 0) > 0.02)) {
+    const tipX = visual.gripOffset + length;
+    const flash = Math.max(0, fighter.shieldStealFlash || 0);
+    const beamLen = Math.max(40, fighter.shieldStealBeamLen || 90);
+    const t = performance.now() / 1000;
+    const locked = !!fighter.shieldStealTarget;
+    context.save();
+    context.globalAlpha = alpha * (0.35 + flash * 2.4);
+    context.strokeStyle = locked ? "rgba(140,220,255,.95)" : "rgba(100,160,200,.55)";
+    context.lineWidth = locked ? 3.4 : 2.2;
+    context.shadowColor = "#7ec8ff";
+    context.shadowBlur = locked ? 14 + flash * 16 : 6;
+    context.beginPath();
+    context.moveTo(tipX, 0);
+    context.lineTo(tipX + beamLen, Math.sin(t * 20) * (locked ? 2.5 : 1.5));
+    context.stroke();
+    if (locked) {
+      context.globalAlpha = alpha * (0.5 + flash);
+      context.fillStyle = "#b8e8ff";
+      for (let i = 0; i < 4; i++) {
+        const u = ((t * 7 + i * 0.22) % 1);
+        const px = tipX + u * beamLen;
+        const py = Math.sin(t * 18 + i) * 3;
+        context.fillRect(px - 1.5, py - 1.5, 3, 3);
       }
     }
     context.restore();

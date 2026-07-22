@@ -4,6 +4,10 @@ import {
 import {
   dropHeldBreakable, THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID
 } from "./throw-breakable.js";
+import {
+  SHIELD_STEAL_DRAIN_PER_SEC, SHIELD_STEAL_ID, SHIELD_STEAL_RANGE,
+  SHIELD_STEAL_TRANSFER
+} from "./shield-steal.js";
 import { angleDiff } from "./utils.js";
 import { SIZE } from "./config.js";
 import {
@@ -99,6 +103,7 @@ export const MATERIAL_CONSUMER_BEAM_RPM = 480;
 export const MATERIAL_CONSUMER_EJECTION_TANK_CAP = 160;
 export const MATERIAL_CONSUMER_ID = "material-consumer-nanotech";
 export { THROW_BREAKABLE_ID } from "./throw-breakable.js";
+export { SHIELD_STEAL_ID } from "./shield-steal.js";
 export const NO_SECONDARY_ID = "no-secondary";
 export const NO_EXTENSION_ID = "no-extension";
 export const RECONJURER_BUILDER_ID = "reconjurer-builder";
@@ -356,6 +361,29 @@ export const GEAR = [
         sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
         movementMultiplier: 1.04, iframeMultiplier: 1,
         baseDamage: THROW_BREAKABLE_DAMAGE, rpm: 90, range: 100
+      }
+    }
+  ),
+  item(
+    SHIELD_STEAL_ID,
+    "secondaryWeapon",
+    "Shield Steal",
+    "Secondary tool: hold fire for a short siphon beam. Drains raised shield durability from the victim and transfers part of it to your shield pool. Only works on shields facing you. Drop your own shield to fire.",
+    {
+      damage: SHIELD_STEAL_DRAIN_PER_SEC / 40,
+      fireRate: 120 / 150,
+      range: SHIELD_STEAL_RANGE / 120
+    },
+    {
+      baseKind: "saber",
+      dps: SHIELD_STEAL_DRAIN_PER_SEC * SHIELD_STEAL_TRANSFER,
+      price: 190,
+      shieldSteal: true,
+      weaponStats: {
+        kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+        sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+        movementMultiplier: 1.02, iframeMultiplier: 1,
+        baseDamage: 0, rpm: 120, range: SHIELD_STEAL_RANGE
       }
     }
   ),
@@ -1452,6 +1480,7 @@ export function applyActiveWeaponGear(fighter, gearId) {
   }
   fighter.materialConsumer = !!gear.materialConsumer;
   fighter.throwBreakable = !!gear.throwBreakable;
+  fighter.shieldSteal = !!gear.shieldSteal;
   fighter.nanotechWeaponCost = gear.nanotech ? nanotechFormCostOf(gear) : 0;
   fighter.nanobotShotCost = gear.nanotech ? Math.max(0, Number(gear.nanobotShotCost) || 0) : 0;
   fighter.nanotechAmmoBonus = gear.nanotech ? nanotechAmmoBonusOf(gear) : 0;
@@ -2180,7 +2209,9 @@ function pickOwned(profileOrEquipment, slot, preferences = []) {
 export function suggestBuddyLoadout(profile) {
   const equipment = profile.equipment;
   const style = evidenceStyle(profile, equipment.player);
-  const secondaryPrefs = [NO_SECONDARY_ID, THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID];
+  const secondaryPrefs = [
+    NO_SECONDARY_ID, THROW_BREAKABLE_ID, SHIELD_STEAL_ID, MATERIAL_CONSUMER_ID
+  ];
   const extensionPrefs = [
     NO_EXTENSION_ID, TRAPPER_ID, LIGHT_CONDENSATION_ID, RECONJURER_BUILDER_ID,
     COMBAT_CLONE_ID, ILLUSIONIST_ID
@@ -2215,7 +2246,9 @@ export function suggestBuddyLoadout(profile) {
           "duelist-blade", "mechanical-modularity",
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
-        secondaryWeapon: [THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID, NO_SECONDARY_ID],
+        secondaryWeapon: [
+          THROW_BREAKABLE_ID, SHIELD_STEAL_ID, MATERIAL_CONSUMER_ID, NO_SECONDARY_ID
+        ],
         extensionSecondary: [
           ILLUSIONIST_ID, COMBAT_CLONE_ID, TRAPPER_ID, RECONJURER_BUILDER_ID,
           LIGHT_CONDENSATION_ID, NO_EXTENSION_ID
@@ -2387,6 +2420,11 @@ export function applyLoadout(fighter, loadout) {
   // Matches primary start above; secondaries are swapped in via 1/2 / scroll.
   fighter.materialConsumer = false;
   fighter.throwBreakable = false;
+  fighter.shieldSteal = false;
+  fighter.shieldStealHeld = false;
+  fighter.shieldStealFlash = 0;
+  fighter.shieldStealTarget = null;
+  fighter.shieldStealBeamLen = 0;
   fighter.heldProp = null;
   fighter.materialScrapBank = [];
   fighter.materialEjectionTank = [];
