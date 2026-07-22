@@ -24,6 +24,10 @@ import {
 } from "./perks.js";
 import { escapeHtml, formatTime } from "./utils.js";
 import {
+  normalizeReconjurerType, paintReconjurerPreview, reconjurerTypeLabel,
+  RECONJURER_METAL_TYPE
+} from "./reconjurer-builder.js";
+import {
   ensureSettingsProfile, normalizeArmorDespawnTimer, normalizeOptimizeIllusions,
   normalizeReconquerRate
 } from "./settings.js";
@@ -62,6 +66,11 @@ export const ui = {
   trapHud: $("#trapHud"),
   trapHudKicker: $("#trapHudKicker"),
   trapHudType: $("#trapHudType"),
+  reconjurerPreview: $("#reconjurerPreview"),
+  reconjurerPreviewCanvas: $("#reconjurerPreviewCanvas"),
+  reconjurerPreviewKicker: $("#reconjurerPreviewKicker"),
+  reconjurerPreviewLabel: $("#reconjurerPreviewLabel"),
+  reconjurerPreviewHint: $("#reconjurerPreviewHint"),
   fuel: $("#fuelFill"),
   fuelMeter: $("#fuelMeter"),
   fuelLabel: $("#fuelLabel"),
@@ -333,6 +342,34 @@ export function showGame(mode, profile, mapName = "") {
 
 export function updateHud(game) {
   const player = game.fighters[0];
+  if (ui.reconjurerPreview) {
+    const showBuild = !!player?.reconjurerBuilder && !player.dead;
+    ui.reconjurerPreview.classList.toggle("hidden", !showBuild);
+    if (showBuild) {
+      const type = normalizeReconjurerType(player.reconjurerType, game);
+      const metal = type === RECONJURER_METAL_TYPE;
+      const metalLocked = metal && (player.reconjurerMetalCd || 0) > 0;
+      const cd = player.reconjurerCd || 0;
+      ui.reconjurerPreview.classList.toggle("metal", metal);
+      ui.reconjurerPreview.classList.toggle("locked", metalLocked);
+      if (ui.reconjurerPreviewKicker) {
+        ui.reconjurerPreviewKicker.textContent = "NEXT BUILD · T cycle";
+      }
+      if (ui.reconjurerPreviewLabel) {
+        ui.reconjurerPreviewLabel.textContent = reconjurerTypeLabel(type);
+      }
+      if (ui.reconjurerPreviewHint) {
+        ui.reconjurerPreviewHint.textContent = metalLocked
+          ? `metal cd ${Math.ceil(player.reconjurerMetalCd)}s`
+          : cd > 0
+            ? `ready in ${Math.ceil(cd)}s`
+            : "3 place · near debris = rebuild";
+      }
+      if (ui.reconjurerPreviewCanvas) {
+        paintReconjurerPreview(ui.reconjurerPreviewCanvas, type, game);
+      }
+    }
+  }
   if (ui.trapHud) {
     const showTrap = !!player?.trapper && !player.dead;
     const showIllu = !!player?.illusionist && !player.dead;
@@ -919,10 +956,11 @@ function modifierMarkup(gear) {
     }
     if (gear.reconjurerBuilder) {
       return [
-        "<span>Extension · press 3</span>",
+        "<span>Extension · T cycle · 3 place</span>",
+        "<span class=\"stat-up\">Left preview · see the breakable look</span>",
         "<span class=\"stat-up\">Near debris · free rebuild +2 scraps</span>",
-        "<span class=\"stat-up\">No debris · paid random conjure</span>",
-        "<span>Metal box · 8% / 10s user CD</span>",
+        "<span class=\"stat-up\">No debris · conjure selected type</span>",
+        "<span>Metal box · select · 10s user CD</span>",
         "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"
       ].join("");
     }

@@ -20,7 +20,8 @@ import {
   isLightCondensation, listLightCondensationProps, tryLightCondensation
 } from "./light-condensation.js";
 import {
-  isReconjurerBuilder, RECONJURER_BOT_COST, RECONJURER_REBUILD_RADIUS, tryReconjurerBuild
+  isReconjurerBuilder, listReconjurerChoices, RECONJURER_BOT_COST,
+  RECONJURER_METAL_TYPE, RECONJURER_REBUILD_RADIUS, tryReconjurerBuild
 } from "./reconjurer-builder.js";
 import {
   canGrabBreakable, isThrowBreakable, THROW_BREAKABLE_GRAB_RANGE, THROW_BREAKABLE_ID
@@ -779,6 +780,20 @@ export function updateAiReconjurer(fighter, state, game, visible, target) {
   const tank = materialEjectionTank(fighter);
   const canPay = tank.length > 0 || (fighter.nanobotFree || 0) >= RECONJURER_BOT_COST;
   if (!canPay) return;
+  // Prefer solid cover; metal only when CD is ready and bots allow.
+  const choices = listReconjurerChoices(game);
+  let want = choices.includes("crate") ? "crate" : (choices[0] || "crate");
+  if (choices.includes("pillar") && foe && dist(fighter, foe) < 200) want = "pillar";
+  else if (choices.includes("barrel") && foe) want = "barrel";
+  if (
+    metalReady
+    && choices.includes(RECONJURER_METAL_TYPE)
+    && (fighter.nanobotFree || 0) >= RECONJURER_BOT_COST * 2
+    && fighter.hp < 180
+  ) {
+    want = RECONJURER_METAL_TYPE;
+  }
+  fighter.reconjurerType = want;
   if (tryReconjurerBuild(fighter, game)) {
     state.plan = "conjuring cover";
   }

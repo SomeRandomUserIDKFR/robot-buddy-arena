@@ -9,9 +9,11 @@ import { spawnPropDebris, spawnPowerCrateDebris } from "./debris.js";
 import { createMapRuntime } from "./maps.js";
 import { createPowerCrate, POWER_CRATE_HP } from "./powerups.js";
 import {
-  hasExtensionSecondary, isReconjurerBuilder, RECONJURER_BOT_COST,
+  cycleReconjurerType, hasExtensionSecondary, isReconjurerBuilder,
+  listReconjurerChoices, paintReconjurerPreview, RECONJURER_BOT_COST,
   RECONJURER_COOLDOWN, RECONJURER_METAL_BOT_COST, RECONJURER_METAL_COOLDOWN,
-  RECONJURER_SCRAP_REWARD, tryReconjurerBuild, tickReconjurerBuilder
+  RECONJURER_METAL_TYPE, RECONJURER_SCRAP_REWARD, reconjurerTypeLabel,
+  tryReconjurerBuild, tickReconjurerBuilder
 } from "./reconjurer-builder.js";
 
 const clone = (value) => structuredClone(value);
@@ -81,7 +83,7 @@ assert.equal(RECONJURER_METAL_COOLDOWN, 10);
   assert.ok(fighter.reconjurerCd > 0);
 }
 
-// No nearby debris → paid random conjure (bots), still +2 scraps.
+// No nearby debris → paid selected conjure (bots), still +2 scraps.
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
@@ -93,6 +95,7 @@ assert.equal(RECONJURER_METAL_COOLDOWN, 10);
   fighter.aim = 0;
   fighter.nanobotFree = 40;
   fighter.materialEjectionTank = [];
+  fighter.reconjurerType = "crate";
   const game = {
     props: [],
     powerCrates: [],
@@ -103,9 +106,10 @@ assert.equal(RECONJURER_METAL_COOLDOWN, 10);
     theme: "industrial",
     elapsed: 1
   };
-  const spawned = tryReconjurerBuild(fighter, game, () => 0.99);
+  const spawned = tryReconjurerBuild(fighter, game, () => 0.5);
   assert.ok(spawned);
-  assert.ok(!spawned.powerCrate, "high roll = normal breakable");
+  assert.ok(!spawned.powerCrate, "selected crate is a normal breakable");
+  assert.equal(spawned.kind, "crate");
   assert.equal(game.props.length, 1);
   assert.equal(fighter.nanobotFree, 40 - RECONJURER_BOT_COST);
   assert.equal(fighter.materialEjectionTank.length, RECONJURER_SCRAP_REWARD);
@@ -131,7 +135,7 @@ assert.equal(RECONJURER_METAL_COOLDOWN, 10);
   assert.equal(tryReconjurerBuild(fighter, game, () => 0.99), null);
 }
 
-// No debris + low roll conjures metal when CD ready (costs metal bot fee).
+// No debris + metal selected conjures metal when CD ready (costs metal bot fee).
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
@@ -144,6 +148,7 @@ assert.equal(RECONJURER_METAL_COOLDOWN, 10);
   fighter.nanobotFree = 40;
   fighter.materialEjectionTank = [];
   fighter.reconjurerMetalCd = 0;
+  fighter.reconjurerType = RECONJURER_METAL_TYPE;
   const game = {
     props: [],
     powerCrates: [],
@@ -154,11 +159,49 @@ assert.equal(RECONJURER_METAL_COOLDOWN, 10);
     theme: "industrial",
     elapsed: 2
   };
-  const spawned = tryReconjurerBuild(fighter, game, () => 0.01);
+  const spawned = tryReconjurerBuild(fighter, game, () => 0.5);
   assert.ok(spawned?.powerCrate);
   assert.equal(game.powerCrates.length, 1);
   assert.equal(fighter.nanobotFree, 40 - RECONJURER_METAL_BOT_COST);
   assert.ok(Math.abs(fighter.reconjurerMetalCd - RECONJURER_METAL_COOLDOWN) < 0.001);
+}
+
+// T cycles theme pool + metal; preview paint is a no-throw.
+{
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: RECONJURER_BUILDER_ID
+  });
+  const game = { theme: "industrial", mapId: "yard" };
+  const choices = listReconjurerChoices(game);
+  assert.ok(choices.includes("crate"));
+  assert.ok(choices.includes(RECONJURER_METAL_TYPE));
+  fighter.reconjurerType = choices[0];
+  const next = cycleReconjurerType(fighter, game);
+  assert.equal(next, choices[1]);
+  assert.equal(reconjurerTypeLabel(RECONJURER_METAL_TYPE), "METAL");
+  // Node canvas may be unavailable — paint no-ops without a real context.
+  const fake = {
+    width: 104,
+    height: 104,
+    getContext: () => ({
+      clearRect() {},
+      fillRect() {},
+      strokeRect() {},
+      beginPath() {},
+      moveTo() {},
+      lineTo() {},
+      closePath() {},
+      ellipse() {},
+      fill() {},
+      stroke() {},
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 1
+    })
+  };
+  paintReconjurerPreview(fake, "crate", game);
+  paintReconjurerPreview(fake, RECONJURER_METAL_TYPE, game);
 }
 
 // Metal box debris rebuild uses the 10s user CD.
