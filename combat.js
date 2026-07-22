@@ -22,6 +22,9 @@ import {
   stepThrownBreakables
 } from "./throw-breakable.js";
 import {
+  bindExplosiveBarrelHitter, bindExplosiveBarrelPowerCrateDamager
+} from "./explosive-barrel.js";
+import {
   isShieldSteal, tickShieldStealBeam, tickShieldStealFighter
 } from "./shield-steal.js";
 import {
@@ -38,6 +41,7 @@ import {
 import { angleDiff, clamp, dist, lerp, segmentHitsBox } from "./utils.js";
 
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
+bindExplosiveBarrelPowerCrateDamager(damagePowerCrate);
 
 function landableSurfaces(game) {
   if (game?._landables) return game._landables;
@@ -233,6 +237,7 @@ function hit(target, source, damage, angle, game, extras = {}) {
 }
 
 export { hit };
+bindExplosiveBarrelHitter(hit);
 
 export function weaponAccuracySpread(fighter) {
   const required = fighter.aimSettleRequired || 0;

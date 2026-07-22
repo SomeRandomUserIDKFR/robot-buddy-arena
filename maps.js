@@ -4,6 +4,9 @@
  * Ceiling / world size match `config.js` (avoid importing config — circular with PLATFORMS re-export).
  */
 import { spawnPropDebris } from "./debris.js";
+import {
+  detonateExplosiveBarrel, isExplosiveBarrel, RED_BARREL_KIND
+} from "./explosive-barrel.js";
 
 const MAP_CEILING = 12;
 const MAP_WORLD = { w: 3600, h: 1600 };
@@ -62,6 +65,11 @@ const PROP_PRESETS = {
     kind: "barrel", w: 34, h: 48, hp: 40,
     solid: true, blocksProjectiles: true, blocksSight: false, breakable: true
   },
+  redBarrel: {
+    kind: RED_BARREL_KIND, w: 34, h: 48, hp: 40,
+    solid: true, blocksProjectiles: true, blocksSight: false, breakable: true,
+    explosive: true
+  },
   crateStack: {
     kind: "crate", w: 44, h: 88, hp: 90,
     solid: true, blocksProjectiles: true, blocksSight: true, breakable: true
@@ -114,6 +122,7 @@ function prop(kind, x, yBottom) {
     baseBlocksProjectiles: blocksProjectiles,
     baseBlocksSight: blocksSight,
     breakable: preset.breakable !== false,
+    explosive: !!preset.explosive,
     canopy,
     hitFlash: 0,
     destroyed: false,
@@ -220,7 +229,8 @@ export const MAPS = Object.freeze([
     props: [
       prop("crate", 540, 1180),
       prop("crate", 2140, 1100),
-      prop("barrel", 1120, 860)
+      prop("barrel", 1120, 860),
+      prop("redBarrel", 2460, 940)
     ],
     spawnPoints: {
       training: {
@@ -368,6 +378,7 @@ export const MAPS = Object.freeze([
       prop("crateStack", 320, 1200),
       prop("pipe", 780, 1060),
       prop("barrel", 900, 1060),
+      prop("redBarrel", 980, 1060),
       prop("crate", 1320, 1220),
       prop("crate", 1480, 1220),
       prop("pipe", 1900, 1000),
@@ -377,6 +388,7 @@ export const MAPS = Object.freeze([
       prop("pipe", 3080, 940),
       prop("crate", 440, 780),
       prop("barrel", 1080, 680),
+      prop("redBarrel", 2860, 520),
       prop("crateStack", 1700, 580),
       prop("pipe", 2280, 720)
     ],
@@ -470,6 +482,7 @@ export const MAPS = Object.freeze([
       prop("barrel", 720, 1380),
       prop("crate", 1400, 1380),
       prop("barrel", 2000, 1380),
+      prop("redBarrel", 2080, 1380),
       prop("crate", 2600, 1380),
       prop("barrel", 3200, 1380),
       prop("crate", 160, 1120),
@@ -702,6 +715,9 @@ export function damageProp(prop, amount, game, impactX, impactY) {
       });
     }
     spawnPropDebris(game, prop, ix, iy);
+    if (isExplosiveBarrel(prop)) {
+      detonateExplosiveBarrel(prop, game, ix, iy, damageProp);
+    }
   }
   return true;
 }

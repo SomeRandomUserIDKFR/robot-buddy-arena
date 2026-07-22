@@ -39,11 +39,11 @@ export const RECONJURER_METAL_TYPE = "metal";
 const THEME_KINDS = Object.freeze({
   desert: ["cactus", "bush", "crate", "barrel"],
   forest: ["tree", "bush", "crate", "barrel"],
-  industrial: ["crate", "pipe", "barrel", "pillar"],
-  yard: ["crate", "pipe", "barrel", "crateStack"],
+  industrial: ["crate", "pipe", "barrel", "redBarrel", "pillar"],
+  yard: ["crate", "pipe", "barrel", "redBarrel", "crateStack"],
   ruins: ["pillar", "crate", "barrel", "bush"],
-  docks: ["crate", "barrel", "pipe"],
-  city: ["crate", "barrel", "pipe", "pillar"],
+  docks: ["crate", "barrel", "redBarrel", "pipe"],
+  city: ["crate", "barrel", "redBarrel", "pipe", "pillar"],
   battlefield: ["crate", "barrel", "pipe", "bush"]
 });
 
@@ -358,6 +358,15 @@ function paintPropLook(ctx, kind, x, y, w, h) {
     ctx.moveTo(x, y + h * 0.7);
     ctx.lineTo(x + w, y + h * 0.7);
     ctx.stroke();
+    return;
+  }
+  if (kind === "redBarrel") {
+    ctx.fillStyle = "#c62828";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = "#f0c020";
+    ctx.fillRect(x, y + h * 0.38, w, h * 0.24);
+    ctx.strokeStyle = "#4a1010";
+    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
     return;
   }
   // crate / crateStack — wood box with X

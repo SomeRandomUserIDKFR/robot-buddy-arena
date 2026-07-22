@@ -1343,6 +1343,21 @@ export function createRenderer(canvas) {
       context.moveTo(prop.x, prop.y + prop.h * .7);
       context.lineTo(prop.x + prop.w, prop.y + prop.h * .7);
       context.stroke();
+    } else if (prop.kind === "redBarrel") {
+      context.fillStyle = flash ? "#ffd0c8" : "#c62828";
+      context.fillRect(prop.x, prop.y, prop.w, prop.h);
+      context.fillStyle = flash ? "#fff59a" : "#f0c020";
+      context.fillRect(prop.x, prop.y + prop.h * .38, prop.w, prop.h * .24);
+      context.strokeStyle = "#4a1010";
+      context.lineWidth = 1.5;
+      context.strokeRect(prop.x + 1, prop.y + 1, prop.w - 2, prop.h - 2);
+      context.beginPath();
+      context.moveTo(prop.x + 4, prop.y + prop.h * .2);
+      context.lineTo(prop.x + prop.w - 4, prop.y + prop.h * .8);
+      context.moveTo(prop.x + prop.w - 4, prop.y + prop.h * .2);
+      context.lineTo(prop.x + 4, prop.y + prop.h * .8);
+      context.strokeStyle = "#2a0808";
+      context.stroke();
     } else {
       context.fillStyle = flash ? "#fff" : "#668";
       context.fillRect(prop.x, prop.y, prop.w, prop.h);
@@ -2168,6 +2183,20 @@ export function createRenderer(canvas) {
         context.beginPath();
         context.arc(effect.x, effect.y, (1 - effect.life) * 48, 0, Math.PI * 2);
         context.stroke();
+      }
+      if (effect.type === "explosion") {
+        const t = 1 - clamp(effect.life / 0.42, 0, 1);
+        const maxR = effect.radius || 150;
+        const r = Math.max(8, t * maxR);
+        context.strokeStyle = effect.color || "#ff6a2a";
+        context.lineWidth = 4 - t * 2;
+        context.beginPath();
+        context.arc(effect.x, effect.y, r, 0, Math.PI * 2);
+        context.stroke();
+        context.fillStyle = `rgba(255,140,40,${(1 - t) * 0.35})`;
+        context.beginPath();
+        context.arc(effect.x, effect.y, r * 0.55, 0, Math.PI * 2);
+        context.fill();
       }
       if (effect.type === "lootPopup") {
         context.globalAlpha = clamp(effect.life * 1.2, 0, 1);
