@@ -182,16 +182,16 @@ export const GEAR = [
   }, 135),
 
   // Nanotech: counterpart weapon stats; shared bot pool. Weapons need free bots ≥ cost to fire.
-  melee("nanotech-sword", "Nanotech Sword", "Arc Saber stats. Needs 100 free nanobots to swing.", {
+  melee("nanotech-sword", "Nanotech Sword", "Arc Saber stats. Forms from 100 free reserve bots.", {
     baseDamage: 55, rpm: 150, range: 120
   }, 100, { nanotech: true, nanobotCost: 100 }),
-  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle stats. Needs 150 free nanobots to fire.", {
+  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle stats. Forms from 150 free reserve bots.", {
     baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
     dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
     aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
     movementMultiplier: 1, iframeMultiplier: 1
   }, 150, { nanotech: true, nanobotCost: 150 }),
-  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper stats. Needs 175 free nanobots to fire.", {
+  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper stats. Forms from 175 free reserve bots.", {
     baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
     dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
     sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
@@ -201,7 +201,7 @@ export const GEAR = [
     "nanotech-chestplate",
     "body",
     "Nanotech Chestplate",
-    "Hold F to channel free bots into armor (2 bots = 1 HP, cap 250). Takes 10% less damage.",
+    "Hold F: loan reserve bots into armor (2 bots = 1 HP, cap 250). Release F to return bots. 10% less damage taken.",
     { damageTaken: 0.9 },
     { price: 500, nanotech: true, nanobotCost: 500 }
   ),
@@ -209,7 +209,7 @@ export const GEAR = [
     "nanotech-reserve",
     "jetpack",
     "Nanotech Reserve",
-    "Huge bot tank for nanotech gear. 5% slower. Fuel/thrust unchanged.",
+    "Huge shared bot tank for nanotech gear. 5% slower. Fuel/thrust unchanged.",
     { speed: 0.95 },
     { price: 1000, nanotech: true, nanobotCost: 1000 }
   ),
@@ -258,14 +258,15 @@ export const GEAR = [
 export const RETRACTABLE_ARMOR_SPEED = 0.9;
 export const RETRACTABLE_MORPH_DURATION = 0.32;
 
-/** Nanotech bot pool: channel free→armor, slow regen when weapon starved. */
+/** Nanotech bot pool: hold F loans free→armor; release returns armor→free. */
 export const NANOTECH_CHANNEL_RATE = 520;
+export const NANOTECH_RECALL_RATE = 580;
 export const NANOTECH_SLOW_REGEN = 55;
 export const NANOTECH_BOTS_PER_HP = 2;
 export const NANOTECH_ARMOR_BOT_CAP = 500;
 /** Snap Mark-85 style assemble when channeling starts from empty. */
 export const NANOTECH_ARMOR_SPAWN_DURATION = 0.22;
-/** Sword melts into the swarm / reforms when armor empties. */
+/** Sword melts when free bots drop below conjure cost / reforms when reserve returns. */
 export const NANOTECH_SWORD_DISSOLVE_DURATION = 0.18;
 export const NANOTECH_SWORD_REFORM_DURATION = 0.2;
 
@@ -716,17 +717,21 @@ export function tickNanotech(fighter, dt) {
   let free = Math.max(0, fighter.nanobotFree || 0);
   let armor = Math.max(0, fighter.nanobotArmor || 0);
   const armorBefore = armor;
+  const weaponCost = fighter.nanotechWeaponCost || 0;
 
   if (fighter.nanotechChanneling && hasNanotechChestplate(fighter)) {
+    // Hold F: loan reserve bots into the armor buffer.
     const room = Math.max(0, NANOTECH_ARMOR_BOT_CAP - armor);
     const flow = Math.min(free, room, NANOTECH_CHANNEL_RATE * dt);
     free -= flow;
     armor += flow;
-  } else if (
-    (fighter.nanotechWeaponCost || 0) > 0
-    && free < fighter.nanotechWeaponCost
-    && free + armor < max
-  ) {
+  } else if (hasNanotechChestplate(fighter) && armor > 0) {
+    // Release F: armor returns to the shared reserve (weapon can reform).
+    const flow = Math.min(armor, NANOTECH_RECALL_RATE * dt);
+    armor -= flow;
+    free += flow;
+  } else if (weaponCost > 0 && free < weaponCost && free + armor < max) {
+    // Only when bots were destroyed (damage) — slowly rebuild reserve.
     const room = Math.max(0, max - free - armor);
     const gain = Math.min(room, NANOTECH_SLOW_REGEN * dt);
     free += gain;
@@ -760,9 +765,9 @@ export function tickNanotech(fighter, dt) {
     }
   }
 
-  // Sword dissolve ↔ reform (Mark-85 melt / rematerialize).
+  // Weapon forms from free reserve — dissolves when free bots < conjure cost.
   if (fighter.weaponId === "nanotech-sword") {
-    const wantDissolved = (fighter.nanobotArmor || 0) > 0 || !!fighter.nanotechArmorSpawning;
+    const wantDissolved = weaponCost > 0 && (fighter.nanobotFree || 0) < weaponCost;
     let dissolve = Math.max(0, Math.min(1, fighter.nanotechSwordDissolveT ?? 0));
     if (wantDissolved) {
       dissolve = Math.min(1, dissolve + dt / NANOTECH_SWORD_DISSOLVE_DURATION);

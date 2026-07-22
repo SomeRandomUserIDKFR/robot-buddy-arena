@@ -348,15 +348,18 @@ export function updateHud(game) {
       const freeLow = weaponCost > 0 && (player.nanobotFree || 0) < weaponCost;
       const armorFull = maxHp > 0 && curHp >= maxHp;
       const filling = !!player.nanotechChanneling && !armorFull && !player.nanotechArmorSpawning;
+      const recalling = !player.nanotechChanneling && curHp > 0;
       ui.armorLabel.textContent = player.nanotechArmorSpawning
         ? "NANO FORM…"
         : filling
           ? "CHANNEL…"
-          : armorFull && player.nanotechChanneling
-            ? "NANO FULL"
-            : freeLow
-              ? "NANO LOW"
-              : "NANO";
+          : recalling
+            ? "RECALL…"
+            : armorFull && player.nanotechChanneling
+              ? "NANO FULL"
+              : freeLow
+                ? "NANO LOW"
+                : "NANO";
     } else if (hasArmor) {
       const armorPct = player.retractableMax > 0
         ? (player.retractableHp / player.retractableMax) * 100
@@ -828,7 +831,7 @@ function modifierMarkup(gear) {
   });
   if (nanoCostLine) changes.unshift(nanoCostLine);
   if (gear.id === "nanotech-chestplate") {
-    changes.push("<span>Hold F to channel bots → armor</span>");
+    changes.push("<span>Hold F: loan reserve → armor · release to recall</span>");
   }
   return changes.length ? changes.join("") : "<span>Baseline stats</span>";
 }

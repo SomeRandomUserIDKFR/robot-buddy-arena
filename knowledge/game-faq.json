@@ -444,7 +444,7 @@
         "nanotech sword rifle sniper",
         "nanotech reserve"
       ],
-      "answer": "Nanotech pieces share a bot pool equal to the sum of each piece's nanobot cost. Nanotech weapons need that many free bots ready to fire (not spent per shot). Hold F with Nanotech Chestplate to channel free bots into armor (2 bots = 1 HP, armor capped at 500 bots / 250 HP). Nanotech Reserve adds a large pool but slows you 5%. With the chestplate, F channels instead of toggling Retractable Armor."
+      "answer": "Nanotech gear shares one bot reserve (sum of each piece's nanobot cost). Weapons form from free reserve bots — sword 100, rifle 150, sniper 175 — and cannot attack until that many are free. Hold F with Nanotech Chestplate to loan free bots into the armor bar (2 bots = 1 HP, cap 500 bots / 250 HP). Release F to return those bots to reserve so the weapon can reform. Nanotech Reserve adds a large tank but slows you 5%. With the chestplate, F channels instead of toggling Retractable Armor."
     },
     {
       "id": "equipment-shields",

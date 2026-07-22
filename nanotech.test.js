@@ -162,38 +162,38 @@ function syncDisplay(fighter) {
   assert.equal(chest.nanotechChanneling, false);
 }
 
-// Armor spawn is a quick Mark-85 snap; sword dissolves smoothly into armor.
+// Armor spawn is a quick Mark-85 snap; sword forms from free reserve bots.
 {
   const {
     NANOTECH_ARMOR_SPAWN_DURATION, NANOTECH_SWORD_DISSOLVE_DURATION,
-    nanotechSwordHidden, nanotechSwordVisibility
+    NANOTECH_RECALL_RATE, nanotechSwordHidden, nanotechSwordVisibility
   } = await import("./equipment.js");
   assert.ok(NANOTECH_ARMOR_SPAWN_DURATION > 0 && NANOTECH_ARMOR_SPAWN_DURATION <= 0.3);
   assert.ok(NANOTECH_SWORD_DISSOLVE_DURATION > 0 && NANOTECH_SWORD_DISSOLVE_DURATION <= 0.25);
+  assert.ok(NANOTECH_RECALL_RATE >= NANOTECH_CHANNEL_RATE);
 
   const fighter = applyLoadout(new Fighter({}), loadout({
     body: "nanotech-chestplate",
     weapon: "nanotech-sword"
   }));
   assert.equal(nanotechSwordHidden(fighter), false);
+  assert.equal(fighter.nanobotFree, 600);
   assert.equal(setNanotechChanneling(fighter, true), true);
   assert.equal(fighter.nanotechArmorSpawning, true);
 
-  // Mid dissolve — sword still partially visible.
-  tickNanotech(fighter, NANOTECH_SWORD_DISSOLVE_DURATION * 0.4);
-  assert.ok(nanotechSwordVisibility(fighter) < 1);
-  assert.ok(nanotechSwordVisibility(fighter) > 0.02);
+  // Channel enough that free drops below the 100-bot sword cost.
+  for (let i = 0; i < 30; i++) tickNanotech(fighter, 0.05);
+  assert.ok(fighter.nanobotArmor > 0);
+  assert.ok(fighter.nanobotFree < 100);
+  assert.equal(nanotechSwordHidden(fighter), true, "sword gone when reserve < 100");
 
-  for (let i = 0; i < 20; i++) tickNanotech(fighter, 0.05);
-  assert.equal(fighter.nanotechArmorSpawning, false, "spawn finishes quickly");
-  assert.equal(nanotechSwordHidden(fighter), true, "sword fully dissolved while armored");
-
-  // Drain armor — sword reforms.
-  fighter.nanobotArmor = 0;
-  fighter.nanotechChanneling = false;
-  for (let i = 0; i < 20; i++) tickNanotech(fighter, 0.05);
+  // Release F — armor recalls to reserve; sword reforms.
+  setNanotechChanneling(fighter, false);
+  for (let i = 0; i < 40; i++) tickNanotech(fighter, 0.05);
+  assert.equal(fighter.nanobotArmor, 0, "armor returns to reserve");
+  assert.ok(fighter.nanobotFree >= 100);
+  assert.equal(nanotechSwordHidden(fighter), false, "sword reforms from reserve");
   assert.ok(nanotechSwordVisibility(fighter) > 0.9);
-  assert.equal(nanotechSwordHidden(fighter), false);
 
   const rifle = applyLoadout(new Fighter({}), loadout({
     body: "nanotech-chestplate",
