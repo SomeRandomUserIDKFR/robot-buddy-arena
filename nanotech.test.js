@@ -83,19 +83,21 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(setNanotechChanneling(fighter, true), true);
   assert.equal(fighter.nanotechChanneling, true);
   tickNanotech(fighter, 1);
-  const expectedFlow = Math.min(
-    fighter.nanobotMax, NANOTECH_CHANNEL_RATE, NANOTECH_ARMOR_BOT_CAP
-  );
+  const expectedFlow = Math.min(fighter.nanobotMax, NANOTECH_CHANNEL_RATE);
   assert.equal(fighter.nanobotArmor, expectedFlow);
   assert.equal(fighter.nanobotFree, fighter.nanobotMax - expectedFlow);
-  assert.equal(nanotechArmorHp(fighter), Math.floor(expectedFlow / NANOTECH_BOTS_PER_HP));
+  assert.equal(nanotechArmorHp(fighter), Math.floor(
+    Math.min(expectedFlow, NANOTECH_ARMOR_BOT_CAP) / NANOTECH_BOTS_PER_HP
+  ));
 
-  // Drain almost all free into armor over time; clamp at armor bot cap.
+  // Drain all free into armor; HP still caps at 500 bots / 250 HP.
   fighter.nanobotFree = 600;
   fighter.nanobotArmor = 0;
   setNanotechChanneling(fighter, true);
   for (let i = 0; i < 20; i++) tickNanotech(fighter, 1);
-  assert.equal(fighter.nanobotArmor, NANOTECH_ARMOR_BOT_CAP);
+  assert.equal(fighter.nanobotArmor, 600);
+  assert.equal(fighter.nanobotFree, 0);
+  assert.equal(nanotechArmorHp(fighter), Math.floor(NANOTECH_ARMOR_BOT_CAP / 2));
   assert.equal(nanotechArmorMaxHp(fighter), Math.floor(NANOTECH_ARMOR_BOT_CAP / 2));
   setNanotechChanneling(fighter, false);
   assert.equal(fighter.nanotechChanneling, false);

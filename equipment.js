@@ -640,15 +640,15 @@ export function hasNanotechChestplate(fighter) {
 }
 
 export function nanotechArmorHp(fighter) {
-  return Math.floor(Math.max(0, fighter?.nanobotArmor || 0) / NANOTECH_BOTS_PER_HP);
+  const bots = Math.min(
+    NANOTECH_ARMOR_BOT_CAP,
+    Math.max(0, fighter?.nanobotArmor || 0)
+  );
+  return Math.floor(bots / NANOTECH_BOTS_PER_HP);
 }
 
 export function nanotechArmorMaxHp(fighter) {
-  const botCap = Math.min(
-    NANOTECH_ARMOR_BOT_CAP,
-    Math.max(0, fighter?.nanobotMax || 0)
-  );
-  return Math.floor(botCap / NANOTECH_BOTS_PER_HP);
+  return Math.floor(NANOTECH_ARMOR_BOT_CAP / NANOTECH_BOTS_PER_HP);
 }
 
 export function canNanotechAttack(fighter) {
@@ -720,8 +720,8 @@ export function tickNanotech(fighter, dt) {
   const weaponCost = fighter.nanotechWeaponCost || 0;
 
   if (fighter.nanotechChanneling && hasNanotechChestplate(fighter)) {
-    // Hold F: loan reserve bots into the armor buffer.
-    const room = Math.max(0, NANOTECH_ARMOR_BOT_CAP - armor);
+    // Hold F: loan any free reserve into armor (HP only counts first 500 bots).
+    const room = Math.max(0, max - armor);
     const flow = Math.min(free, room, NANOTECH_CHANNEL_RATE * dt);
     free -= flow;
     armor += flow;
@@ -738,8 +738,8 @@ export function tickNanotech(fighter, dt) {
   }
 
   fighter.nanobotFree = Math.max(0, Math.min(max - armor, free));
-  fighter.nanobotArmor = Math.max(0, Math.min(NANOTECH_ARMOR_BOT_CAP, armor));
-  // Keep free+armor ≤ max (channel can leave unused reserve capacity).
+  fighter.nanobotArmor = Math.max(0, Math.min(max, armor));
+  // Keep free+armor ≤ max.
   if (fighter.nanobotFree + fighter.nanobotArmor > max) {
     fighter.nanobotFree = Math.max(0, max - fighter.nanobotArmor);
   }
