@@ -59,7 +59,8 @@ export function thoughtReason(plan) {
     "laying fake platform": "a false ledge would punish a landing",
     "casting fighter illusion": "a kit-matched decoy would steal focus",
     "casting prop illusion": "a false cover prop would bait shots",
-    "casting platform illusion": "a false ledge would waste a landing"
+    "casting platform illusion": "a false ledge would waste a landing",
+    "spawning doppel": "a real twin would split their focus"
   })[plan] || "no clean engagement was visible";
 }
 

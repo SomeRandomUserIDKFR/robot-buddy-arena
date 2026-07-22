@@ -5,6 +5,10 @@ import {
   triggerDodge
 } from "./combat.js";
 import {
+  isCombatClone, isCombatCloneGear, refreshCombatCloneCaches, tickCombatCloneWorld,
+  tryCombatCloneSpawn
+} from "./combat-clone.js";
+import {
   cycleIllusionistType, isIllusionFighter, isIllusionist, isRealCombatant,
   refreshIllusionCaches, tickIllusionistWorld, tryIllusionistPlant
 } from "./illusionist.js";
@@ -317,12 +321,13 @@ function update(dt) {
   }
   refreshCombatCaches(game);
   refreshIllusionCaches(game);
+  refreshCombatCloneCaches(game);
   const trapPrevY = new Map();
   for (const fighter of game.fighters) {
     stepFighter(fighter, dt, game, profile, keys, humanIntent);
     if (fighter._trapPrevY != null) trapPrevY.set(fighter, fighter._trapPrevY);
-    // Decoys skip secondary/extension world ticks — they only gaslight-fight.
-    if (isIllusionFighter(fighter)) continue;
+    // Decoys / Doppels skip secondary/extension world ticks — they only fight.
+    if (isIllusionFighter(fighter) || isCombatClone(fighter)) continue;
     tickFighterPowerBuffs(fighter, dt);
     tickThrowBreakable(fighter, game, dt);
     tickReconjurerBuilder(fighter, dt);
@@ -330,6 +335,7 @@ function update(dt) {
   }
   tickTrapperWorld(game, dt, trapPrevY);
   tickIllusionistWorld(game, dt);
+  tickCombatCloneWorld(game);
   stepBullets(game, dt);
   stepThrownProps(game, dt);
   tickPowerCrateSpawns(game, dt);
@@ -435,6 +441,7 @@ function handleKeyDown(event) {
   if (event.code === "Digit3" && !event.repeat) {
     const player = game.fighters[0];
     if (isIllusionist(player)) tryIllusionistPlant(player, game, Fighter);
+    else if (isCombatCloneGear(player)) tryCombatCloneSpawn(player, game, Fighter);
     else if (isTrapper(player)) tryTrapperPlant(player, game);
     else if (isLightCondensation(player)) tryLightCondensation(player, game);
     else if (isReconjurerBuilder(player)) tryReconjurerBuild(player, game);
