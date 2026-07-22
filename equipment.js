@@ -201,7 +201,7 @@ export const GEAR = [
     "nanotech-chestplate",
     "body",
     "Nanotech Chestplate",
-    "Tap F: +100 bots to armor. Hold F: return 20 bots/s to reserve (2 bots = 1 HP, cap 250). 10% less damage taken.",
+    "Tap F: +100 bots to armor. Hold F: return 50 bots/s to reserve (2 bots = 1 HP, cap 250). 10% less damage taken.",
     { damageTaken: 0.9 },
     { price: 500, nanotech: true, nanobotCost: 500 }
   ),
@@ -258,8 +258,8 @@ export const GEAR = [
 export const RETRACTABLE_ARMOR_SPEED = 0.9;
 export const RETRACTABLE_MORPH_DURATION = 0.32;
 
-/** Nanotech: tap F loans +100 free→armor; hold F returns armor→free at 20/s. */
-export const NANOTECH_RECALL_RATE = 20;
+/** Nanotech: tap F loans +100 free→armor; hold F returns armor→free at 50/s. */
+export const NANOTECH_RECALL_RATE = 50;
 /** @deprecated Use NANOTECH_RECALL_RATE — hold F recalls armor to reserve. */
 export const NANOTECH_CHANNEL_RATE = NANOTECH_RECALL_RATE;
 export const NANOTECH_ARMOR_PRESS = 100;

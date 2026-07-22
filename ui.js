@@ -827,7 +827,7 @@ function modifierMarkup(gear) {
   });
   if (nanoCostLine) changes.unshift(nanoCostLine);
   if (gear.id === "nanotech-chestplate") {
-    changes.push("<span>Tap F: +100 armor bots · hold F: return 20/s</span>");
+    changes.push("<span>Tap F: +100 armor bots · hold F: return 50/s</span>");
   }
   return changes.length ? changes.join("") : "<span>Baseline stats</span>";
 }

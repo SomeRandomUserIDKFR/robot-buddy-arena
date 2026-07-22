@@ -278,7 +278,7 @@ function syncDisplay(fighter) {
 // Channel / regen rates.
 {
   assert.equal(NANOTECH_SLOW_REGEN, 55);
-  assert.equal(NANOTECH_CHANNEL_RATE, 20);
+  assert.equal(NANOTECH_CHANNEL_RATE, 50);
   assert.equal(NANOTECH_ARMOR_PRESS, 100);
   assert.equal(NANOTECH_BOTS_PER_HP, 2);
 }

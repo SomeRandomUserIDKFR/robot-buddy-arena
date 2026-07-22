@@ -273,7 +273,7 @@ function update(dt) {
   game.announcement -= dt;
   game.thoughtClock -= dt;
   const player = game.fighters[0];
-  // Tap F = +100 armor; hold F = recall armor→reserve at 20/s (after threshold).
+  // Tap F = +100 armor; hold F = recall armor→reserve at 50/s (after threshold).
   if (player && hasNanotechChestplate(player) && !player.dead) {
     if (keys.KeyF) {
       nanoFHoldT += dt;
