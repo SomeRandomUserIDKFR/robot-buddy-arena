@@ -1019,6 +1019,15 @@ function modifierMarkup(gear) {
         "<span class=\"stat-down\">Shatters at impact · reconquer there</span>"
       ].join("");
     }
+    if (gear.shieldSteal) {
+      return [
+        "<span>Secondary · hold fire siphon beam</span>",
+        "<span class=\"stat-up\">Drains raised shield HP into yours</span>",
+        "<span>Short range · shield must face you</span>",
+        "<span>Transfer ~55% · drop your Q to fire</span>",
+        "<span class=\"stat-down\">No effect on lowered / broken shields</span>"
+      ].join("");
+    }
     const stats = weaponStats(gear);
     const changes = [
       `<span>${stats.kind === "gun" ? "Ranged" : "Melee"} mechanics</span>`,

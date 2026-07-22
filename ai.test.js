@@ -9,8 +9,9 @@ import {
   shieldLowerCooldown, shieldRaiseAllowed, shieldStyleBias, stepAimSmoothing,
   tickAiShieldHold, updateAI, updateAiCombatClone, updateAiIllusionist,
   updateAiLightCondensation, updateAiMaterialConsumer, updateAiReconjurer,
-  updateAiRetractableArmor, updateAiShield, updateAiThrowBreakable, updateAiTrapper,
-  updateAiWeaponSlot, wantAiSecondarySlot, wantRetractableDeployed
+  updateAiRetractableArmor, updateAiShield, updateAiShieldSteal,
+  updateAiThrowBreakable, updateAiTrapper, updateAiWeaponSlot, wantAiSecondarySlot,
+  wantRetractableDeployed
 } from "./ai.js";
 import { Fighter } from "./combat.js";
 import { isCombatClone } from "./combat-clone.js";
@@ -19,8 +20,8 @@ import { spawnPropDebris } from "./debris.js";
 import {
   applyLoadout, COMBAT_CLONE_ID, DEFAULT_LOADOUT, ILLUSIONIST_ID, isPrecisionAimWeapon,
   LIGHT_CONDENSATION_ID, MATERIAL_CONSUMER_ID, RECONJURER_BUILDER_ID,
-  RETRACTABLE_MORPH_DURATION, selectWeaponSlot, tickRetractableArmor, trainerLoadout,
-  TRAPPER_ID
+  RETRACTABLE_MORPH_DURATION, selectWeaponSlot, SHIELD_STEAL_ID, tickRetractableArmor,
+  trainerLoadout, TRAPPER_ID
 } from "./equipment.js";
 import { createLightCondensationProp } from "./light-condensation.js";
 import { isIllusionFighter } from "./illusionist.js";
@@ -1577,4 +1578,35 @@ console.log("Illusionist AI suite passed.");
 }
 
 console.log("Doppel AI suite passed.");
+
+// --- Shield Steal AI ---
+{
+  assert.match(thoughtReason("stealing shield"), /siphon|shield/i);
+}
+
+{
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced", aim: 0
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: SHIELD_STEAL_ID,
+    shield: "kinetic-targe"
+  });
+  selectWeaponSlot(buddy, "secondaryWeapon");
+  const enemy = applyLoadout(new Fighter({
+    x: 620, y: 700, team: 1, aim: Math.PI
+  }), { ...DEFAULT_LOADOUT, shield: "kinetic-targe" });
+  enemy.shieldRaised = true;
+  enemy.shieldDurability = 200;
+  const state = { plan: "idle", desiredAim: null, attack: false };
+  updateAiShieldSteal(buddy, state, { fighters: [buddy, enemy] }, [enemy], enemy);
+  assert.equal(state.plan, "stealing shield");
+  assert.equal(state.attack, true);
+  assert.equal(
+    wantAiSecondarySlot(buddy, { fighters: [buddy, enemy] }, [enemy], enemy),
+    "secondaryWeapon"
+  );
+}
+
+console.log("Shield Steal AI suite passed.");
 

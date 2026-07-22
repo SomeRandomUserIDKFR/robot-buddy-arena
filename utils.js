@@ -60,7 +60,8 @@ export function thoughtReason(plan) {
     "casting fighter illusion": "a kit-matched decoy would steal focus",
     "casting prop illusion": "a false cover prop would bait shots",
     "casting platform illusion": "a false ledge would waste a landing",
-    "spawning doppel": "a real twin would split their focus"
+    "spawning doppel": "a real twin would split their focus",
+    "stealing shield": "their raised shield could be siphoned"
   })[plan] || "no clean engagement was visible";
 }
 

@@ -13,6 +13,9 @@ import {
   setNanotechChanneling, tryFormNanotechWeapon
 } from "./equipment.js";
 import {
+  isShieldSteal, SHIELD_STEAL_ID, SHIELD_STEAL_RANGE
+} from "./shield-steal.js";
+import {
   ensureLearningProfile, evidenceReliability, evidenceState, mimicBlendFactor,
   precisionAimErrorScale
 } from "./learning.js";
@@ -654,6 +657,19 @@ export function wantAiSecondarySlot(fighter, game, visible, target) {
     return "weapon";
   }
 
+  if (secondaryId === SHIELD_STEAL_ID) {
+    if (
+      foe
+      && foe.shieldRaised
+      && !foe.shieldBroken
+      && (foe.shieldDurability || 0) > 0
+      && foeDist < SHIELD_STEAL_RANGE + 40
+    ) {
+      return "secondaryWeapon";
+    }
+    return "weapon";
+  }
+
   return "weapon";
 }
 
@@ -704,6 +720,34 @@ export function updateAiMaterialConsumer(fighter, state, game, visible, target) 
   // Beam at stand-off; keep saber swings only when already close.
   if (d >= 140) state.attack = false;
   state.plan = "debris beam";
+}
+
+/**
+ * Shield Steal: hold fire on a close foe with a raised facing shield.
+ */
+export function updateAiShieldSteal(fighter, state, game, visible, target) {
+  if (!isShieldSteal(fighter) || fighter.dead) return;
+  const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
+  if (
+    !foe
+    || !foe.shieldRaised
+    || foe.shieldBroken
+    || !(foe.shieldDurability > 0)
+  ) {
+    return;
+  }
+  const d = dist(fighter, foe);
+  if (d > SHIELD_STEAL_RANGE + 20) return;
+  // Drop own shield so the siphon can fire.
+  if (fighter.shieldRaised && !fighter.shieldBroken) {
+    fighter.shieldRaised = false;
+  }
+  state.desiredAim = Math.atan2(
+    foe.y + SIZE / 2 - (fighter.y + SIZE / 2),
+    foe.x + SIZE / 2 - (fighter.x + SIZE / 2)
+  );
+  state.attack = true;
+  state.plan = "stealing shield";
 }
 
 /**
@@ -1893,6 +1937,7 @@ export function updateAI(fighter, dt, game, profile) {
   // Light Condensation.
   updateAiMaterialConsumer(fighter, state, game, visible, target);
   updateAiThrowBreakable(fighter, state, game, visible, target);
+  updateAiShieldSteal(fighter, state, game, visible, target);
   updateAiReconjurer(fighter, state, game, visible, target);
   updateAiLightCondensation(fighter, state, game, visible, target);
   updateAiTrapper(fighter, state, game, visible, target);
