@@ -65,8 +65,9 @@ export class Fighter {
     }, options);
     this.aiState = {
       timer: Math.random() * .2, mx: 0, jump: false, jet: false, attack: false,
-      dodge: false, target: null, lastKnown: null, stale: 0, plan: "idle", escape: null,
-      desiredAim: null, shieldHoldUntil: 0, shieldCooldownUntil: 0
+      dodge: false, chuck: false, ejectVacuum: false, target: null, lastKnown: null,
+      stale: 0, plan: "idle", escape: null, desiredAim: null, shieldHoldUntil: 0,
+      shieldCooldownUntil: 0, weaponSwapUntil: 0
     };
   }
 

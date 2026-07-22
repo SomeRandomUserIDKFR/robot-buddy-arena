@@ -45,7 +45,14 @@ export function thoughtReason(plan) {
     "vertical escape": "a practiced fuel-safe route created separation",
     "pressing target": "weapon range looked favorable",
     "answering ping": "you marked a priority",
-    "searching last sighting": "shared vision was lost"
+    "searching last sighting": "shared vision was lost",
+    "debris beam": "scrap ammo was ready for a beam",
+    "vacuuming scrap": "the nanobot pool was full near debris",
+    "grabbing breakable": "a throwable was in reach",
+    "approaching breakable": "cover could be thrown",
+    "throwing breakable": "a held prop made a good missile",
+    "reconjuring debris": "nearby scrap could be rebuilt",
+    "conjuring cover": "a breakable would buy space"
   })[plan] || "no clean engagement was visible";
 }
 

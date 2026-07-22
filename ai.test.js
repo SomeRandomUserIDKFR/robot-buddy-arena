@@ -1,25 +1,31 @@
 import assert from "node:assert/strict";
 import {
-  aimTurnRateFor, buddySkill, CRATE_ESCAPE_HOP_RADIUS, DODGE_MIMIC_BASELINE,
-  DODGE_PANIC_BASE, DODGE_PANIC_ROOKIE_FLOOR, DODGE_THREAT_HIGH,
+  aimTurnRateFor, buddySkill, CRATE_ESCAPE_HOP_RADIUS, debrisNearFighter,
+  DODGE_MIMIC_BASELINE, DODGE_PANIC_BASE, DODGE_PANIC_ROOKIE_FLOOR, DODGE_THREAT_HIGH,
   DODGE_THREAT_HIGH_ROOKIE, DODGE_THREAT_MED, dodgeCommitChance, enemyDodgeScale,
   ENEMY_GREEN, evaluateDodgeThreat, evaluateShieldThreat, hasIncomingHostileShot,
-  isGreenEnemyAi, mindDodgeScale, pickEscapeCrateHop, pickNearestVisibleCrate,
-  ROOKIE_BUDDY, SHIELD_MAX_HOLD, shieldHoldDuration, shieldLowerCooldown,
-  shieldRaiseAllowed, shieldStyleBias, stepAimSmoothing, tickAiShieldHold,
-  updateAI, updateAiRetractableArmor, updateAiShield, wantRetractableDeployed
+  isGreenEnemyAi, mindDodgeScale, pickEscapeCrateHop, pickNearestGrabbable,
+  pickNearestVisibleCrate, ROOKIE_BUDDY, SHIELD_MAX_HOLD, shieldHoldDuration,
+  shieldLowerCooldown, shieldRaiseAllowed, shieldStyleBias, stepAimSmoothing,
+  tickAiShieldHold, updateAI, updateAiMaterialConsumer, updateAiReconjurer,
+  updateAiRetractableArmor, updateAiShield, updateAiThrowBreakable,
+  updateAiWeaponSlot, wantAiSecondarySlot, wantRetractableDeployed
 } from "./ai.js";
 import { Fighter } from "./combat.js";
 import { AI_PRESETS, DEFAULT_PROFILE, SIZE, WORLD } from "./config.js";
+import { spawnPropDebris } from "./debris.js";
 import {
-  applyLoadout, DEFAULT_LOADOUT, isPrecisionAimWeapon, RETRACTABLE_MORPH_DURATION,
+  applyLoadout, DEFAULT_LOADOUT, isPrecisionAimWeapon, MATERIAL_CONSUMER_ID,
+  RECONJURER_BUILDER_ID, RETRACTABLE_MORPH_DURATION, selectWeaponSlot,
   tickRetractableArmor, trainerLoadout
 } from "./equipment.js";
 import {
   ensureLearningProfile, PRECISION_AIM_MAX_REDUCTION, precisionAimErrorScale, recordEvidence
 } from "./learning.js";
+import { createMapRuntime } from "./maps.js";
 import { createPowerCrate } from "./powerups.js";
-import { angleDiff, dist, lerp } from "./utils.js";
+import { THROW_BREAKABLE_ID } from "./throw-breakable.js";
+import { angleDiff, dist, lerp, thoughtReason } from "./utils.js";
 
 const clone = (value) => structuredClone(value);
 
@@ -1051,3 +1057,283 @@ console.log("Power-crate AI suite passed.");
 }
 
 console.log("Retractable armor AI suite passed.");
+
+// --- Material Consumer / Throw Breakable / Reconjurer AI ---
+{
+  assert.match(thoughtReason("debris beam"), /scrap ammo/i);
+  assert.match(thoughtReason("vacuuming scrap"), /pool was full/i);
+  assert.match(thoughtReason("throwing breakable"), /missile/i);
+  assert.match(thoughtReason("reconjuring debris"), /rebuilt/i);
+  assert.match(thoughtReason("conjuring cover"), /buy space/i);
+}
+
+{
+  const buddy = applyLoadout(new Fighter({
+    x: 400, y: 700, team: 0, buddy: true, ai: "balanced", grounded: true
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: MATERIAL_CONSUMER_ID,
+    body: "nanotech-chestplate"
+  });
+  const game = {
+    groundDebris: [
+      { x: 420, y: 720, sourceId: "ai-mc-a", despawnMode: null, color: "#888" }
+    ],
+    props: [], powerCrates: [], fighters: [buddy], elapsed: 1
+  };
+  assert.equal(debrisNearFighter(game, buddy), true);
+  assert.equal(
+    wantAiSecondarySlot(buddy, game, [], null),
+    "secondaryWeapon",
+    "MC wants draw when debris is in vacuum range"
+  );
+}
+
+{
+  // End-to-end: buddy swaps onto Material Consumer near debris.
+  const profile = clone(DEFAULT_PROFILE);
+  const player = new Fighter({
+    x: 200, y: 700, human: true, team: 0, grounded: true
+  });
+  const buddy = applyLoadout(new Fighter({
+    x: 800, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: 0, sight: 820, hp: 400
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: MATERIAL_CONSUMER_ID,
+    body: "nanotech-chestplate"
+  });
+  const enemy = new Fighter({
+    x: 1600, y: 700, team: 1, weapon: "gun", hp: 500, grounded: true
+  });
+  buddy.aiState.timer = 0;
+  buddy.aiState.weaponSwapUntil = 0;
+  const game = {
+    mode: "conquest", elapsed: 1, lastShotAtPlayer: -99,
+    fighters: [player, buddy, enemy], pings: [], thoughts: [], bullets: [],
+    groundDebris: [
+      { x: 810, y: 720, sourceId: "ai-mc-swap", despawnMode: null, color: "#888" }
+    ],
+    props: [], powerCrates: []
+  };
+  updateAI(buddy, .05, game, profile);
+  assert.equal(buddy.weaponId, MATERIAL_CONSUMER_ID, "AI draws Material Consumer near debris");
+  assert.ok(buddy.materialConsumer);
+}
+
+{
+  // Full pool + debris → hold V (ejectVacuum).
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced", grounded: true
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: MATERIAL_CONSUMER_ID,
+    body: "nanotech-chestplate"
+  });
+  selectWeaponSlot(buddy, "secondaryWeapon");
+  buddy.nanobotFree = buddy.nanobotMax;
+  buddy.nanobotArmor = 0;
+  buddy.nanobotWeapon = 0;
+  const enemy = new Fighter({
+    x: 900, y: 700, team: 1, weapon: "gun", grounded: true
+  });
+  const state = {
+    chuck: false, ejectVacuum: false, attack: false, plan: "idle", desiredAim: null
+  };
+  const game = {
+    elapsed: 1,
+    groundDebris: [
+      { x: 510, y: 710, sourceId: "ai-mc-v", despawnMode: null, color: "#888" }
+    ],
+    fighters: [buddy, enemy]
+  };
+  updateAiMaterialConsumer(buddy, state, game, [enemy], enemy);
+  assert.equal(state.ejectVacuum, true, "full pool near debris holds V");
+  assert.equal(state.plan, "vacuuming scrap");
+}
+
+{
+  // Scrap ammo + mid-range foe → debris beam (chuck).
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced", grounded: true, aim: 0
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: MATERIAL_CONSUMER_ID,
+    body: "nanotech-chestplate"
+  });
+  selectWeaponSlot(buddy, "secondaryWeapon");
+  buddy.materialEjectionTank = [{ bots: 0, ejection: true, color: "#888", w: 8, h: 8 }];
+  const enemy = new Fighter({
+    x: 820, y: 700, team: 1, weapon: "gun", grounded: true
+  });
+  const state = {
+    chuck: false, ejectVacuum: false, attack: true, plan: "idle", desiredAim: null
+  };
+  updateAiMaterialConsumer(buddy, state, { elapsed: 1 }, [enemy], enemy);
+  assert.equal(state.chuck, true, "AI beams when scrap ammo and foe are mid-range");
+  assert.equal(state.attack, false, "stand-off beam suppresses saber swing");
+  assert.equal(state.plan, "debris beam");
+  assert.ok(state.desiredAim != null);
+}
+
+{
+  // Throw Breakable: draw + grab a prop already in reach (no LOS needed).
+  const profile = clone(DEFAULT_PROFILE);
+  const crate = {
+    x: 780, y: 700, w: 48, h: 48, kind: "crate", breakable: true,
+    destroyed: false, hp: 40, maxHp: 40, solid: true
+  };
+  const player = new Fighter({
+    x: 200, y: 700, human: true, team: 0, grounded: true
+  });
+  const buddy = applyLoadout(new Fighter({
+    x: 800, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: 0, sight: 820, hp: 400
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  const enemy = new Fighter({
+    x: 1400, y: 700, team: 1, weapon: "gun", hp: 500, grounded: true
+  });
+  buddy.aiState.timer = 0;
+  buddy.aiState.weaponSwapUntil = 0;
+  const game = {
+    mode: "conquest", elapsed: 1, lastShotAtPlayer: -99,
+    fighters: [player, buddy, enemy], pings: [], thoughts: [], bullets: [],
+    props: [crate], platforms: [{ x: 0, y: 760, w: 2000, h: 40 }],
+    powerCrates: [], groundDebris: []
+  };
+  assert.ok(pickNearestGrabbable(game, buddy));
+  updateAI(buddy, .05, game, profile);
+  assert.equal(buddy.weaponId, THROW_BREAKABLE_ID, "AI draws Throw Breakable near cover");
+  assert.ok(
+    buddy.aiState.plan === "grabbing breakable"
+      || buddy.aiState.plan === "approaching breakable"
+      || buddy.heldProp,
+    `expected grab plan, got ${buddy.aiState.plan}`
+  );
+  assert.equal(buddy.aiState.attack, true, "AI clicks to grab when in range");
+}
+
+{
+  // Holding a prop → throw at foe.
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced", grounded: true, aim: 0
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  selectWeaponSlot(buddy, "secondaryWeapon");
+  const prop = {
+    x: 520, y: 700, w: 40, h: 40, breakable: true, destroyed: false, hp: 40, maxHp: 40
+  };
+  buddy.heldProp = prop;
+  prop.heldBy = buddy;
+  const enemy = new Fighter({
+    x: 900, y: 700, team: 1, weapon: "gun", grounded: true
+  });
+  const state = {
+    attack: false, plan: "idle", desiredAim: null, mx: 0,
+    chuck: false, ejectVacuum: false
+  };
+  updateAiThrowBreakable(buddy, state, { elapsed: 1, props: [prop] }, [enemy], enemy);
+  assert.equal(state.attack, true, "held prop → throw click");
+  assert.equal(state.plan, "throwing breakable");
+}
+
+{
+  // Reconjurer: rebuild nearby debris via updateAI.
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate");
+  assert.ok(crate);
+  crate.destroyed = true;
+  crate.solid = false;
+  crate.hp = 0;
+  crate.groundDebrisDropped = false;
+  const profile = clone(DEFAULT_PROFILE);
+  const player = new Fighter({
+    x: 100, y: crate.y, human: true, team: 0, grounded: true
+  });
+  const buddy = applyLoadout(new Fighter({
+    x: crate.x - 10, y: crate.y, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: 0, sight: 820, hp: 400
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: RECONJURER_BUILDER_ID
+  });
+  const enemy = new Fighter({
+    x: 1800, y: crate.y, team: 1, weapon: "gun", hp: 500, grounded: true
+  });
+  buddy.aiState.timer = 0;
+  const game = {
+    mode: "conquest", elapsed: 1, lastShotAtPlayer: -99,
+    fighters: [player, buddy, enemy], pings: [], thoughts: [], bullets: [],
+    props: yard.props, platforms: yard.platforms, powerCrates: [],
+    groundDebris: [], effects: [], reconquerQueue: [], forgeCasts: [],
+    mapId: "yard", theme: "industrial"
+  };
+  spawnPropDebris(game, crate, crate.x + crate.w / 2, crate.y + crate.h / 2);
+  assert.ok(game.groundDebris.length > 0);
+  updateAI(buddy, .05, game, profile);
+  assert.equal(crate.destroyed, false, "AI Reconjurer rebuilds nearby debris");
+  assert.equal(buddy.aiState.plan, "reconjuring debris");
+  assert.ok(buddy.reconjurerCd > 0);
+}
+
+{
+  // Reconjurer: no debris + pressure → paid conjure.
+  const buddy = applyLoadout(new Fighter({
+    x: 400, y: 600, team: 0, buddy: true, ai: "balanced",
+    grounded: true, hp: 180
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: RECONJURER_BUILDER_ID,
+    body: "nanotech-chestplate"
+  });
+  buddy.nanobotFree = 40;
+  const enemy = new Fighter({
+    x: 520, y: 600, team: 1, weapon: "saber", grounded: true
+  });
+  const state = { plan: "idle", chuck: false, ejectVacuum: false };
+  const game = {
+    elapsed: 1,
+    props: [],
+    powerCrates: [],
+    platforms: [{ x: 0, y: 700, w: 1200, h: 40 }],
+    groundDebris: [],
+    effects: [],
+    mapId: "yard",
+    theme: "industrial"
+  };
+  updateAiReconjurer(buddy, state, game, [enemy], enemy);
+  assert.equal(state.plan, "conjuring cover");
+  assert.ok(
+    game.props.length + (game.powerCrates?.length || 0) >= 1,
+    "pressured Reconjurer conjures a breakable or metal crate"
+  );
+  assert.ok(buddy.reconjurerCd > 0);
+}
+
+{
+  // Weapon-slot helper stays on primary when MC has no ammo and no debris.
+  const buddy = applyLoadout(new Fighter({
+    x: 400, y: 700, team: 0, buddy: true, grounded: true, hp: 400
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: MATERIAL_CONSUMER_ID,
+    body: "nanotech-chestplate"
+  });
+  const enemy = new Fighter({
+    x: 700, y: 700, team: 1, weapon: "gun", grounded: true
+  });
+  assert.equal(
+    wantAiSecondarySlot(buddy, { groundDebris: [] }, [enemy], enemy),
+    "weapon"
+  );
+  const state = { weaponSwapUntil: 0 };
+  updateAiWeaponSlot(buddy, state, { elapsed: 1, groundDebris: [] }, [enemy], enemy);
+  assert.equal(buddy.activeWeaponSlot, "weapon");
+}
+
+console.log("Secondary / extension AI suite passed.");

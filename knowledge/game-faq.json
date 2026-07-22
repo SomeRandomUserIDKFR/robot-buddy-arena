@@ -456,7 +456,7 @@
         "conjure crates",
         "builder tool"
       ],
-      "answer": "Reconjurer / Builder is an Extension-slot tool (not your 1/2 secondary). Buy and Equip it in the Extension bay, then press 3. Near debris it rebuilds that pile for free and grants 2 ejection scraps. Away from debris it conjures a random breakable for nanobots (same odds as before, including an 8% metal power crate when your 10s metal countdown is ready). Metal box rebuilds/conjures share that personal 10s cooldown. It stays on 3 for the whole match and does not replace Material Consumer or Throw Breakable."
+      "answer": "Reconjurer / Builder is an Extension-slot tool (not your 1/2 secondary). Buy and Equip it in the Extension bay, then press 3. Near debris it rebuilds that pile for free and grants 2 ejection scraps. Away from debris it conjures a random breakable for nanobots (same odds as before, including an 8% metal power crate when your 10s metal countdown is ready). Metal box rebuilds/conjures share that personal 10s cooldown. It stays on 3 for the whole match and does not replace Material Consumer or Throw Breakable. Buddies and other AI with it equipped rebuild nearby debris on their own, and may conjure cover when pressured."
     },
     {
       "id": "equipment-material-consumer",
@@ -472,7 +472,7 @@
         "ejection tank",
         "hold V material consumer"
       ],
-      "answer": "Material Consumer is a secondary-slot nanotech tool-sword. Equip it in the Secondary bay, then press 2 (or scroll) to draw it; 1 returns to your primary. While active it vacuums nearby debris into free nanobots (as if they regenerated, still capped by your pool), remembers those scraps, and those scraps cannot reconquer. Hold right-click to fire a debris beam — the ejection tank shoots first, then remembered scraps (bank scraps spend the free bots they gave you). Hold V when your pool is full to vacuum excess into the ejection tank (free to eject, capped at 160 scraps — about 10 pipes). It adds 120 bots to the shared nanotech pool and swings as a physical saber — no E form step."
+      "answer": "Material Consumer is a secondary-slot nanotech tool-sword. Equip it in the Secondary bay, then press 2 (or scroll) to draw it; 1 returns to your primary. While active it vacuums nearby debris into free nanobots (as if they regenerated, still capped by your pool), remembers those scraps, and those scraps cannot reconquer. Hold right-click to fire a debris beam — the ejection tank shoots first, then remembered scraps (bank scraps spend the free bots they gave you). Hold V when your pool is full to vacuum excess into the ejection tank (free to eject, capped at 160 scraps — about 10 pipes). It adds 120 bots to the shared nanotech pool and swings as a physical saber — no E form step. AI fighters swap to it near debris or when they have scrap ammo, beam at mid-range foes, and hold V when the pool is full."
     },
     {
       "id": "equipment-throw-breakable",
@@ -486,7 +486,21 @@
         "1 and 2 weapon swap",
         "throw trees"
       ],
-      "answer": "Throw Breakable is a secondary tool. Press 2 (or scroll) to draw it. Click near any breakable map prop to grab it into your hand — enemies can still shoot or slash the held object. Click again to throw: it deals about 48 impact damage, then shatters into debris where it hits. With Reconquer on, rebuild attempts target that impact site (the prop slot moves with the throw)."
+      "answer": "Throw Breakable is a secondary tool. Press 2 (or scroll) to draw it. Click near any breakable map prop to grab it into your hand — enemies can still shoot or slash the held object. Click again to throw: it deals about 48 impact damage, then shatters into debris where it hits. With Reconquer on, rebuild attempts target that impact site (the prop slot moves with the throw). AI with it equipped grabs nearby breakables and throws them at foes (they will not abandon a retreat just to chase a prop)."
+    },
+    {
+      "id": "equipment-ai-secondaries",
+      "tags": ["equipment", "ai", "buddy", "secondary", "extension", "material consumer", "throw", "reconjurer"],
+      "questions": [
+        "does my buddy use material consumer",
+        "does the buddy use throw breakable",
+        "does AI use reconjurer",
+        "will the buddy swap to secondary",
+        "does buddy use key 3",
+        "AI secondary weapons",
+        "buddy debris beam"
+      ],
+      "answer": "Yes. When Material Consumer, Throw Breakable, or Reconjurer / Builder is equipped, buddies and other AI use them: they swap to Material Consumer to vacuum debris or fire the scrap beam, hold V when the nanobot pool is full near scraps, grab and throw breakables, and press the Extension action to rebuild nearby debris or conjure cover under pressure. Conquest trainers do not start with these tools by default."
     },
     {
       "id": "equipment-nanotech",

@@ -3,18 +3,33 @@ import {
 } from "./config.js";
 import { platformsOf } from "./maps.js";
 import { directiveStrength } from "./coaching.js";
+import { findRebuildableDebrisNear } from "./debris.js";
 import {
   beginAdaptiveMorph, beginModularMorph, beginRetractableMorph, hasNanotechChestplate,
-  hasRetractableArmor, isAdaptiveNanotechWeapon, isModularWeapon, nanotechFormPct,
-  pulseNanotechArmor, setNanotechChanneling, tryFormNanotechWeapon
+  hasRetractableArmor, hasSecondaryWeapon, isAdaptiveNanotechWeapon, isMaterialConsumer,
+  isModularWeapon, MATERIAL_CONSUMER_EJECTION_TANK_CAP, MATERIAL_CONSUMER_ID,
+  MATERIAL_CONSUMER_VACUUM_RADIUS, materialDebrisAmmoCount, materialEjectionTank,
+  nanotechFormPct, nanotechPoolRoom, pulseNanotechArmor, selectWeaponSlot,
+  setNanotechChanneling, tryFormNanotechWeapon
 } from "./equipment.js";
 import {
   ensureLearningProfile, evidenceReliability, evidenceState, mimicBlendFactor,
   precisionAimErrorScale
 } from "./learning.js";
+import {
+  isReconjurerBuilder, RECONJURER_BOT_COST, RECONJURER_REBUILD_RADIUS, tryReconjurerBuild
+} from "./reconjurer-builder.js";
+import {
+  canGrabBreakable, isThrowBreakable, THROW_BREAKABLE_GRAB_RANGE, THROW_BREAKABLE_ID
+} from "./throw-breakable.js";
 import { angleDiff, clamp, dist, formatTime, lerp } from "./utils.js";
 import { crateVisibleToTeam } from "./powerups.js";
 import { visibleToTeam } from "./vision.js";
+
+/** Min seconds between AI primary ↔ secondary swaps. */
+export const AI_WEAPON_SWAP_CD = 0.9;
+/** Search radius when hunting a throw prop (beyond grab reach). */
+export const AI_THROW_SEEK_RANGE = 240;
 
 /**
  * Soft teammate-safety weight in Conquest Mimic. Full intensity still copies
@@ -544,6 +559,216 @@ export function updateAiNanotech(fighter, state, game, visible, target) {
   setNanotechChanneling(fighter, wantRecall);
 }
 
+/** True if any ground scrap sits within `radius` of the fighter center. */
+export function debrisNearFighter(game, fighter, radius = MATERIAL_CONSUMER_VACUUM_RADIUS) {
+  if (!game || !fighter || !(radius > 0)) return false;
+  const cx = fighter.x + SIZE / 2;
+  const cy = fighter.y + SIZE / 2;
+  const r2 = radius * radius;
+  for (const piece of game.groundDebris || []) {
+    if (!piece || !piece.sourceId) continue;
+    const dx = piece.x - cx;
+    const dy = piece.y - cy;
+    if (dx * dx + dy * dy <= r2) return true;
+  }
+  return false;
+}
+
+/** Nearest grabbable map prop / damaged power crate within `maxRange`. */
+export function pickNearestGrabbable(game, fighter, maxRange = AI_THROW_SEEK_RANGE) {
+  if (!game || !fighter || !(maxRange > 0)) return null;
+  const cx = fighter.x + SIZE / 2;
+  const cy = fighter.y + SIZE / 2;
+  let best = null;
+  let bestD = maxRange;
+  const candidates = [...(game.props || []), ...(game.powerCrates || [])];
+  for (const prop of candidates) {
+    if (!canGrabBreakable(prop)) continue;
+    const px = prop.x + (prop.w || 0) / 2;
+    const py = prop.y + (prop.h || 0) / 2;
+    const d = Math.hypot(px - cx, py - cy);
+    if (d <= bestD) {
+      best = prop;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/**
+ * Which weapon slot the AI wants active for Material Consumer / Throw Breakable.
+ * Returns `"weapon"` or `"secondaryWeapon"`.
+ */
+export function wantAiSecondarySlot(fighter, game, visible, target) {
+  if (!hasSecondaryWeapon(fighter)) return "weapon";
+  const secondaryId = fighter.loadout?.secondaryWeapon;
+  const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
+  const foeDist = foe ? dist(fighter, foe) : Infinity;
+  const nearDebris = debrisNearFighter(game, fighter, MATERIAL_CONSUMER_VACUUM_RADIUS);
+
+  if (secondaryId === MATERIAL_CONSUMER_ID) {
+    const ammo = materialDebrisAmmoCount(fighter);
+    const room = nanotechPoolRoom(fighter);
+    const tank = materialEjectionTank(fighter);
+    if (
+      nearDebris
+      && (room > 0 || tank.length < MATERIAL_CONSUMER_EJECTION_TANK_CAP)
+    ) {
+      return "secondaryWeapon";
+    }
+    if (ammo > 0 && foe && foeDist > 70 && foeDist < 900) {
+      return "secondaryWeapon";
+    }
+    return "weapon";
+  }
+
+  if (secondaryId === THROW_BREAKABLE_ID) {
+    if (fighter.heldProp && !fighter.heldProp.destroyed) return "secondaryWeapon";
+    const grab = pickNearestGrabbable(game, fighter, AI_THROW_SEEK_RANGE);
+    if (!grab) return "weapon";
+    const fx = fighter.x + SIZE / 2;
+    const fy = fighter.y + SIZE / 2;
+    const gx = grab.x + (grab.w || 0) / 2;
+    const gy = grab.y + (grab.h || 0) / 2;
+    const grabDist = Math.hypot(gx - fx, gy - fy);
+    // In grab reach: pick it up opportunistically. Farther: only while fighting / hurt.
+    if (grabDist <= THROW_BREAKABLE_GRAB_RANGE) return "secondaryWeapon";
+    const engaged = !!target && !target.dead;
+    if (foe || engaged || fighter.hp < 260) return "secondaryWeapon";
+    return "weapon";
+  }
+
+  return "weapon";
+}
+
+/** Swap primary ↔ secondary when Material Consumer / Throw Breakable is useful. */
+export function updateAiWeaponSlot(fighter, state, game, visible, target) {
+  if (!fighter || fighter.dead || !hasSecondaryWeapon(fighter)) return;
+  const now = game?.elapsed || 0;
+  if ((state.weaponSwapUntil || 0) > now) return;
+  const want = wantAiSecondarySlot(fighter, game, visible, target);
+  const current = fighter.activeWeaponSlot === "secondaryWeapon"
+    ? "secondaryWeapon"
+    : "weapon";
+  if (want === current) return;
+  // Keep Throw Breakable drawn while holding — do not soft-drop via primary swap.
+  if (want === "weapon" && fighter.heldProp && !fighter.heldProp.destroyed) return;
+  if (selectWeaponSlot(fighter, want)) {
+    state.weaponSwapUntil = now + AI_WEAPON_SWAP_CD;
+  }
+}
+
+/**
+ * Material Consumer: hold V when the pool is full near debris; hold RMB beam mid-range.
+ */
+export function updateAiMaterialConsumer(fighter, state, game, visible, target) {
+  if (!isMaterialConsumer(fighter) || fighter.dead) return;
+  const nearDebris = debrisNearFighter(game, fighter, MATERIAL_CONSUMER_VACUUM_RADIUS);
+  const room = nanotechPoolRoom(fighter);
+  const tank = materialEjectionTank(fighter);
+  if (
+    nearDebris
+    && room <= 0
+    && tank.length < MATERIAL_CONSUMER_EJECTION_TANK_CAP
+  ) {
+    state.ejectVacuum = true;
+    state.plan = "vacuuming scrap";
+  }
+
+  const ammo = materialDebrisAmmoCount(fighter);
+  const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
+  if (!(ammo > 0) || !foe) return;
+  const d = dist(fighter, foe);
+  if (d <= 90 || d >= 900) return;
+  state.chuck = true;
+  state.desiredAim = Math.atan2(
+    foe.y + SIZE / 2 - (fighter.y + SIZE / 2),
+    foe.x + SIZE / 2 - (fighter.x + SIZE / 2)
+  );
+  // Beam at stand-off; keep saber swings only when already close.
+  if (d >= 140) state.attack = false;
+  state.plan = "debris beam";
+}
+
+/**
+ * Throw Breakable: grab nearby cover, then throw at a visible foe.
+ */
+export function updateAiThrowBreakable(fighter, state, game, visible, target) {
+  if (!isThrowBreakable(fighter) || fighter.dead) return;
+  const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
+  const fx = fighter.x + SIZE / 2;
+  const fy = fighter.y + SIZE / 2;
+
+  if (fighter.heldProp && !fighter.heldProp.destroyed) {
+    if (foe) {
+      state.desiredAim = Math.atan2(
+        foe.y + SIZE / 2 - fy,
+        foe.x + SIZE / 2 - fx
+      );
+      state.attack = true;
+      state.plan = "throwing breakable";
+    }
+    return;
+  }
+
+  // Do not abandon a retreat to chase props; held throws above still fire.
+  if (
+    state.plan === "covering retreat"
+    || state.plan === "vertical escape"
+    || state.plan === "retreat crate hop"
+  ) {
+    return;
+  }
+
+  const prop = pickNearestGrabbable(game, fighter, AI_THROW_SEEK_RANGE);
+  if (!prop) return;
+  const px = prop.x + (prop.w || 0) / 2;
+  const py = prop.y + (prop.h || 0) / 2;
+  const d = Math.hypot(px - fx, py - fy);
+  const engaged = !!target && !target.dead;
+  // Only chase beyond grab reach while fighting or hurt.
+  if (d > THROW_BREAKABLE_GRAB_RANGE && !foe && !engaged && fighter.hp >= 260) return;
+  state.mx = Math.abs(px - fx) > 20 ? Math.sign(px - fx) : 0;
+  state.desiredAim = Math.atan2(py - fy, px - fx);
+  if (d <= THROW_BREAKABLE_GRAB_RANGE) {
+    state.attack = true;
+    state.plan = "grabbing breakable";
+  } else {
+    state.plan = "approaching breakable";
+  }
+}
+
+/**
+ * Reconjurer / Builder (key 3): free rebuild near debris; paid conjure under pressure.
+ */
+export function updateAiReconjurer(fighter, state, game, visible, target) {
+  if (!isReconjurerBuilder(fighter) || fighter.dead || !game) return;
+  if ((fighter.reconjurerCd || 0) > 0) return;
+
+  const cx = fighter.x + SIZE / 2;
+  const cy = fighter.y + SIZE / 2;
+  const metalReady = (fighter.reconjurerMetalCd || 0) <= 0;
+  const nearRebuild = findRebuildableDebrisNear(game, cx, cy, RECONJURER_REBUILD_RADIUS, {
+    allowPowerCrate: metalReady
+  });
+  if (nearRebuild) {
+    if (tryReconjurerBuild(fighter, game)) {
+      state.plan = "reconjuring debris";
+    }
+    return;
+  }
+
+  const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
+  const pressured = fighter.hp < 240 || (foe && dist(fighter, foe) < 280);
+  if (!pressured) return;
+  const tank = materialEjectionTank(fighter);
+  const canPay = tank.length > 0 || (fighter.nanobotFree || 0) >= RECONJURER_BOT_COST;
+  if (!canPay) return;
+  if (tryReconjurerBuild(fighter, game)) {
+    state.plan = "conjuring cover";
+  }
+}
+
 /**
  * Preferred fight distance under Mimic: blend default weapon spacing toward
  * the player's engagementRange / rush habits by intensity × reliability.
@@ -899,6 +1124,11 @@ export function updateAI(fighter, dt, game, profile) {
     state.target = null;
     target = null;
   }
+
+  // Per-decision tool holds (persist between reaction ticks like attack).
+  state.chuck = false;
+  state.ejectVacuum = false;
+  updateAiWeaponSlot(fighter, state, game, visible, target);
 
   const reach = fighter.weaponReach || (fighter.weapon === "saber" ? 120 : 920);
   const sniper = (fighter.weaponStats?.aimSettle || 0) >= .3;
@@ -1332,6 +1562,11 @@ export function updateAI(fighter, dt, game, profile) {
   if (fighter.adaptiveMorphing) {
     state.attack = false;
   }
+
+  // Secondaries / extension: Material Consumer beam+V, Throw Breakable, Reconjurer.
+  updateAiMaterialConsumer(fighter, state, game, visible, target);
+  updateAiThrowBreakable(fighter, state, game, visible, target);
+  updateAiReconjurer(fighter, state, game, visible, target);
 
   // Enemy trainers stay on the baseline tactical shield policy (bias 0).
   // Buddies blend toward player shieldUse; Mimic scales by intensity blend.
