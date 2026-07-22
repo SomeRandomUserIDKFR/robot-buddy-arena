@@ -1023,8 +1023,9 @@ function modifierMarkup(gear) {
       return [
         "<span>Secondary · hold fire siphon beam</span>",
         "<span class=\"stat-up\">Drains raised shield HP into yours</span>",
+        "<span class=\"stat-up\">100% transfer while their shield is up</span>",
         "<span>Short range · shield must face you</span>",
-        "<span>Transfer ~55% · drop your Q to fire</span>",
+        "<span>Drop your Q to fire</span>",
         "<span class=\"stat-down\">No effect on lowered / broken shields</span>"
       ].join("");
     }

@@ -15,7 +15,7 @@ assert.ok(GEAR_BY_ID[SHIELD_STEAL_ID].price > 160);
 assert.ok(GEAR_BY_ID[SHIELD_STEAL_ID].price < 220);
 assert.equal(SHIELD_STEAL_RANGE, 160);
 assert.equal(SHIELD_STEAL_DRAIN_PER_SEC, 90);
-assert.equal(SHIELD_STEAL_TRANSFER, 0.55);
+assert.equal(SHIELD_STEAL_TRANSFER, 1);
 
 {
   const stealer = applyLoadout(new Fighter({
