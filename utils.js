@@ -54,7 +54,9 @@ export function thoughtReason(plan) {
     "reconjuring debris": "nearby scrap could be rebuilt",
     "conjuring cover": "a breakable would buy space",
     "condensing light": "a glare spot would reveal or blind the lane",
-    "breaking glare": "an enemy light node was cutting vision"
+    "breaking glare": "an enemy light node was cutting vision",
+    "setting bear trap": "a mobility lock would pin the lane",
+    "laying fake platform": "a false ledge would punish a landing"
   })[plan] || "no clean engagement was visible";
 }
 

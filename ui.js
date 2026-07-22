@@ -58,6 +58,8 @@ export const ui = {
   teamBars: $("#teamBars"),
   modeLabel: $("#modeLabel"),
   readinessLabel: $("#readinessLabel"),
+  trapHud: $("#trapHud"),
+  trapHudType: $("#trapHudType"),
   fuel: $("#fuelFill"),
   fuelMeter: $("#fuelMeter"),
   fuelLabel: $("#fuelLabel"),
@@ -327,6 +329,18 @@ export function showGame(mode, profile, mapName = "") {
 
 export function updateHud(game) {
   const player = game.fighters[0];
+  if (ui.trapHud) {
+    const showTrap = !!player?.trapper && !player.dead;
+    ui.trapHud.classList.toggle("hidden", !showTrap);
+    if (showTrap) {
+      const type = player.trapperType === "fakePlatform" ? "fake" : "bear";
+      ui.trapHud.classList.toggle("fake", type === "fake");
+      ui.trapHud.classList.toggle("bear", type === "bear");
+      if (ui.trapHudType) {
+        ui.trapHudType.textContent = type === "fake" ? "FAKE PLAT" : "BEAR";
+      }
+    }
+  }
   ui.teamBars.innerHTML = game.fighters.map((fighter) => `
     <div class="fighter-bar" style="opacity:${fighter.dead ? .38 : 1}">
       <b style="color:${fighter.color}">${escapeHtml(fighter.name)}</b>
@@ -877,6 +891,16 @@ function modifierMarkup(gear) {
         "<span class=\"stat-up\">Blocks sight · 5× size box</span>",
         "<span>Break the square to end both · 10s CD</span>",
         "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"
+      ].join("");
+    }
+    if (gear.trapper) {
+      return [
+        "<span>Extension · T cycle · 3 plant</span>",
+        "<span class=\"stat-up\">Bear · 25 dmg + 5s no mobility</span>",
+        "<span class=\"stat-up\">Fake plat · looks almost real, 10 dmg fall</span>",
+        "<span>Short arm time before triggers</span>",
+        "<span>Ally outline · faint enemy cue</span>",
+        "<span class=\"stat-down\">Owner immune · max 3 active</span>"
       ].join("");
     }
     if (gear.id === "no-extension") {

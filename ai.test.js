@@ -9,7 +9,7 @@ import {
   shieldLowerCooldown, shieldRaiseAllowed, shieldStyleBias, stepAimSmoothing,
   tickAiShieldHold, updateAI, updateAiLightCondensation, updateAiMaterialConsumer,
   updateAiReconjurer, updateAiRetractableArmor, updateAiShield, updateAiThrowBreakable,
-  updateAiWeaponSlot, wantAiSecondarySlot, wantRetractableDeployed
+  updateAiTrapper, updateAiWeaponSlot, wantAiSecondarySlot, wantRetractableDeployed
 } from "./ai.js";
 import { Fighter } from "./combat.js";
 import { AI_PRESETS, DEFAULT_PROFILE, SIZE, WORLD } from "./config.js";
@@ -17,7 +17,7 @@ import { spawnPropDebris } from "./debris.js";
 import {
   applyLoadout, DEFAULT_LOADOUT, isPrecisionAimWeapon, LIGHT_CONDENSATION_ID,
   MATERIAL_CONSUMER_ID, RECONJURER_BUILDER_ID, RETRACTABLE_MORPH_DURATION,
-  selectWeaponSlot, tickRetractableArmor, trainerLoadout
+  selectWeaponSlot, tickRetractableArmor, trainerLoadout, TRAPPER_ID
 } from "./equipment.js";
 import { createLightCondensationProp } from "./light-condensation.js";
 import {
@@ -1423,4 +1423,80 @@ console.log("Secondary / extension AI suite passed.");
 }
 
 console.log("Light Condensation AI suite passed.");
+
+// --- Trapper AI ---
+{
+  assert.match(thoughtReason("setting bear trap"), /mobility|pin/i);
+  assert.match(thoughtReason("laying fake platform"), /false ledge|landing/i);
+}
+
+{
+  // Grounded foe → bear trap.
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: 0, hp: 400
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: TRAPPER_ID
+  });
+  const enemy = new Fighter({
+    x: 720, y: 700, team: 1, weapon: "gun", grounded: true, hp: 500
+  });
+  const state = { plan: "idle", desiredAim: null, attack: false };
+  const game = { traps: [], effects: [], fighters: [buddy, enemy] };
+  updateAiTrapper(buddy, state, game, [enemy], enemy);
+  assert.equal(state.plan, "setting bear trap");
+  assert.equal(game.traps.length, 1);
+  assert.equal(game.traps[0].trapType, "bear");
+}
+
+{
+  // Airborne / above foe → fake platform.
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: -0.8, hp: 400
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: TRAPPER_ID
+  });
+  buddy.trapperType = "bear";
+  const enemy = new Fighter({
+    x: 620, y: 520, team: 1, weapon: "gun", grounded: false, hp: 500, vy: 100
+  });
+  const state = { plan: "idle", desiredAim: null };
+  const game = { traps: [], effects: [], fighters: [buddy, enemy] };
+  updateAiTrapper(buddy, state, game, [enemy], enemy);
+  assert.equal(state.plan, "laying fake platform");
+  assert.equal(game.traps[0].trapType, "fakePlatform");
+}
+
+{
+  // End-to-end updateAI plants a trap when equipped.
+  const profile = clone(DEFAULT_PROFILE);
+  const player = new Fighter({
+    x: 100, y: 700, human: true, team: 0, grounded: true
+  });
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: 0, sight: 820, hp: 180
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: TRAPPER_ID
+  });
+  const enemy = new Fighter({
+    x: 700, y: 700, team: 1, weapon: "saber", hp: 500, grounded: true
+  });
+  buddy.aiState.timer = 0;
+  const game = {
+    mode: "conquest", elapsed: 1, lastShotAtPlayer: -99,
+    fighters: [player, buddy, enemy], pings: [], thoughts: [], bullets: [],
+    traps: [], props: [], platforms: [{ x: 0, y: 760, w: 2000, h: 40 }], effects: []
+  };
+  updateAI(buddy, .05, game, profile);
+  assert.ok(game.traps.length >= 1, "pressured Trapper AI plants a trap");
+  assert.ok(buddy.trapperCd > 0);
+}
+
+console.log("Trapper AI suite passed.");
+
 

@@ -18,6 +18,9 @@ import {
 } from "./light-condensation.js";
 import { isReconjurerBuilder, tickReconjurerBuilder, tryReconjurerBuild } from "./reconjurer-builder.js";
 import {
+  cycleTrapperType, isTrapper, tickTrapperWorld, tryTrapperPlant
+} from "./trapper.js";
+import {
   getPendingEncounter, rerollEncounter, setPendingEncounter
 } from "./conquest.js";
 import {
@@ -154,6 +157,7 @@ function makeGame(mode) {
     armorDummies: [],
     reconquerBonusAcc: 0,
     beamReveals: [],
+    traps: [],
     pings: [],
     camera: { x: 0, y: 0 },
     startedAt: Date.now(),
@@ -303,13 +307,16 @@ function update(dt) {
     nanoFHoldT = 0;
     nanoFHoldLatched = false;
   }
+  const trapPrevY = new Map();
   for (const fighter of game.fighters) {
     stepFighter(fighter, dt, game, profile, keys, humanIntent);
+    if (fighter._trapPrevY != null) trapPrevY.set(fighter, fighter._trapPrevY);
     tickFighterPowerBuffs(fighter, dt);
     tickThrowBreakable(fighter, game, dt);
     tickReconjurerBuilder(fighter, dt);
     tickLightCondensation(fighter, dt);
   }
+  tickTrapperWorld(game, dt, trapPrevY);
   stepBullets(game, dt);
   stepThrownProps(game, dt);
   tickPowerCrateSpawns(game, dt);
@@ -410,8 +417,13 @@ function handleKeyDown(event) {
   }
   if (event.code === "Digit3" && !event.repeat) {
     const player = game.fighters[0];
-    if (isLightCondensation(player)) tryLightCondensation(player, game);
+    if (isTrapper(player)) tryTrapperPlant(player, game);
+    else if (isLightCondensation(player)) tryLightCondensation(player, game);
     else if (isReconjurerBuilder(player)) tryReconjurerBuild(player, game);
+  }
+  if (event.code === "KeyT" && !event.repeat) {
+    const player = game.fighters[0];
+    if (isTrapper(player)) cycleTrapperType(player);
   }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
   if (event.code === "KeyG") {
@@ -432,7 +444,7 @@ function handleKeyDown(event) {
     showPause(game.paused);
   }
   if ([
-    "Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE", "KeyF", "KeyR",
+    "Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE", "KeyF", "KeyR", "KeyT",
     "Digit1", "Digit2", "Digit3"
   ].includes(event.code)) {
     event.preventDefault();

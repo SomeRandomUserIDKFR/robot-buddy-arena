@@ -21,6 +21,9 @@ import {
   attackThrowBreakable, bindThrowBreakablePowerCrateDamager, isThrowBreakable,
   stepThrownBreakables
 } from "./throw-breakable.js";
+import {
+  applyTrapLockToIntent, isTrapLocked, tickTrapperFighter
+} from "./trapper.js";
 import { angleDiff, clamp, dist, lerp, segmentHitsBox } from "./utils.js";
 
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
@@ -77,7 +80,7 @@ export class Fighter {
 }
 
 export function triggerDodge(fighter, game, keys) {
-  if (fighter.dead || fighter.dodgeCd > 0) return;
+  if (fighter.dead || fighter.dodgeCd > 0 || isTrapLocked(fighter)) return;
   const direction = fighter.human
     ? ((keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) || fighter.facing)
     : (fighter.aiState.mx || fighter.facing);
@@ -455,6 +458,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   tickModularWeapon(fighter, dt);
   tickAdaptiveWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
+  tickTrapperFighter(fighter, dt);
   // Humans: know fire intent before nanotech tick so hold-to-shoot blocks regen.
   let intent = null;
   if (fighter.human && getHumanIntent) {
@@ -475,6 +479,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
       ? getHumanIntent(fighter)
       : updateAI(fighter, dt, game, profile);
   }
+  applyTrapLockToIntent(fighter, intent);
   fighter.nanotechWantFire = !!intent.attack;
   const aimDelta = fighter.lastAim == null ? Infinity : Math.abs(angleDiff(fighter.aim, fighter.lastAim));
   fighter.aimSettle = aimDelta <= .012
@@ -487,7 +492,8 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   }
   const speedCap = fighter.moveSpeed * shieldSpeedMultiplier(fighter)
     * retractableSpeedMultiplier(fighter)
-    * moveSpeedBuffMult(fighter);
+    * moveSpeedBuffMult(fighter)
+    * (isTrapLocked(fighter) ? 0.35 : 1);
   if (Math.abs(fighter.vx) < speedCap * 1.25) {
     fighter.vx += intent.mx * fighter.acceleration * dt;
   }
@@ -513,6 +519,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   fighter.vy = Math.min(fighter.vy, 900);
 
   const oldY = fighter.y;
+  fighter._trapPrevY = oldY;
   fighter.x += fighter.vx * dt;
   fighter.y += fighter.vy * dt;
   fighter.grounded = false;

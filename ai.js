@@ -25,6 +25,9 @@ import {
 import {
   canGrabBreakable, isThrowBreakable, THROW_BREAKABLE_GRAB_RANGE, THROW_BREAKABLE_ID
 } from "./throw-breakable.js";
+import {
+  cycleTrapperType, isTrapper, listTrapperTraps, tryTrapperPlant
+} from "./trapper.js";
 import { angleDiff, clamp, dist, formatTime, lerp } from "./utils.js";
 import { crateVisibleToTeam } from "./powerups.js";
 import { hasLineOfSight, visibleToTeam } from "./vision.js";
@@ -856,6 +859,49 @@ export function updateAiLightCondensation(fighter, state, game, visible, target)
 }
 
 /**
+ * Trapper (T cycle / key 3 plant): bear on ground lanes, fake plat under airborne foes.
+ */
+export function updateAiTrapper(fighter, state, game, visible, target) {
+  if (!isTrapper(fighter) || fighter.dead || !game) return;
+  if ((fighter.trapperCd || 0) > 0) return;
+  const own = listTrapperTraps(game).filter((t) => t.owner === fighter);
+  if (own.length >= 3) return;
+
+  const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
+  const engaged = !!target && !target.dead;
+  if (!foe && !engaged && fighter.hp >= 260) return;
+
+  // Pick type: airborne / above → fake platform; else bear.
+  let want = "bear";
+  if (foe) {
+    const airborne = !foe.grounded || foe.y < fighter.y - 40;
+    const above = foe.y + SIZE < fighter.y - 20;
+    if (airborne || above) want = "fakePlatform";
+  } else if (target && target.y < fighter.y - 60) {
+    want = "fakePlatform";
+  }
+  if (normalizeTrapTypeSafe(fighter) !== want) {
+    // At most one cycle per decision — two types only.
+    cycleTrapperType(fighter);
+  }
+
+  if (foe || target) {
+    const aimAt = foe || target;
+    state.desiredAim = Math.atan2(
+      aimAt.y + SIZE / 2 - (fighter.y + SIZE / 2),
+      aimAt.x + SIZE / 2 - (fighter.x + SIZE / 2)
+    );
+  }
+  if (tryTrapperPlant(fighter, game)) {
+    state.plan = want === "fakePlatform" ? "laying fake platform" : "setting bear trap";
+  }
+}
+
+function normalizeTrapTypeSafe(fighter) {
+  return fighter?.trapperType === "fakePlatform" ? "fakePlatform" : "bear";
+}
+
+/**
  * Preferred fight distance under Mimic: blend default weapon spacing toward
  * the player's engagementRange / rush habits by intensity × reliability.
  */
@@ -1655,6 +1701,7 @@ export function updateAI(fighter, dt, game, profile) {
   updateAiThrowBreakable(fighter, state, game, visible, target);
   updateAiReconjurer(fighter, state, game, visible, target);
   updateAiLightCondensation(fighter, state, game, visible, target);
+  updateAiTrapper(fighter, state, game, visible, target);
 
   // Enemy trainers stay on the baseline tactical shield policy (bias 0).
   // Buddies blend toward player shieldUse; Mimic scales by intensity blend.

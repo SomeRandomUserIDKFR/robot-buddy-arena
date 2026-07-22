@@ -103,6 +103,7 @@ export const NO_SECONDARY_ID = "no-secondary";
 export const NO_EXTENSION_ID = "no-extension";
 export const RECONJURER_BUILDER_ID = "reconjurer-builder";
 export const LIGHT_CONDENSATION_ID = "light-condensation";
+export const TRAPPER_ID = "trapper";
 
 /** World position of the Material Consumer blade tip (aim-aligned). */
 export function materialConsumerTip(fighter) {
@@ -362,7 +363,7 @@ export const GEAR = [
     NO_EXTENSION_ID,
     "extensionSecondary",
     "No Extension",
-    "No extension tool — unlock Reconjurer / Builder or Light Condensation to bind ability key 3.",
+    "No extension tool — unlock Reconjurer, Light Condensation, or Trapper to bind ability key 3.",
     {},
     { price: 0 }
   ),
@@ -388,6 +389,18 @@ export const GEAR = [
       price: 180,
       extensionSecondary: true,
       lightCondensation: true
+    }
+  ),
+  item(
+    TRAPPER_ID,
+    "extensionSecondary",
+    "Trapper",
+    "Extension tool: T cycles trap type (HUD shows next), 3 plants after a short arm time. Bear trap: 25 dmg + 5s no jump/jet/dodge. Fake platform: looks almost real but wrong — no collision, 10 dmg on fall-through. Owner immune. Does not replace 1/2 secondary.",
+    {},
+    {
+      price: 190,
+      extensionSecondary: true,
+      trapper: true
     }
   ),
 
@@ -2143,7 +2156,7 @@ export function suggestBuddyLoadout(profile) {
   const style = evidenceStyle(profile, equipment.player);
   const secondaryPrefs = [NO_SECONDARY_ID, THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID];
   const extensionPrefs = [
-    NO_EXTENSION_ID, LIGHT_CONDENSATION_ID, RECONJURER_BUILDER_ID
+    NO_EXTENSION_ID, TRAPPER_ID, LIGHT_CONDENSATION_ID, RECONJURER_BUILDER_ID
   ];
   const preferences = style === "ranged"
     ? {
@@ -2155,7 +2168,9 @@ export function suggestBuddyLoadout(profile) {
         "gattler", "burst-carbine", "mechanical-modularity", "arc-saber", "duelist-blade"
       ],
       secondaryWeapon: secondaryPrefs,
-      extensionSecondary: [LIGHT_CONDENSATION_ID, NO_EXTENSION_ID, RECONJURER_BUILDER_ID],
+      extensionSecondary: [
+        LIGHT_CONDENSATION_ID, TRAPPER_ID, NO_EXTENSION_ID, RECONJURER_BUILDER_ID
+      ],
       jetpack: [
         "endurance-pack", "vector-pack", "recycler-pack", "sprinter-pack", "nanotech-reserve"
       ],
@@ -2173,7 +2188,9 @@ export function suggestBuddyLoadout(profile) {
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
         secondaryWeapon: [THROW_BREAKABLE_ID, MATERIAL_CONSUMER_ID, NO_SECONDARY_ID],
-        extensionSecondary: [RECONJURER_BUILDER_ID, LIGHT_CONDENSATION_ID, NO_EXTENSION_ID],
+        extensionSecondary: [
+          TRAPPER_ID, RECONJURER_BUILDER_ID, LIGHT_CONDENSATION_ID, NO_EXTENSION_ID
+        ],
         jetpack: [
           "sprinter-pack", "vector-pack", "recycler-pack", "endurance-pack", "nanotech-reserve"
         ],
@@ -2355,6 +2372,12 @@ export function applyLoadout(fighter, loadout) {
   fighter.lightCondensation = !!extension?.lightCondensation;
   fighter.lightCondensationCd = 0;
   fighter.lightCondensationFlash = 0;
+  fighter.trapper = !!extension?.trapper;
+  fighter.trapperCd = 0;
+  fighter.trapperFlash = 0;
+  fighter.trapperType = "bear";
+  fighter.trapLockT = 0;
+  fighter.trapLockKind = null;
   if (weapon.id === ADAPTIVE_NANOTECH_ID) {
     applyAdaptiveCombatStats(fighter, "sword");
     syncAdaptiveNanotechCosts(fighter, "sword");

@@ -1020,6 +1020,29 @@ button span { opacity: .6; font-size: 11px; }
 .hp-track { height: 10px; background: #1a262d; border: 1px solid #384a53; }
 .hp-fill { display: block; height: 100%; transition: width .12s; }
 .status-stack { position: absolute; top: 18px; right: 18px; text-align: right; color: #a5bbc5; }
+.trap-hud {
+  margin-top: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(72, 232, 255, .45);
+  background: rgba(7, 16, 22, .82);
+  text-align: right;
+  min-width: 120px;
+}
+.trap-hud .trap-hud-kicker {
+  display: block;
+  color: rgba(160, 190, 210, .8);
+  font: 600 9px ui-monospace, Consolas, monospace;
+  letter-spacing: .08em;
+}
+.trap-hud b {
+  display: block;
+  margin-top: 2px;
+  color: #e8fbff;
+  font: 700 14px ui-monospace, Consolas, monospace;
+  letter-spacing: .06em;
+}
+.trap-hud.fake b { color: #c8e0a8; }
+.trap-hud.bear b { color: #ffc8a0; }
 #readinessLabel { color: var(--cyan); margin-top: 5px; }
 #hudCyber { margin-top: 5px; color: var(--cyan); font-size: 14px; }
 #hudRanking { margin-top: 5px; color: #7ddca9; font-size: 13px; font-weight: 700; }

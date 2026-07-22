@@ -829,6 +829,7 @@ export function createRenderer(canvas) {
     context.translate(-camera.x, -camera.y);
     drawBackdrop(game, .2);
     drawPlatforms(game, .28);
+    drawTraps(game, .35, game.fighters?.[0]?.team ?? 0);
     drawProps(game, .35, false);
     drawGroundDebris(game, .35);
     drawForgeCasts(game, .35);
@@ -879,6 +880,7 @@ export function createRenderer(canvas) {
     context.clip();
     drawBackdrop(game, .9);
     drawPlatforms(game, 1);
+    drawTraps(game, 1, player.team);
     drawProps(game, 1, false);
     drawGroundDebris(game, 1);
     drawForgeCasts(game, 1);
@@ -1091,6 +1093,79 @@ export function createRenderer(canvas) {
       }
     }
     context.globalAlpha = 1;
+  }
+
+  /**
+   * Trapper traps: tiny bear jaws; fake platforms almost match real plates
+   * but hatch / top edge are slightly wrong. Ally outline, faint enemy cue.
+   */
+  function drawTraps(game, alpha, viewerTeam = 0) {
+    const colors = platformColors(game);
+    for (const trap of game.traps || []) {
+      if (!trap || trap.destroyed || !(trap.life > 0)) continue;
+      const ally = trap.team === viewerTeam;
+      const arming = !trap.armed;
+      const pulse = arming ? 0.55 + 0.35 * Math.sin((game.elapsed || 0) * 14) : 1;
+      context.globalAlpha = alpha * pulse * (ally ? 1 : 0.72);
+
+      if (trap.trapType === "fakePlatform") {
+        // Almost real — fill matches, but top edge is thinner/wrong hue and hatch skews.
+        context.fillStyle = colors.fill;
+        context.fillRect(trap.x, trap.y, trap.w, trap.h);
+        context.fillStyle = ally ? "#9ab8c4" : "#5a6a72";
+        context.fillRect(trap.x, trap.y, trap.w, 2);
+        context.strokeStyle = ally ? "rgba(120,200,220,.55)" : colors.hatch;
+        for (let x = trap.x + 10; x < trap.x + trap.w; x += 38) {
+          context.beginPath();
+          context.moveTo(x, trap.y + 5);
+          context.lineTo(x + 18, trap.y + Math.min(trap.h, 22));
+          context.stroke();
+        }
+        // One "wrong" vertical nick so it never quite looks plated.
+        context.strokeStyle = ally ? "rgba(72,232,255,.7)" : "rgba(200,210,220,.22)";
+        context.beginPath();
+        context.moveTo(trap.x + trap.w * 0.62, trap.y + 1);
+        context.lineTo(trap.x + trap.w * 0.62, trap.y + trap.h - 2);
+        context.stroke();
+        if (ally) {
+          context.strokeStyle = "rgba(72,232,255,.85)";
+          context.lineWidth = 1.5;
+          context.strokeRect(trap.x - 1, trap.y - 1, trap.w + 2, trap.h + 2);
+          context.lineWidth = 1;
+        } else {
+          // Tiny enemy tell — sparse corner ticks, not a full outline.
+          context.strokeStyle = "rgba(255,220,160,.35)";
+          context.beginPath();
+          context.moveTo(trap.x, trap.y);
+          context.lineTo(trap.x + 8, trap.y);
+          context.moveTo(trap.x + trap.w - 8, trap.y);
+          context.lineTo(trap.x + trap.w, trap.y);
+          context.stroke();
+        }
+      } else {
+        // Bear trap — very small jaws; ally cyan outline, enemy faint rust ticks.
+        const cx = trap.x + trap.w / 2;
+        const cy = trap.y + trap.h / 2;
+        context.fillStyle = ally ? "#3a4a52" : "#2a3238";
+        context.fillRect(trap.x, trap.y, trap.w, trap.h);
+        context.strokeStyle = ally ? "#8a9aa4" : "#5a6068";
+        context.strokeRect(trap.x + 1, trap.y + 1, trap.w - 2, trap.h - 2);
+        context.beginPath();
+        context.moveTo(trap.x + 4, cy);
+        context.lineTo(cx - 2, trap.y + 2);
+        context.lineTo(cx + 2, trap.y + 2);
+        context.lineTo(trap.x + trap.w - 4, cy);
+        context.stroke();
+        if (ally) {
+          context.strokeStyle = "rgba(72,232,255,.9)";
+          context.strokeRect(trap.x - 2, trap.y - 2, trap.w + 4, trap.h + 4);
+        } else {
+          context.fillStyle = "rgba(255,180,120,.28)";
+          context.fillRect(cx - 2, cy - 1, 4, 2);
+        }
+      }
+      context.globalAlpha = 1;
+    }
   }
 
   function drawPropBody(prop, alpha) {
