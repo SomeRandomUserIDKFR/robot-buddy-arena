@@ -84,6 +84,7 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.ok(crate.destroyed);
   assert.ok(game.groundDebris.length > 0);
   assert.ok(Math.abs(crate.x - startX) > 5 || Math.abs(crate.y - startY) > 5, "slot moved to impact");
+  assert.ok(Math.abs((crate.y + crate.h) - 220) < 1, "reconquer slot feet on platform");
   assert.ok(game.groundDebris.every((p) => p.sourceProp === crate));
   const origin = game.groundDebris[0];
   assert.ok(Math.abs(origin.originX - (crate.x + crate.w / 2)) < 2);
@@ -144,15 +145,67 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   dropHeldBreakable(fighter, game); // no-op when empty
 }
 
-// Direct shatter relocates slot for reconquer-at-hit.
+// Direct shatter snaps reconquer slot onto a valid floor (not mid-air).
 {
-  const yard = createMapRuntime("yard");
-  const pipe = yard.props.find((p) => p.kind === "pipe");
-  const game = { props: yard.props, effects: [], groundDebris: [] };
-  shatterBreakableAt(pipe, game, 900, 500);
+  const upper = { x: 0, y: 400, w: 800, h: 40 };
+  const lower = { x: 0, y: 900, w: 800, h: 40 };
+  const pipe = {
+    kind: "pipe",
+    breakable: true,
+    solid: true,
+    destroyed: false,
+    x: 100,
+    y: 100,
+    w: 80,
+    h: 22,
+    hp: 40,
+    maxHp: 40,
+    groundDebrisDropped: false
+  };
+  const game = {
+    props: [pipe],
+    platforms: [upper, lower],
+    effects: [],
+    groundDebris: []
+  };
+  // Mid-air impact between platforms — old code left the slot floating at y≈500.
+  // With no scrap votes, dummy logic picks the first floor at/below the impact.
+  shatterBreakableAt(pipe, game, 200, 500);
   assert.ok(pipe.destroyed);
-  assert.ok(Math.abs(pipe.x + pipe.w / 2 - 900) < 1);
-  assert.ok(Math.abs(pipe.y + pipe.h / 2 - 500) < 1);
+  assert.ok(Math.abs((pipe.y + pipe.h) - lower.y) < 1, "feet on floor below impact");
+  assert.ok(pipe.y + pipe.h > upper.y + 40, "not stuck mid-air above lower floor");
+  assert.ok(pipe.x + pipe.w / 2 >= lower.x);
+  assert.ok(pipe.x + pipe.w / 2 <= lower.x + lower.w);
+}
+
+// Mid-air shatter clamps X onto the chosen surface.
+{
+  const ledge = { x: 400, y: 600, w: 120, h: 24 };
+  const crate = {
+    kind: "crate",
+    breakable: true,
+    solid: true,
+    destroyed: false,
+    x: 0,
+    y: 0,
+    w: 44,
+    h: 44,
+    hp: 50,
+    maxHp: 50,
+    groundDebrisDropped: false
+  };
+  const game = {
+    props: [crate],
+    platforms: [ledge],
+    effects: [],
+    groundDebris: []
+  };
+  shatterBreakableAt(crate, game, 40, 300);
+  assert.ok(crate.destroyed);
+  assert.ok(Math.abs((crate.y + crate.h) - ledge.y) < 1, "feet on ledge");
+  const cx = crate.x + crate.w / 2;
+  assert.ok(cx >= ledge.x + crate.w / 2 - 0.5);
+  assert.ok(cx <= ledge.x + ledge.w - crate.w / 2 + 0.5);
 }
 
 console.log("throw-breakable.test.js passed.");

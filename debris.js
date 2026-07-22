@@ -49,11 +49,16 @@ function debrisLandables(game) {
   ];
 }
 
-/** Floors a training dummy can stand on (platforms + solid props — not other dummies). */
-function dummyStandSurfaces(game) {
+/** Floors a training dummy / thrown prop can stand on (platforms + solid props). */
+function dummyStandSurfaces(game, excludeProp = null) {
   const platforms = game?.platforms?.length ? game.platforms : [];
   const solids = (game?.props || []).filter(
-    (prop) => !prop.destroyed && prop.solid && (prop.hp == null || prop.hp > 0)
+    (prop) => prop !== excludeProp
+      && !prop.destroyed
+      && !prop.thrownInFlight
+      && !prop.heldBy
+      && prop.solid
+      && (prop.hp == null || prop.hp > 0)
   );
   return [
     ...platforms,
@@ -62,12 +67,13 @@ function dummyStandSurfaces(game) {
 }
 
 /**
- * Snap a dummy stand center onto a real floor near the scrap pile.
+ * Snap a stand center onto a real floor near a rough world point.
  * Prefers the surface most scraps already rest on; otherwise the first floor
- * under the pile (avoids mid-air averages between stacked platforms).
+ * under the point (avoids mid-air averages between stacked platforms).
+ * Shared by armor dummies and thrown-breakable reconquer slots.
  */
-function resolveDummyStandTarget(game, group, roughX, roughY, w, h) {
-  const surfaces = dummyStandSurfaces(game);
+export function resolveStandTarget(game, group, roughX, roughY, w, h, options = {}) {
+  const surfaces = dummyStandSurfaces(game, options.excludeProp || null);
   const halfW = w * 0.5;
   const clampXOnto = (surface, x) => {
     if (surface.w <= w) return surface.x + surface.w * 0.5;
@@ -80,7 +86,7 @@ function resolveDummyStandTarget(game, group, roughX, roughY, w, h) {
 
   // Vote for platforms scraps are already sitting on.
   const votes = new Map();
-  for (const scrap of group) {
+  for (const scrap of group || []) {
     const scale = scrap.scale || 1;
     const halfScrapW = (scrap.w || 10) * scale * 0.5;
     const halfScrapH = (scrap.h || 10) * scale * 0.5;
@@ -126,6 +132,11 @@ function resolveDummyStandTarget(game, group, roughX, roughY, w, h) {
     targetX: clampXOnto(chosen, roughX),
     targetY: chosen.y - h * 0.5
   };
+}
+
+/** @deprecated internal alias — armor dummy build still calls this name. */
+function resolveDummyStandTarget(game, group, roughX, roughY, w, h) {
+  return resolveStandTarget(game, group, roughX, roughY, w, h);
 }
 
 function pushPiece(game, piece) {

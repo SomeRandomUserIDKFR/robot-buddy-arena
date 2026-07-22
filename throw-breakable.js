@@ -1,8 +1,9 @@
 /**
  * Throw Breakable secondary: grab any map breakable, hold it (still damageable),
- * throw for impact damage + debris. Reconquer rebuilds at the impact slot.
+ * throw for impact damage + debris. Reconquer rebuilds on a valid floor near impact.
  */
 import { GRAVITY, SIZE, WORLD } from "./config.js";
+import { resolveStandTarget } from "./debris.js";
 import { damageProp, platformsOf, solidProps } from "./maps.js";
 import { clamp } from "./utils.js";
 
@@ -156,7 +157,8 @@ export function tryGrabBreakable(fighter, game) {
 
 /**
  * Shatter a prop at a world point and leave debris for reconquer-at-hit.
- * Relocates the prop slot to the impact so rebuild targets where it landed.
+ * Snaps the prop slot onto a valid stand surface (same checks as armor dummies)
+ * near the impact so rebuild doesn't float mid-air.
  */
 export function shatterBreakableAt(prop, game, impactX, impactY) {
   if (!prop || !game) return false;
@@ -166,9 +168,22 @@ export function shatterBreakableAt(prop, game, impactX, impactY) {
   prop.solid = false;
   prop.blocksProjectiles = false;
   prop.blocksSight = false;
-  prop.x = impactX - prop.w / 2;
-  prop.y = impactY - prop.h / 2;
+
+  // Same floor-pick as armor dummies: vote scraps (none here) else first
+  // surface at/below the impact so rebuild never floats between platforms.
+  const { targetX, targetY } = resolveStandTarget(
+    game,
+    [],
+    impactX,
+    impactY,
+    prop.w,
+    prop.h,
+    { excludeProp: prop }
+  );
+  prop.x = targetX - prop.w / 2;
+  prop.y = targetY - prop.h / 2;
   syncCanopy(prop);
+
   // Ensure destroy path runs even if already low HP.
   if (prop.destroyed || prop.hp <= 0) {
     prop.destroyed = false;
@@ -176,6 +191,7 @@ export function shatterBreakableAt(prop, game, impactX, impactY) {
     prop.groundDebrisDropped = false;
   }
   prop.hp = 0;
+  // Hit FX stay at the true impact; jigsaw/reconquer use the snapped prop slot.
   return damageProp(prop, 1, game, impactX, impactY);
 }
 
