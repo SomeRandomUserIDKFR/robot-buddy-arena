@@ -185,18 +185,18 @@ export const GEAR = [
   melee("nanotech-sword", "Nanotech Sword", "Arc Saber. E forms from bots (partial OK). Incomplete swings bleed 2% bots.", {
     baseDamage: 55, rpm: 150, range: 120
   }, 100, { nanotech: true, nanobotCost: 100 }),
-  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle. E forms the gun (150 bots); ammo pulls 2 free bots/shot.", {
+  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle. E forms the gun (180 bots); ammo pulls 2 free bots/shot.", {
     baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
     dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
     aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
     movementMultiplier: 1, iframeMultiplier: 1
-  }, 150, { nanotech: true, nanobotCost: 150, nanobotShotCost: 2 }),
-  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper. E forms the gun (175 bots); ammo pulls 20 free bots/shot.", {
+  }, 150, { nanotech: true, nanobotCost: 180, nanobotShotCost: 2 }),
+  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper. E forms the gun (195 bots); ammo pulls 20 free bots/shot.", {
     baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
     dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
     sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
     iframeMultiplier: 1, tracer: true
-  }, 175, { nanotech: true, nanobotCost: 175, nanobotShotCost: 20 }),
+  }, 175, { nanotech: true, nanobotCost: 195, nanobotShotCost: 20 }),
   item(
     "nanotech-chestplate",
     "body",
