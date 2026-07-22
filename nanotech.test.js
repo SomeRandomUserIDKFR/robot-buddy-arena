@@ -119,59 +119,69 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(nanotechArmorMaxHp(fighter), Math.floor(NANOTECH_ARMOR_BOT_CAP / 2));
 }
 
-// E forms weapon (partial OK); guns spend bots per shot; damage scales.
+// E forms the gun body; shots withdraw ammo from free reserve; E absorbs guns too.
 {
   const fighter = applyLoadout(new Fighter({
     x: 100, y: 400, team: 0, aim: 0
   }), loadout({ weapon: "nanotech-rifle", jetpack: "nanotech-reserve" }));
   assert.equal(fighter.nanobotMax, 1150);
-  assert.equal(fighter.nanobotWeapon, 150);
+  assert.equal(fighter.nanobotWeapon, 150, "150 bots are the gun body");
+  assert.equal(fighter.nanobotFree, 1000);
   assert.equal(fighter.nanobotShotCost, 2);
-  fighter.nanobotWeapon = 0;
-  fighter.nanobotFree = 149;
-  assert.equal(canNanotechAttack(fighter), false);
   const game = { bullets: [], effects: [], fighters: [fighter] };
   attack(fighter, game);
-  assert.equal(game.bullets.length, 0);
-
-  const formed = tryFormNanotechWeapon(fighter);
-  assert.equal(formed.ok, true);
-  assert.equal(formed.fullyFormed, false);
-  assert.equal(fighter.nanobotWeapon, 149);
-  assert.equal(fighter.nanobotFree, 0);
-  assert.ok(Math.abs(nanotechFormPct(fighter) - 149 / 150) < 1e-9);
-  assert.equal(canNanotechAttack(fighter), true);
-  attack(fighter, game);
   assert.equal(game.bullets.length, 1);
-  assert.ok(Math.abs(game.bullets[0].damage - fighter.weaponBaseDamage * (149 / 150)) < 1e-6);
-  assert.equal(fighter.nanobotWeapon, 147, "rifle spends 2 bots/shot");
+  assert.equal(fighter.nanobotWeapon, 150, "gun body unchanged by shots");
+  assert.equal(fighter.nanobotFree, 998, "ammo pulled from free reserve");
 
-  fighter.nanobotWeapon = 1;
+  fighter.nanobotFree = 1;
   fighter.attackCd = 0;
-  assert.equal(canNanotechAttack(fighter), false, "need 2 bots to fire rifle");
+  assert.equal(canNanotechAttack(fighter), false, "need 2 free bots to fire");
   attack(fighter, game);
   assert.equal(game.bullets.length, 1);
+  assert.equal(fighter.nanobotWeapon, 150);
+
+  fighter.nanobotWeapon = 0;
+  fighter.nanobotFree = 100;
+  assert.equal(canNanotechAttack(fighter), false, "need formed gun");
+
+  fighter.nanobotWeapon = 100;
+  fighter.nanobotFree = 20;
+  assert.equal(canNanotechAttack(fighter), true);
+  fighter.attackCd = 0;
+  attack(fighter, game);
+  assert.equal(game.bullets.length, 2);
+  assert.equal(fighter.nanobotWeapon, 100);
+  assert.equal(fighter.nanobotFree, 18);
 
   const sniper = applyLoadout(new Fighter({
     x: 100, y: 400, team: 0, aim: 0
   }), loadout({ weapon: "nanotech-sniper", jetpack: "nanotech-reserve" }));
   assert.equal(sniper.nanobotShotCost, 20);
   assert.equal(sniper.nanobotWeapon, 175);
+  const freeBefore = sniper.nanobotFree;
   const sniperGame = { bullets: [], effects: [], fighters: [sniper] };
   attack(sniper, sniperGame);
   assert.equal(sniperGame.bullets.length, 1);
-  assert.equal(sniper.nanobotWeapon, 155, "sniper spends 20 bots/shot");
-  sniper.nanobotWeapon = 19;
-  sniper.attackCd = 0;
-  assert.equal(canNanotechAttack(sniper), false);
+  assert.equal(sniper.nanobotWeapon, 175, "sniper body intact");
+  assert.equal(sniper.nanobotFree, freeBefore - 20);
+
+  // E absorbs the entire gun back into reserve (same as sword).
+  const absorb = tryNanotechWeaponAction(sniper);
+  assert.equal(absorb.ok, true);
+  assert.equal(absorb.absorbing, true);
+  for (let i = 0; i < 30; i++) tickNanotech(sniper, 0.05);
+  assert.equal(sniper.nanobotWeapon, 0);
+  assert.equal(sniper.nanotechWeaponAbsorbing, false);
+  assert.ok(sniper.nanobotFree >= freeBefore - 20 + 175);
 
   // Slow regen fills unused pool capacity; does not pull from armor or weapon.
   fighter.nanobotArmor = 40;
   fighter.nanobotFree = 100;
   fighter.nanobotWeapon = 100;
-  const freeBefore = fighter.nanobotFree;
+  const regenBefore = fighter.nanobotFree;
   tickNanotech(fighter, 2);
-  assert.ok(fighter.nanobotFree > freeBefore);
+  assert.ok(fighter.nanobotFree > regenBefore);
   assert.equal(fighter.nanobotArmor, 40);
   assert.equal(fighter.nanobotWeapon, 100);
 }

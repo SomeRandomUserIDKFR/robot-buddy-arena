@@ -380,11 +380,20 @@ export function updateHud(game) {
       const free = Math.max(0, Math.floor(player.nanobotFree || 0));
       const weapon = Math.max(0, Math.floor(player.nanobotWeapon || 0));
       const cost = player.nanotechWeaponCost || 0;
+      const shotCost = player.nanobotShotCost || 0;
       ui.reserve.style.width = `${max > 0 ? (free / max) * 100 : 0}%`;
-      ui.reserveMeter.classList.toggle("low", cost > 0 && weapon < cost && free < cost - weapon);
+      ui.reserveMeter.classList.toggle(
+        "low",
+        (shotCost > 0 && weapon > 0 && free < shotCost)
+          || (cost > 0 && weapon < cost && free < cost - weapon)
+      );
       ui.reserveMeter.classList.toggle("empty", free <= 0);
       if (player.nanotechWeaponAbsorbing) {
         ui.reserveLabel.textContent = `RESERVE ${free} · ABSORB…`;
+      } else if (cost > 0 && shotCost > 0 && weapon > 0) {
+        ui.reserveLabel.textContent = free < shotCost
+          ? `RESERVE ${free} · NEED ${shotCost}`
+          : `RESERVE ${free} · ${shotCost}/shot`;
       } else if (weapon > 0) {
         const formTag = cost > 0 && weapon < cost ? `W ${weapon}/${cost}` : `W ${weapon}`;
         ui.reserveLabel.textContent = `RESERVE ${free} · ${formTag}`;
@@ -792,7 +801,7 @@ function modifierMarkup(gear) {
     ? `<span class="stat-up">${gear.nanobotCost} nanobot pool</span>`
     : "";
   const nanoShotLine = gear.nanotech && gear.nanobotShotCost
-    ? `<span class="stat-up">${gear.nanobotShotCost} bots/shot</span>`
+    ? `<span class="stat-up">${gear.nanobotShotCost} bots/shot from reserve</span>`
     : "";
   if (gear.slot === "weapon") {
     if (gear.id === "mechanical-modularity") {

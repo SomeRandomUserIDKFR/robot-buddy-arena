@@ -185,13 +185,13 @@ export const GEAR = [
   melee("nanotech-sword", "Nanotech Sword", "Arc Saber. E forms from bots (partial OK). Incomplete swings bleed 2% bots.", {
     baseDamage: 55, rpm: 150, range: 120
   }, 100, { nanotech: true, nanobotCost: 100 }),
-  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle. E forms from bots; 2 bots/shot; damage scales with form %.", {
+  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle. E forms the gun (150 bots); ammo pulls 2 free bots/shot.", {
     baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
     dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
     aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
     movementMultiplier: 1, iframeMultiplier: 1
   }, 150, { nanotech: true, nanobotCost: 150, nanobotShotCost: 2 }),
-  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper. E forms from bots; 20 bots/shot; damage scales with form %.", {
+  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper. E forms the gun (175 bots); ammo pulls 20 free bots/shot.", {
     baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
     dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
     sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
@@ -660,25 +660,27 @@ export function canNanotechAttack(fighter) {
   const cost = fighter?.nanotechWeaponCost || 0;
   if (cost <= 0) return true;
   if (fighter.nanotechWeaponAbsorbing) return false;
+  if ((fighter.nanobotWeapon || 0) <= 0) return false;
   const shot = nanotechShotCost(fighter);
-  if (shot > 0) return (fighter.nanobotWeapon || 0) >= shot;
-  return (fighter.nanobotWeapon || 0) > 0;
+  // Guns: formed weapon + free-reserve ammo. Melee: any formed bots.
+  if (shot > 0) return (fighter.nanobotFree || 0) >= shot;
+  return true;
 }
 
-/** Bots spent per gun shot (0 for melee / non-nanotech). */
+/** Bots withdrawn from free reserve per gun shot (0 for melee / non-nanotech). */
 export function nanotechShotCost(fighter) {
   if ((fighter?.nanotechWeaponCost || 0) <= 0) return 0;
   if (fighter.weapon !== "gun") return 0;
   return Math.max(0, Number(fighter.nanobotShotCost) || 0);
 }
 
-/** Spend formed weapon bots as projectile mass. Returns bots consumed. */
+/** Pull ammo bots from free reserve. Weapon bots stay as the gun body. */
 export function consumeNanotechShot(fighter) {
   const shot = nanotechShotCost(fighter);
   if (shot <= 0) return 0;
-  const before = fighter.nanobotWeapon || 0;
-  if (before < shot) return 0;
-  fighter.nanobotWeapon = before - shot;
+  const free = fighter.nanobotFree || 0;
+  if (free < shot) return 0;
+  fighter.nanobotFree = free - shot;
   clampNanotechPool(fighter);
   return shot;
 }
@@ -811,24 +813,33 @@ function clampNanotechPool(fighter) {
   fighter.nanobotFree = free;
 }
 
-/** Nanotech sword melts when unformed — fully hidden near end of dissolve. */
+/** Nanotech weapon melts when unformed — fully hidden near end of dissolve. */
 export function nanotechSwordHidden(fighter) {
   if (fighter?.weaponId !== "nanotech-sword") return false;
-  return nanotechSwordVisibility(fighter) <= 0.02;
+  return nanotechWeaponVisibility(fighter) <= 0.02;
 }
 
-/** 1 = blade out, 0 = fully dissolved into particles. */
-export function nanotechSwordVisibility(fighter) {
-  if (fighter?.weaponId !== "nanotech-sword") return 1;
+/** 1 = weapon out, 0 = fully dissolved into particles (sword + guns). */
+export function nanotechWeaponVisibility(fighter) {
+  const cost = fighter?.nanotechWeaponCost || 0;
+  if (cost <= 0 || !fighter?.weaponId?.startsWith?.("nanotech-")) return 1;
   const form = nanotechFormPct(fighter);
   const t = Math.max(0, Math.min(1, fighter.nanotechSwordDissolveT ?? 0));
   const eased = t * t * (3 - 2 * t);
   if (fighter.nanotechWeaponAbsorbing) {
-    // Hard melt into nanoparticle flecks while bots stream back to reserve.
     return Math.max(0, form * (1 - eased * 0.98));
   }
-  // Scale by form % so a half-built sword looks thinner / fainter.
-  return form * (1 - eased * 0.15);
+  if (fighter.weaponId === "nanotech-sword") {
+    return form * (1 - eased * 0.15);
+  }
+  // Guns: hide when absorbed/empty; otherwise hold shape at form %.
+  if (form <= 0) return 0;
+  return Math.max(0.25, form) * (1 - eased * 0.85);
+}
+
+/** @deprecated Prefer nanotechWeaponVisibility */
+export function nanotechSwordVisibility(fighter) {
+  return nanotechWeaponVisibility(fighter);
 }
 
 function beginNanotechArmorSpawn(fighter) {
@@ -927,9 +938,9 @@ export function tickNanotech(fighter, dt) {
   }
 
   // Particle dissolve while absorbing or when the weapon has no committed bots.
-  if (fighter.weaponId === "nanotech-sword") {
+  if ((fighter.nanotechWeaponCost || 0) > 0) {
     const wantDissolved = fighter.nanotechWeaponAbsorbing
-      || (weaponCost > 0 && (fighter.nanobotWeapon || 0) <= 0);
+      || (fighter.nanobotWeapon || 0) <= 0;
     let dissolve = Math.max(0, Math.min(1, fighter.nanotechSwordDissolveT ?? 0));
     if (wantDissolved) {
       const dur = fighter.nanotechWeaponAbsorbing

@@ -1,6 +1,6 @@
 import { CEILING, SIGHT, SIZE, WORLD } from "./config.js";
 import { armorDummyColor, FORGE_PHASE_DURATIONS, forgeCastColor } from "./debris.js";
-import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID, nanotechArmorHp, nanotechArmorMaxHp, nanotechSwordVisibility } from "./equipment.js";
+import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID, nanotechArmorHp, nanotechArmorMaxHp, nanotechWeaponVisibility } from "./equipment.js";
 import { normalizeModularMorphStyle } from "./settings.js";
 import { platformsOf } from "./maps.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
@@ -622,12 +622,12 @@ function drawNanotechChestplateArmor(context, game, fighter, centerX, centerY, b
 }
 
 function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
-  const swordVis = fighter.weaponId === "nanotech-sword"
-    ? nanotechSwordVisibility(fighter)
-    : 1;
-  if (swordVis <= 0.02 && fighter.weaponId === "nanotech-sword") return;
+  const isNanoWeapon = (fighter.nanotechWeaponCost || 0) > 0
+    && !!fighter.weaponId?.startsWith?.("nanotech-");
+  const weaponVis = isNanoWeapon ? nanotechWeaponVisibility(fighter) : 1;
+  if (isNanoWeapon && weaponVis <= 0.02) return;
 
-  const alpha = bodyAlpha * (shieldUp ? .38 : 1) * swordVis;
+  const alpha = bodyAlpha * (shieldUp ? .38 : 1) * weaponVis;
   const morphStyle = morphStyleFor(fighter, game);
   const canMorph = fighter.weaponId === MODULAR_WEAPON_ID
     && visual.morphing
@@ -648,17 +648,19 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
   }
 
   const scale = fighter.weaponId === "nanotech-sword"
-    ? 0.55 + 0.45 * swordVis
-    : 1;
+    ? 0.55 + 0.45 * weaponVis
+    : isNanoWeapon
+      ? 0.7 + 0.3 * weaponVis
+      : 1;
   const length = visual.length * scale;
   const width = visual.width * Math.max(0.35, scale);
   context.globalAlpha = alpha;
   context.fillStyle = visual.color;
   context.fillRect(visual.gripOffset, -width / 2, length, width);
 
-  // Melting nano flecks while the blade dissolves / absorbs into reserve.
-  if (fighter.weaponId === "nanotech-sword" && swordVis < 0.92 && swordVis > 0.02) {
-    const scatter = 1 - swordVis;
+  // Melting nano flecks while the weapon dissolves / absorbs into reserve.
+  if (isNanoWeapon && weaponVis < 0.92 && weaponVis > 0.02) {
+    const scatter = 1 - weaponVis;
     const absorbing = !!fighter.nanotechWeaponAbsorbing;
     const flecks = absorbing ? 18 : 10;
     for (let i = 0; i < flecks; i++) {
