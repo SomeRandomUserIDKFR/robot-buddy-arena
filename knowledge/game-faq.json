@@ -498,7 +498,7 @@
         "illusion platform",
         "most expensive extension"
       ],
-      "answer": "Illusionist is the most expensive Extension (320¢). Press T to cycle FIGHTER / PROP / PLAT (top-right HUD), then 3 to plant. Strictly deception: no world cues, no collision, no sight block. Fighter decoys are AI clones with your exact loadout; they fight for attention. Their hits only gaslight — bars and numbers drop by at least 40 phantom damage, real HP is untouched. Their projectiles vanish on impact. Real shots pass through illusions (fighter decoys absorb 10 hits before fading). Prop and platform illusions look real and punish focus, not bodies — unlike Trapper, which actually hurts. AI cannot tell decoys from real fighters."
+      "answer": "Illusionist is the most expensive Extension (320¢). Press T to cycle FIGHTER / PROP / PLAT (top-right HUD), then 3 to plant. Strictly deception: no world cues, no collision, no sight block. Fighter decoys are AI clones with your exact loadout and a fake health bar that chips when shot (10 hits to fade). Their hits only gaslight — bars and numbers drop by at least 40 phantom damage, real HP is untouched. Their projectiles vanish on impact. When a real shot 'hits' an illusion it looks like it disappears, but the round keeps traveling invisible and can still hurt whatever is behind. Prop and platform illusions look real and punish focus, not bodies — unlike Trapper, which actually hurts. AI cannot tell decoys from real fighters."
     },
     {
       "id": "equipment-material-consumer",

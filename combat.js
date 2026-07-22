@@ -22,9 +22,9 @@ import {
   stepThrownBreakables
 } from "./throw-breakable.js";
 import {
-  applyPhantomDamage, illusionObjectHitBySegment, isIllusionFighter,
-  ILLUSION_PHANTOM_DAMAGE, registerIllusionFighterHit, registerIllusionObjectHit,
-  tickIllusionistFighter
+  applyPhantomDamage, ghostBulletThroughIllusion, illusionObjectHitBySegment,
+  isIllusionFighter, ILLUSION_PHANTOM_DAMAGE, registerIllusionFighterHit,
+  registerIllusionObjectHit, tickIllusionistFighter
 } from "./illusionist.js";
 import {
   applyTrapLockToIntent, isTrapLocked, tickTrapperFighter
@@ -613,12 +613,13 @@ export function stepBullets(game, dt) {
     bullet.life -= dt;
     const ownerIllusion = isIllusionFighter(bullet.owner);
 
-    // Visual-only illusions: chip/fade them, never stop the real projectile.
+    // Visual-only illusions: chip/fade them; real rounds ghost (invisible, keep going).
     for (const ill of game.illusions || []) {
       if (!ill || ill.destroyed) continue;
       if (illusionObjectHitBySegment(ill, bullet.px, bullet.py, bullet.x, bullet.y)
         || segmentHitsBox(bullet.px, bullet.py, bullet.x, bullet.y, ill.x, ill.y, ill.w, ill.h)) {
         registerIllusionObjectHit(ill, game);
+        if (!ownerIllusion) ghostBulletThroughIllusion(bullet, game);
       }
     }
 
@@ -638,10 +639,18 @@ export function stepBullets(game, dt) {
         : 1;
       const dmg = (bullet.damage ?? 12 * bullet.owner.weaponDamage) * multiplier;
       if (isIllusionFighter(enemy)) {
-        registerIllusionFighterHit(enemy, game);
-        // Real bullets keep flying through decoys.
-        if (!ownerIllusion) continue;
-        // Illusion-vs-illusion: the fake round still vanishes.
+        // Only chip a decoy once per bullet (ghost rounds keep overlapping).
+        bullet._illusionHits ||= new Set();
+        if (!bullet._illusionHits.has(enemy)) {
+          bullet._illusionHits.add(enemy);
+          registerIllusionFighterHit(enemy, game);
+        }
+        if (!ownerIllusion) {
+          // Looks like the round died on impact, but it keeps going invisible.
+          ghostBulletThroughIllusion(bullet, game);
+          continue;
+        }
+        // Illusion-vs-illusion: the fake round still vanishes for real.
         bullet.life = -1;
         stopped = true;
         break;

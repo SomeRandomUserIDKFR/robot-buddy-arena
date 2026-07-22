@@ -92,7 +92,20 @@ function placePoint(fighter, w, h) {
 /** Displayed HP after phantom gaslight (never below 0). */
 export function displayedHp(fighter) {
   if (!fighter) return 0;
+  // Decoys show their fake pool so hits look like real chip damage.
+  if (isIllusionFighter(fighter)) {
+    return Math.max(0, fighter.illusionFakeHp ?? fighter.hp ?? 0);
+  }
   return Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
+}
+
+/** Fake max HP used for decoy bars (falls back to real maxHp). */
+export function displayedMaxHp(fighter) {
+  if (!fighter) return 1;
+  if (isIllusionFighter(fighter)) {
+    return Math.max(1, fighter.illusionFakeMaxHp ?? fighter.maxHp ?? 1);
+  }
+  return Math.max(1, fighter.maxHp || 1);
 }
 
 /** Apply visual-only damage. Returns phantom amount applied. */
@@ -129,12 +142,31 @@ export function tickPhantomDamage(fighter, dt) {
   }
 }
 
-/** Real hit against a fighter illusion — bullet continues; decoy may fade. */
+/**
+ * Real hit against a fighter illusion — chips the fake HP pool / hit budget.
+ * Caller should ghost the projectile (invisible, keep flying).
+ */
 export function registerIllusionFighterHit(illusion, game) {
   if (!isIllusionFighter(illusion) || illusion.dead) return false;
-  illusion.illusionHitsLeft = Math.max(0, (illusion.illusionHitsLeft ?? ILLUSION_FIGHTER_HITS) - 1);
+  const hits = Math.max(1, ILLUSION_FIGHTER_HITS);
+  const maxFake = Math.max(1, illusion.illusionFakeMaxHp ?? illusion.maxHp ?? 500);
+  if (illusion.illusionFakeHp == null) illusion.illusionFakeHp = maxFake;
+  illusion.illusionHitsLeft = Math.max(0, (illusion.illusionHitsLeft ?? hits) - 1);
+  // Drain fake pool in equal chunks so the bar sells a real fight.
+  const chunk = maxFake / hits;
+  illusion.illusionFakeHp = Math.max(0, illusion.illusionFakeHp - chunk);
   illusion.hitFlash = 0.12;
-  if (illusion.illusionHitsLeft <= 0) {
+  // Keep `.hp` mirrored to the fake pool so any generic HP UI stays consistent.
+  illusion.hp = illusion.illusionFakeHp;
+  if (game?.effects) {
+    game.effects.push({
+      type: "hit",
+      x: illusion.x + SIZE / 2,
+      y: illusion.y + SIZE / 2,
+      life: 0.16
+    });
+  }
+  if (illusion.illusionHitsLeft <= 0 || illusion.illusionFakeHp <= 0) {
     fadeIllusionFighter(illusion, game);
   }
   return true;
@@ -144,6 +176,7 @@ export function fadeIllusionFighter(illusion, game) {
   if (!illusion || illusion.dead) return;
   illusion.dead = true;
   illusion.hp = 0;
+  illusion.illusionFakeHp = 0;
   illusion.life = 0;
   if (game?.effects) {
     game.effects.push({
@@ -154,6 +187,23 @@ export function fadeIllusionFighter(illusion, game) {
       color: "rgba(200,220,240,0.55)"
     });
   }
+}
+
+/** Mark a real bullet as visually gone while it keeps traveling for collisions. */
+export function ghostBulletThroughIllusion(bullet, game = null) {
+  if (!bullet || bullet.ghost) return bullet;
+  bullet.ghost = true;
+  bullet.hidden = true;
+  // One-shot impact puff so the round looks like it "died" on the decoy.
+  if (game?.effects) {
+    game.effects.push({
+      type: "propHit",
+      x: bullet.x,
+      y: bullet.y,
+      life: 0.1
+    });
+  }
+  return bullet;
 }
 
 /** Hit prop/platform illusion — fades; caller must not stop the projectile. */
@@ -240,8 +290,16 @@ export function createFighterIllusion(owner, FighterCtor) {
   decoy.phantomDamage = 0;
   decoy.aim = owner.aim;
   decoy.facing = owner.facing || 1;
-  decoy.hp = owner.hp;
-  decoy.maxHp = owner.maxHp;
+  // Fake health pool mirrors the source's current displayed HP.
+  const fakeMax = Math.max(40, owner.maxHp || 500);
+  const fakeNow = Math.max(
+    40,
+    Math.min(fakeMax, (owner.hp || fakeMax) - (owner.phantomDamage || 0))
+  );
+  decoy.illusionFakeMaxHp = fakeMax;
+  decoy.illusionFakeHp = fakeNow;
+  decoy.maxHp = fakeMax;
+  decoy.hp = fakeNow;
   decoy.fuel = owner.fuel;
   return decoy;
 }

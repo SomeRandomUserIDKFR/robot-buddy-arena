@@ -46,6 +46,8 @@ assert.equal(ILLUSION_PHANTOM_DAMAGE, 40);
   assert.equal(decoy.loadout.weapon, owner.loadout.weapon);
   assert.equal(decoy.loadout.shield, owner.loadout.shield);
   assert.equal(decoy.illusionHitsLeft, ILLUSION_FIGHTER_HITS);
+  assert.ok(decoy.illusionFakeMaxHp > 0);
+  assert.ok(decoy.illusionFakeHp > 0);
   assert.equal(isRealCombatant(decoy), false);
   assert.equal(game.fighters.includes(decoy), true);
 }
@@ -98,9 +100,12 @@ assert.equal(ILLUSION_PHANTOM_DAMAGE, 40);
     platforms: []
   };
   const hitsBefore = decoy.illusionHitsLeft;
+  const fakeBefore = decoy.illusionFakeHp;
   stepBullets(game, 1 / 60);
   assert.equal(decoy.illusionHitsLeft, hitsBefore - 1);
+  assert.ok(decoy.illusionFakeHp < fakeBefore, "fake HP pool chips on hit");
   assert.equal(game.bullets.length, 1, "real bullet continues through decoy");
+  assert.equal(game.bullets[0].ghost, true, "bullet ghosts (invisible) after illusion hit");
 }
 
 {

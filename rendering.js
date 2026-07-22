@@ -1446,8 +1446,14 @@ export function createRenderer(canvas) {
     context.fillStyle = "#111c22";
     context.fillRect(fighter.x, fighter.y - 12, SIZE, 5);
     context.fillStyle = fighter.team ? "#ff6259" : "#36dff5";
-    const showHp = Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
-    const hpFrac = fighter.maxHp > 0 ? showHp / fighter.maxHp : 0;
+    // Decoys use a fake pool; everyone else can be gaslit by phantom damage.
+    const showHp = fighter.illusion
+      ? Math.max(0, fighter.illusionFakeHp ?? fighter.hp ?? 0)
+      : Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
+    const showMax = fighter.illusion
+      ? Math.max(1, fighter.illusionFakeMaxHp ?? fighter.maxHp ?? 1)
+      : Math.max(1, fighter.maxHp || 1);
+    const hpFrac = showHp / showMax;
     context.fillRect(fighter.x, fighter.y - 12, SIZE * hpFrac, 5);
     context.fillStyle = "#24343c";
     context.fillRect(fighter.x, fighter.y - 5, SIZE, 3);
@@ -1871,6 +1877,8 @@ export function createRenderer(canvas) {
 
   function drawBullets(game) {
     for (const bullet of game.bullets) {
+      // Ghost rounds: "disappeared" on an illusion but still collide invisibly.
+      if (bullet.ghost || bullet.hidden) continue;
       if (bullet.scrapChuck) {
         const ang = Math.atan2(bullet.vy, bullet.vx) + (bullet.scrapSpin || 0) * 0.08;
         const w = bullet.scrapW || 8;

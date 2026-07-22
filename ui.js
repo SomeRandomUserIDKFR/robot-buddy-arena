@@ -926,10 +926,10 @@ function modifierMarkup(gear) {
     if (gear.illusionist) {
       return [
         "<span>Premium Extension · T cycle · 3 plant</span>",
-        "<span class=\"stat-up\">Fighter decoy · clones your kit</span>",
+        "<span class=\"stat-up\">Fighter decoy · kit + fake HP bar</span>",
         "<span class=\"stat-up\">Gaslight hits · ≥40 phantom HP</span>",
+        "<span>Shots 'vanish' on decoy · keep going invisible</span>",
         "<span>Prop / platform · visual only, no cues</span>",
-        "<span>Real shots pass through · decoy takes 10 hits</span>",
         "<span class=\"stat-down\">No real damage · most expensive</span>"
       ].join("");
     }
