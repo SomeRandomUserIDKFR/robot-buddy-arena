@@ -3,7 +3,7 @@ import { attack, Fighter } from "./combat.js";
 import {
   applyHpDamage, applyLoadout, applyNanotechSlashBotLoss, beginNanotechWeaponAbsorb,
   canNanotechAttack, DEFAULT_LOADOUT, GEAR_BY_ID, hasNanotechChestplate, nanotechArmorHp,
-  nanotechArmorMaxHp, nanotechCostOf, nanotechFormPct, nanotechPoolCapacity,
+  nanotechArmorMaxHp, nanotechCostOf, nanotechFormCostOf, nanotechFormPct, nanotechPoolCapacity,
   NANOTECH_ARMOR_BOT_CAP, NANOTECH_ARMOR_PRESS, NANOTECH_BOTS_PER_HP, NANOTECH_CHANNEL_RATE,
   NANOTECH_SLOW_REGEN, PRECISION_AIM_WEAPONS, pulseNanotechArmor, setNanotechChanneling,
   STARTER_GEAR, tickNanotech, tryFormNanotechWeapon, tryNanotechWeaponAction, weaponStats
@@ -46,6 +46,9 @@ function assertWeaponStatsMatch(a, b) {
     nanotechPoolCapacity(loadout({ weapon: "nanotech-rifle" })),
     180
   );
+  assert.equal(nanotechFormCostOf("nanotech-rifle"), 150);
+  assert.equal(nanotechFormCostOf("nanotech-sniper"), 175);
+  assert.equal(nanotechFormCostOf("nanotech-sword"), 100);
   assert.equal(
     nanotechPoolCapacity(loadout({
       body: "nanotech-chestplate",
@@ -125,21 +128,22 @@ function assertWeaponStatsMatch(a, b) {
     x: 100, y: 400, team: 0, aim: 0
   }), loadout({ weapon: "nanotech-rifle", jetpack: "nanotech-reserve" }));
   assert.equal(fighter.nanobotMax, 1180);
-  assert.equal(fighter.nanobotWeapon, 180, "180 bots are the gun body");
-  assert.equal(fighter.nanobotFree, 1000);
+  assert.equal(fighter.nanotechWeaponCost, 150, "gun body form/absorb cost");
+  assert.equal(fighter.nanobotWeapon, 150, "150 bots are the gun body");
+  assert.equal(fighter.nanobotFree, 1030, "+30 pool bots stay free for ammo");
   assert.equal(fighter.nanobotShotCost, 2);
   const game = { bullets: [], effects: [], fighters: [fighter] };
   attack(fighter, game);
   assert.equal(game.bullets.length, 1);
-  assert.equal(fighter.nanobotWeapon, 180, "gun body unchanged by shots");
-  assert.equal(fighter.nanobotFree, 998, "ammo pulled from free reserve");
+  assert.equal(fighter.nanobotWeapon, 150, "gun body unchanged by shots");
+  assert.equal(fighter.nanobotFree, 1028, "ammo pulled from free reserve");
 
   fighter.nanobotFree = 1;
   fighter.attackCd = 0;
   assert.equal(canNanotechAttack(fighter), false, "need 2 free bots to fire");
   attack(fighter, game);
   assert.equal(game.bullets.length, 1);
-  assert.equal(fighter.nanobotWeapon, 180);
+  assert.equal(fighter.nanobotWeapon, 150);
 
   fighter.nanobotWeapon = 0;
   fighter.nanobotFree = 100;
@@ -158,22 +162,24 @@ function assertWeaponStatsMatch(a, b) {
     x: 100, y: 400, team: 0, aim: 0
   }), loadout({ weapon: "nanotech-sniper", jetpack: "nanotech-reserve" }));
   assert.equal(sniper.nanobotShotCost, 20);
-  assert.equal(sniper.nanobotWeapon, 195);
+  assert.equal(sniper.nanotechWeaponCost, 175);
+  assert.equal(sniper.nanobotWeapon, 175);
+  assert.equal(sniper.nanobotFree, 1000 + 20, "+20 pool bots for one sniper shot");
   const freeBefore = sniper.nanobotFree;
   const sniperGame = { bullets: [], effects: [], fighters: [sniper] };
   attack(sniper, sniperGame);
   assert.equal(sniperGame.bullets.length, 1);
-  assert.equal(sniper.nanobotWeapon, 195, "sniper body intact");
+  assert.equal(sniper.nanobotWeapon, 175, "sniper body intact");
   assert.equal(sniper.nanobotFree, freeBefore - 20);
 
-  // E absorbs the entire gun back into reserve (same as sword).
+  // E absorbs only the gun body (175), not the whole pool contribution.
   const absorb = tryNanotechWeaponAction(sniper);
   assert.equal(absorb.ok, true);
   assert.equal(absorb.absorbing, true);
   for (let i = 0; i < 30; i++) tickNanotech(sniper, 0.05);
   assert.equal(sniper.nanobotWeapon, 0);
   assert.equal(sniper.nanotechWeaponAbsorbing, false);
-  assert.ok(sniper.nanobotFree >= freeBefore - 20 + 195);
+  assert.ok(sniper.nanobotFree >= freeBefore - 20 + 175);
 
   // Slow regen fills unused pool capacity; does not pull from armor or weapon.
   fighter.nanobotArmor = 40;

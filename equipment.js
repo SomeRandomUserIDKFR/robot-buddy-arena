@@ -185,18 +185,22 @@ export const GEAR = [
   melee("nanotech-sword", "Nanotech Sword", "Arc Saber. E forms from bots (partial OK). Incomplete swings bleed 2% bots.", {
     baseDamage: 55, rpm: 150, range: 120
   }, 100, { nanotech: true, nanobotCost: 100 }),
-  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle. E forms the gun (180 bots); ammo pulls 2 free bots/shot.", {
+  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle. E forms/absorbs the gun (150 bots); +30 pool bots for ammo (2/shot).", {
     baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
     dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
     aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
     movementMultiplier: 1, iframeMultiplier: 1
-  }, 150, { nanotech: true, nanobotCost: 180, nanobotShotCost: 2 }),
-  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper. E forms the gun (195 bots); ammo pulls 20 free bots/shot.", {
+  }, 150, {
+    nanotech: true, nanobotCost: 180, nanobotFormCost: 150, nanobotShotCost: 2
+  }),
+  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper. E forms/absorbs the gun (175 bots); +20 pool bots for ammo (20/shot).", {
     baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
     dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
     sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
     iframeMultiplier: 1, tracer: true
-  }, 175, { nanotech: true, nanobotCost: 195, nanobotShotCost: 20 }),
+  }, 175, {
+    nanotech: true, nanobotCost: 195, nanobotFormCost: 175, nanobotShotCost: 20
+  }),
   item(
     "nanotech-chestplate",
     "body",
@@ -625,6 +629,16 @@ export function nanotechCostOf(gearOrId) {
   const gear = typeof gearOrId === "string" ? GEAR_BY_ID[gearOrId] : gearOrId;
   if (!gear?.nanotech) return 0;
   return Math.max(0, Number(gear.nanobotCost) || 0);
+}
+
+/** Bots committed to form/absorb the weapon body (may be less than pool cost). */
+export function nanotechFormCostOf(gearOrId) {
+  const gear = typeof gearOrId === "string" ? GEAR_BY_ID[gearOrId] : gearOrId;
+  if (!gear?.nanotech) return 0;
+  if (gear.nanobotFormCost != null) {
+    return Math.max(0, Number(gear.nanobotFormCost) || 0);
+  }
+  return nanotechCostOf(gear);
 }
 
 export function nanotechPoolCapacity(loadout) {
@@ -1451,7 +1465,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.nanotechArmorSpawning = false;
   fighter.nanotechArmorSpawnT = 1;
   fighter.nanotechSwordDissolveT = 0;
-  fighter.nanotechWeaponCost = weapon.nanotech ? nanotechCostOf(weapon) : 0;
+  fighter.nanotechWeaponCost = weapon.nanotech ? nanotechFormCostOf(weapon) : 0;
   fighter.nanobotShotCost = weapon.nanotech ? Math.max(0, Number(weapon.nanobotShotCost) || 0) : 0;
   fighter.hasNanotechChestplate = fighter.loadout.body === "nanotech-chestplate";
   fighter.forceNanotechMorph = SLOT_ORDER.some((slot) => {
