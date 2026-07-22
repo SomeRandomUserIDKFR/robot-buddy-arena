@@ -24,7 +24,8 @@ import {
 } from "./perks.js";
 import { escapeHtml, formatTime } from "./utils.js";
 import {
-  ensureSettingsProfile, normalizeArmorDespawnTimer, normalizeReconquerRate
+  ensureSettingsProfile, normalizeArmorDespawnTimer, normalizeOptimizeIllusions,
+  normalizeReconquerRate
 } from "./settings.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -122,8 +123,10 @@ export const ui = {
   settingsBtn: $("#settingsBtn"),
   settingsCloseBtn: $("#settingsCloseBtn"),
   settingsVisualPanel: $("#settingsVisualPanel"),
+  settingsGameplayPanel: $("#settingsGameplayPanel"),
   settingsDeveloperPanel: $("#settingsDeveloperPanel"),
   unlockAllGearTemporaryInput: $("#unlockAllGearTemporary"),
+  optimizeIllusionsInput: $("#optimizeIllusions"),
   modularMorphStyleInputs: [...document.querySelectorAll('input[name="modularMorphStyle"]')],
   debrisDespawnStyleInputs: [...document.querySelectorAll('input[name="debrisDespawnStyle"]')],
   reconquerRateInput: $("#reconquerRate"),
@@ -653,6 +656,11 @@ export function refreshSettings(profile) {
   }
   if (ui.unlockAllGearTemporaryInput) {
     ui.unlockAllGearTemporaryInput.checked = !!profile.settings.developer?.unlockAllGearTemporary;
+  }
+  if (ui.optimizeIllusionsInput) {
+    ui.optimizeIllusionsInput.checked = normalizeOptimizeIllusions(
+      profile.settings.gameplay?.optimizeIllusions
+    );
   }
 }
 
@@ -1334,6 +1342,7 @@ export function bindUi(handlers) {
     }
     const which = tab.dataset.settingsTab;
     ui.settingsVisualPanel?.classList.toggle("hidden", which !== "visual");
+    ui.settingsGameplayPanel?.classList.toggle("hidden", which !== "gameplay");
     ui.settingsDeveloperPanel?.classList.toggle("hidden", which !== "developer");
   });
   ui.settingsModal?.addEventListener("change", (event) => {
@@ -1360,6 +1369,11 @@ export function bindUi(handlers) {
     const armorTimer = event.target.closest('input[name="armorDespawnTimer"]');
     if (armorTimer) {
       handlers.settingsChange?.({ armorDespawnTimer: armorTimer.value });
+      return;
+    }
+    const optimizeIllusions = event.target.closest('input[name="optimizeIllusions"]');
+    if (optimizeIllusions) {
+      handlers.settingsChange?.({ optimizeIllusions: optimizeIllusions.checked });
       return;
     }
     const unlockAll = event.target.closest('input[name="unlockAllGearTemporary"]');

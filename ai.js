@@ -37,6 +37,7 @@ import {
 } from "./trapper.js";
 import { angleDiff, clamp, dist, formatTime, lerp } from "./utils.js";
 import { crateVisibleToTeam } from "./powerups.js";
+import { optimizeIllusionsEnabled } from "./settings.js";
 import { hasLineOfSight, visibleToSelf, visibleToTeam } from "./vision.js";
 import { Fighter } from "./combat.js";
 
@@ -1354,10 +1355,11 @@ export function updateAiCombatClone(fighter, state, game, visible, target) {
 }
 
 export function updateAI(fighter, dt, game, profile) {
-  if (isIllusionFighter(fighter)) {
+  const optimize = optimizeIllusionsEnabled(game);
+  if (isIllusionFighter(fighter) && optimize) {
     return updateAIDecoy(fighter, dt, game);
   }
-  if (isCombatClone(fighter)) {
+  if (isCombatClone(fighter) && optimize) {
     return updateAIClone(fighter, dt, game);
   }
   const state = fighter.aiState;

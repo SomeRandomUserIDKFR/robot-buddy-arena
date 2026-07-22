@@ -56,9 +56,28 @@ export function normalizeUnlockAllGearTemporary(value) {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
+/** Default ON — missing / legacy saves keep swarm optimizations. */
+export function normalizeOptimizeIllusions(value) {
+  if (value === false || value === "false" || value === 0 || value === "0") return false;
+  return true;
+}
+
+/**
+ * Whether Illusionist/Doppel swarm optimizations are active for this match.
+ * Accepts a game (`game.settings`) or a settings object.
+ */
+export function optimizeIllusionsEnabled(gameOrSettings) {
+  const gameplay = gameOrSettings?.settings?.gameplay
+    || gameOrSettings?.gameplay
+    || null;
+  return normalizeOptimizeIllusions(gameplay?.optimizeIllusions);
+}
+
 export function ensureSettingsProfile(profile, saved = profile) {
   const defaults = DEFAULT_PROFILE.settings.visual;
   const visual = { ...defaults, ...(saved?.settings?.visual || {}) };
+  const gameplayDefaults = DEFAULT_PROFILE.settings.gameplay;
+  const gameplay = { ...gameplayDefaults, ...(saved?.settings?.gameplay || {}) };
   const developerDefaults = DEFAULT_PROFILE.settings.developer;
   const developer = { ...developerDefaults, ...(saved?.settings?.developer || {}) };
   profile.settings = {
@@ -71,6 +90,9 @@ export function ensureSettingsProfile(profile, saved = profile) {
       reconquerRate: normalizeReconquerRate(visual.reconquerRate),
       armorDespawnStyle: normalizeArmorDespawnStyle(visual.armorDespawnStyle),
       armorDespawnTimer: normalizeArmorDespawnTimer(visual.armorDespawnTimer)
+    },
+    gameplay: {
+      optimizeIllusions: normalizeOptimizeIllusions(gameplay.optimizeIllusions)
     },
     developer: {
       unlockAllGearTemporary: normalizeUnlockAllGearTemporary(
@@ -94,6 +116,9 @@ export function cloneSettings(settings) {
       reconquerRate: normalizeReconquerRate(settings?.visual?.reconquerRate),
       armorDespawnStyle: normalizeArmorDespawnStyle(settings?.visual?.armorDespawnStyle),
       armorDespawnTimer: normalizeArmorDespawnTimer(settings?.visual?.armorDespawnTimer)
+    },
+    gameplay: {
+      optimizeIllusions: normalizeOptimizeIllusions(settings?.gameplay?.optimizeIllusions)
     },
     developer: {
       unlockAllGearTemporary: normalizeUnlockAllGearTemporary(
