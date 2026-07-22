@@ -862,10 +862,10 @@ function modifierMarkup(gear) {
     }
     if (gear.reconjurerBuilder) {
       return [
-        "<span>Extension · press 3 near debris</span>",
-        "<span class=\"stat-up\">Rebuilds that pile · free</span>",
-        "<span class=\"stat-up\">+2 ejection scraps per rebuild</span>",
-        "<span class=\"stat-up\">Metal box debris · 10s user CD</span>",
+        "<span>Extension · press 3</span>",
+        "<span class=\"stat-up\">Near debris · free rebuild +2 scraps</span>",
+        "<span class=\"stat-up\">No debris · paid random conjure</span>",
+        "<span>Metal box · 8% / 10s user CD</span>",
         "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"
       ].join("");
     }

@@ -9,9 +9,9 @@ import { spawnPropDebris, spawnPowerCrateDebris } from "./debris.js";
 import { createMapRuntime } from "./maps.js";
 import { createPowerCrate, POWER_CRATE_HP } from "./powerups.js";
 import {
-  hasExtensionSecondary, isReconjurerBuilder, RECONJURER_COOLDOWN,
-  RECONJURER_METAL_COOLDOWN, RECONJURER_SCRAP_REWARD, tryReconjurerBuild,
-  tickReconjurerBuilder
+  hasExtensionSecondary, isReconjurerBuilder, RECONJURER_BOT_COST,
+  RECONJURER_COOLDOWN, RECONJURER_METAL_BOT_COST, RECONJURER_METAL_COOLDOWN,
+  RECONJURER_SCRAP_REWARD, tryReconjurerBuild, tickReconjurerBuilder
 } from "./reconjurer-builder.js";
 
 const clone = (value) => structuredClone(value);
@@ -81,7 +81,37 @@ assert.equal(RECONJURER_METAL_COOLDOWN, 10);
   assert.ok(fighter.reconjurerCd > 0);
 }
 
-// No nearby debris → no-op.
+// No nearby debris → paid random conjure (bots), still +2 scraps.
+{
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: RECONJURER_BUILDER_ID,
+    body: "nanotech-chestplate"
+  });
+  fighter.x = 100;
+  fighter.y = 100;
+  fighter.aim = 0;
+  fighter.nanobotFree = 40;
+  fighter.materialEjectionTank = [];
+  const game = {
+    props: [],
+    powerCrates: [],
+    platforms: [{ x: 0, y: 200, w: 800, h: 40 }],
+    groundDebris: [],
+    effects: [],
+    mapId: "yard",
+    theme: "industrial",
+    elapsed: 1
+  };
+  const spawned = tryReconjurerBuild(fighter, game, () => 0.99);
+  assert.ok(spawned);
+  assert.ok(!spawned.powerCrate, "high roll = normal breakable");
+  assert.equal(game.props.length, 1);
+  assert.equal(fighter.nanobotFree, 40 - RECONJURER_BOT_COST);
+  assert.equal(fighter.materialEjectionTank.length, RECONJURER_SCRAP_REWARD);
+}
+
+// No debris + broke (no bots) → no-op.
 {
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
@@ -89,6 +119,8 @@ assert.equal(RECONJURER_METAL_COOLDOWN, 10);
   });
   fighter.x = 100;
   fighter.y = 100;
+  fighter.nanobotFree = 0;
+  fighter.nanobotMax = 0;
   const game = {
     props: [],
     powerCrates: [],
@@ -96,7 +128,37 @@ assert.equal(RECONJURER_METAL_COOLDOWN, 10);
     groundDebris: [],
     effects: []
   };
-  assert.equal(tryReconjurerBuild(fighter, game), null);
+  assert.equal(tryReconjurerBuild(fighter, game, () => 0.99), null);
+}
+
+// No debris + low roll conjures metal when CD ready (costs metal bot fee).
+{
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: RECONJURER_BUILDER_ID,
+    body: "nanotech-chestplate"
+  });
+  fighter.x = 300;
+  fighter.y = 200;
+  fighter.aim = 0;
+  fighter.nanobotFree = 40;
+  fighter.materialEjectionTank = [];
+  fighter.reconjurerMetalCd = 0;
+  const game = {
+    props: [],
+    powerCrates: [],
+    platforms: [{ x: 0, y: 300, w: 800, h: 40 }],
+    groundDebris: [],
+    effects: [],
+    mapId: "yard",
+    theme: "industrial",
+    elapsed: 2
+  };
+  const spawned = tryReconjurerBuild(fighter, game, () => 0.01);
+  assert.ok(spawned?.powerCrate);
+  assert.equal(game.powerCrates.length, 1);
+  assert.equal(fighter.nanobotFree, 40 - RECONJURER_METAL_BOT_COST);
+  assert.ok(Math.abs(fighter.reconjurerMetalCd - RECONJURER_METAL_COOLDOWN) < 0.001);
 }
 
 // Metal box debris rebuild uses the 10s user CD.
