@@ -38,16 +38,27 @@ assert.equal(normalizeArmorDespawnTimer(14), 14);
 assert.equal(normalizeArmorDespawnTimer(1.24), 1.2);
 assert.equal(normalizeArmorDespawnTimer(0), 0.1);
 
-// Jigsaw uses exact prop colors and full fragment coverage.
+// Jagged jigsaw: unique polygons, source-region colors, full coverage.
 {
   const yard = createMapRuntime("yard");
   const crate = yard.props.find((p) => p.kind === "crate");
   const tiles = buildPropJigsaw(crate);
   assert.equal(tiles.length, 16, "4x4 crate jigsaw");
-  assert.ok(tiles.every((t) => t.color === PROP_DEBRIS_COLORS.crate.fill));
+  assert.ok(tiles.every((t) => Array.isArray(t.verts) && t.verts.length >= 3), "jagged verts");
   assert.ok(tiles.every((t) => t.material === "wood"), "map crates are wood, not metal");
-  const area = tiles.reduce((sum, t) => sum + t.w * t.h, 0);
-  assert.ok(Math.abs(area - crate.w * crate.h) < 1, "tiles cover 100% of crate area");
+  // Source-region paint: edge shards darker, interior wood — not one mosaic color.
+  assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.crate.fill));
+  assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.crate.edge));
+  assert.ok(tiles.some((t) => Array.isArray(t.marks) && t.marks.length), "crate X/border marks");
+  const area = tiles.reduce((sum, t) => sum + (t.area || 0), 0);
+  assert.ok(Math.abs(area - crate.w * crate.h) < 2, "shards cover ~100% of crate area");
+  // Shared jags: neighboring shards have matching world-space edge midpoints.
+  const a = tiles[0];
+  const b = tiles[1];
+  const world = (tile, v) => [tile.homeLx + v[0], tile.homeLy + v[1]];
+  const aPts = a.verts.map((v) => world(a, v).map((n) => n.toFixed(3)).join(","));
+  const bPts = new Set(b.verts.map((v) => world(b, v).map((n) => n.toFixed(3)).join(",")));
+  assert.ok(aPts.some((p) => bPts.has(p)), "adjacent shards share edge vertices");
 }
 
 {
@@ -55,9 +66,21 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   const tree = forest.props.find((p) => p.kind === "tree");
   const tiles = buildPropJigsaw(tree);
   assert.ok(tiles.length >= 16, "trunk + canopy fragments");
+  assert.ok(tiles.every((t) => Array.isArray(t.verts) && t.verts.length >= 3));
   assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.tree.fill));
   assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.treeCanopy.fill
     || t.color === PROP_DEBRIS_COLORS.treeCanopy.fill2));
+}
+
+{
+  // Barrel shards carry hoop bands from their source region.
+  const yard = createMapRuntime("yard");
+  const barrel = yard.props.find((p) => p.kind === "barrel")
+    || { kind: "barrel", w: 34, h: 48, x: 0, y: 0 };
+  const tiles = buildPropJigsaw(barrel, "barrel");
+  assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.barrel.fill));
+  assert.ok(tiles.some((t) => t.color === (PROP_DEBRIS_COLORS.barrel.hoop
+    || PROP_DEBRIS_COLORS.barrel.edge)));
 }
 
 // Fade despawn removes non-armor debris after lifetime + animation.
@@ -76,7 +99,7 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   damageProp(crate, crate.hp, game, crate.x + 5, crate.y + 5);
   assert.equal(game.groundDebris.length, 16);
   assert.ok(game.groundDebris.every((p) => p.material === "wood" && !p.immortal));
-  assert.ok(game.groundDebris.every((p) => p.color === PROP_DEBRIS_COLORS.crate.fill));
+  assert.ok(game.groundDebris.every((p) => Array.isArray(p.verts) && p.verts.length >= 3));
   assert.ok(game.groundDebris.every((p) => Number.isFinite(p.homeLx) && Number.isFinite(p.homeLy)));
 
   for (let i = 0; i < Math.ceil(NON_ARMOR_DEBRIS_LIFE * 60) + 5; i++) {
@@ -585,11 +608,15 @@ assert.equal(restoreMapProp(null), false);
     groundDebris: Array.from({ length: pieces }, (_, i) => ({
       x: fighter.x + 20 + i,
       y: fighter.y + 20,
-      w: 8,
-      h: 8,
+      w: 10,
+      h: 9,
       sourceId: "mc-src",
       despawnMode: null,
-      color: "#8a7a68",
+      color: i === 0 ? "#8a6a3a" : "#4a3818",
+      edge: "#4a3818",
+      shape: "poly",
+      verts: [[-5, -4], [0, -5], [5, -3], [4, 4], [-4, 5], [-6, 0]],
+      marks: [{ x1: -4, y1: -3, x2: 4, y2: 3, color: "#4a3818" }],
       vx: 0,
       vy: 0,
       spin: 0,
@@ -622,8 +649,13 @@ assert.equal(restoreMapProp(null), false);
   assert.ok(game.effects.some((e) => e.type === "nanoBotGrant"), "bots bloom from tip");
   assert.equal(fighter.materialScrapBank.length, pieces, "remembers inhaled scraps");
   assert.ok(fighter.materialScrapBank.every((s) => s.bots === MATERIAL_CONSUMER_BOTS_PER_PIECE));
+  assert.ok(
+    fighter.materialScrapBank.every((s) => Array.isArray(s.verts) && s.verts.length >= 3),
+    "bank keeps jagged shard shapes"
+  );
+  assert.ok(fighter.materialScrapBank.every((s) => Array.isArray(s.marks)));
 
-  // Chuck spends those bots and fires a scrap projectile.
+  // Chuck spends those bots and fires a scrap projectile with the same silhouette.
   game.bullets = [];
   fighter.attackCd = 0;
   const freeBeforeChuck = fighter.nanobotFree;
@@ -633,6 +665,7 @@ assert.equal(restoreMapProp(null), false);
   assert.equal(game.bullets.length, 1);
   assert.equal(game.bullets[0].scrapChuck, true);
   assert.equal(game.bullets[0].damage, MATERIAL_CONSUMER_CHUCK_DAMAGE);
+  assert.ok(Array.isArray(game.bullets[0].scrapVerts) && game.bullets[0].scrapVerts.length >= 3);
 
   // Cannot chuck without enough free bots (spend them elsewhere).
   fighter.attackCd = 0;

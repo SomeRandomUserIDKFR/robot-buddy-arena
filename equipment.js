@@ -1366,6 +1366,22 @@ export function spendTankOrNanobots(fighter, botCost = MATERIAL_CONSUMER_BOTS_PE
   return { source: "bots", scrap: null, botsSpent: cost };
 }
 
+/** Copy scrap silhouette fields so bank/tank/beam keep jagged source shapes. */
+function cloneScrapShape(scrap) {
+  if (!scrap || typeof scrap !== "object") return scrap;
+  return {
+    ...scrap,
+    verts: Array.isArray(scrap.verts)
+      ? scrap.verts.map((p) => [p[0], p[1]])
+      : null,
+    marks: Array.isArray(scrap.marks)
+      ? scrap.marks.map((m) => ({
+        x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2, color: m.color || null
+      }))
+      : null
+  };
+}
+
 /**
  * Pull next debris ammo: ejection tank first (no bot cost), then remembered bank.
  * @returns {{ scrap: object, source: "tank"|"bank" } | null}
@@ -1410,6 +1426,10 @@ export function chuckMaterialConsumerScrap(fighter, game) {
   fighter.materialBeamFlash = Math.max(fighter.materialBeamFlash || 0, 0.12);
 
   game.bullets ||= [];
+  const shapeScale = Math.min(
+    1,
+    14 / Math.max(scrap.w || 8, scrap.h || 8, 1)
+  );
   game.bullets.push({
     x: tip.x,
     y: tip.y,
@@ -1426,9 +1446,22 @@ export function chuckMaterialConsumerScrap(fighter, game) {
     scrapBeam: true,
     scrapSource: source,
     color: scrap.color || "#8a7a68",
+    edge: scrap.edge || null,
     scrapW: Math.max(4, Math.min(14, scrap.w || 8)),
     scrapH: Math.max(4, Math.min(14, scrap.h || 8)),
-    scrapSpin: (Math.random() - 0.5) * 14
+    scrapSpin: (Math.random() - 0.5) * 14,
+    scrapVerts: Array.isArray(scrap.verts)
+      ? scrap.verts.map((p) => [p[0] * shapeScale, p[1] * shapeScale])
+      : null,
+    scrapMarks: Array.isArray(scrap.marks)
+      ? scrap.marks.map((m) => ({
+        x1: m.x1 * shapeScale,
+        y1: m.y1 * shapeScale,
+        x2: m.x2 * shapeScale,
+        y2: m.y2 * shapeScale,
+        color: m.color || null
+      }))
+      : null
   });
   if (game.effects) {
     game.effects.push({
@@ -1623,15 +1656,20 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
       }
       if (arrival.ejection) {
         if (tank.length < MATERIAL_CONSUMER_EJECTION_TANK_CAP) {
-          tank.push({
+          tank.push(cloneScrapShape({
             bots: 0,
             ejection: true,
             color: arrival.color || "#8a7a68",
             kind: arrival.kind || null,
             material: arrival.material || null,
             w: arrival.w || 8,
-            h: arrival.h || 8
-          });
+            h: arrival.h || 8,
+            edge: arrival.edge || null,
+            shape: arrival.shape || null,
+            detail: arrival.detail || null,
+            verts: arrival.verts || null,
+            marks: arrival.marks || null
+          }));
           if (game.effects) {
             game.effects.push({
               type: "nanoIngest",
@@ -1649,14 +1687,19 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
       gained += got;
       // Remember only scraps that actually paid bots — chucking spends that amount.
       if (got > 0) {
-        bank.push({
+        bank.push(cloneScrapShape({
           bots: got,
           color: arrival.color || "#8a7a68",
           kind: arrival.kind || null,
           material: arrival.material || null,
           w: arrival.w || 8,
-          h: arrival.h || 8
-        });
+          h: arrival.h || 8,
+          edge: arrival.edge || null,
+          shape: arrival.shape || null,
+          detail: arrival.detail || null,
+          verts: arrival.verts || null,
+          marks: arrival.marks || null
+        }));
       }
       if (got > 0 && game.effects) {
         game.effects.push({

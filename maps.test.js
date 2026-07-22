@@ -72,6 +72,7 @@ import { generateEncounter, resetConquestSelectSession } from "./conquest.js";
   const wood = crateGame.groundDebris.filter((p) => p.material === "wood");
   assert.equal(wood.length, 16, "full 4x4 wood crate jigsaw");
   assert.ok(wood.every((p) => p.kind === "tile"));
+  assert.ok(wood.every((p) => Array.isArray(p.verts) && p.verts.length >= 3));
 
   const pipe = yard.props.find((p) => p.kind === "pipe")
     || createMapRuntime("battlefield").props.find((p) => p.kind === "pipe");

@@ -783,8 +783,10 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
       context.stroke();
     }
     // Hold-RMB debris beam: scrap stream from the tip along aim (+x in local blade space).
-    const tankN = fighter.materialEjectionTank?.length || 0;
-    const bankN = fighter.materialScrapBank?.length || 0;
+    const tank = fighter.materialEjectionTank || [];
+    const bank = fighter.materialScrapBank || [];
+    const tankN = tank.length;
+    const bankN = bank.length;
     if (fighter.materialBeamHeld && (tankN + bankN > 0 || beamFlash > 0.02)) {
       const beamLen = 210 + beamFlash * 40;
       const t = performance.now() / 1000;
@@ -797,14 +799,35 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
       context.moveTo(tipX, 0);
       context.lineTo(tipX + beamLen, Math.sin(t * 28) * 3);
       context.stroke();
-      context.lineWidth = 1.2;
-      context.globalAlpha = alpha * (0.45 + beamFlash);
+      context.shadowBlur = 0;
+      context.lineWidth = 1;
+      context.globalAlpha = alpha * (0.55 + beamFlash);
+      const ammo = tankN > 0 ? tank : bank;
       for (let i = 0; i < 5; i++) {
         const u = ((t * 9 + i * 0.17) % 1);
         const px = tipX + u * beamLen;
         const py = Math.sin(t * 22 + i * 1.7) * (4 + i);
-        context.fillStyle = i % 2 ? "#d8c4a0" : "#9a8a78";
-        context.fillRect(px - 2.5, py - 2, 5, 4);
+        const scrap = ammo.length ? ammo[i % ammo.length] : null;
+        context.save();
+        context.translate(px, py);
+        context.rotate(u * 4 + i);
+        context.scale(0.45, 0.45);
+        if (scrap && Array.isArray(scrap.verts) && scrap.verts.length >= 3) {
+          context.fillStyle = scrap.color || (i % 2 ? "#d8c4a0" : "#9a8a78");
+          context.beginPath();
+          context.moveTo(scrap.verts[0][0], scrap.verts[0][1]);
+          for (let v = 1; v < scrap.verts.length; v++) {
+            context.lineTo(scrap.verts[v][0], scrap.verts[v][1]);
+          }
+          context.closePath();
+          context.fill();
+          context.strokeStyle = scrap.edge || "rgba(255,255,255,.35)";
+          context.stroke();
+        } else {
+          context.fillStyle = scrap?.color || (i % 2 ? "#d8c4a0" : "#9a8a78");
+          context.fillRect(-2.5, -2, 5, 4);
+        }
+        context.restore();
       }
     }
     context.restore();
@@ -1854,37 +1877,44 @@ export function createRenderer(canvas) {
     context.globalAlpha = settle * fogAlpha * pieceAlpha;
     context.fillStyle = color;
 
-    // Jigsaw prop tiles (and armor scraps) — keep silhouette accurate for reconquer.
+    // Jagged prop shards — unique polygons + source-region paint/marks.
     if (piece.material !== "armor" && (piece.kind === "tile" || piece.homeLx != null)) {
-      if (piece.shape === "ellipse") {
+      if (Array.isArray(piece.verts) && piece.verts.length >= 3) {
+        context.beginPath();
+        context.moveTo(piece.verts[0][0], piece.verts[0][1]);
+        for (let i = 1; i < piece.verts.length; i++) {
+          context.lineTo(piece.verts[i][0], piece.verts[i][1]);
+        }
+        context.closePath();
+        context.fill();
+        context.strokeStyle = edge;
+        context.lineWidth = 1;
+        context.stroke();
+      } else if (piece.shape === "ellipse") {
         context.beginPath();
         context.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2);
         context.fill();
+        context.strokeStyle = edge;
+        context.lineWidth = 1;
+        context.stroke();
       } else {
         context.fillRect(-hw, -hh, piece.w, piece.h);
+        context.strokeStyle = edge;
+        context.lineWidth = 1;
+        context.strokeRect(-hw + 0.5, -hh + 0.5, piece.w - 1, piece.h - 1);
       }
-      context.strokeStyle = edge;
-      context.lineWidth = 1;
-      context.strokeRect(-hw + 0.5, -hh + 0.5, piece.w - 1, piece.h - 1);
-      if (piece.detail === "crate") {
-        context.beginPath();
-        context.moveTo(-hw + 1, -hh + 1);
-        context.lineTo(hw - 1, hh - 1);
-        context.stroke();
-      } else if (piece.detail === "barrel") {
-        context.beginPath();
-        context.moveTo(-hw + 1, 0);
-        context.lineTo(hw - 1, 0);
-        context.stroke();
+      if (Array.isArray(piece.marks)) {
+        context.lineWidth = 1.2;
+        for (const mark of piece.marks) {
+          context.strokeStyle = mark.color || edge;
+          context.beginPath();
+          context.moveTo(mark.x1, mark.y1);
+          context.lineTo(mark.x2, mark.y2);
+          context.stroke();
+        }
       } else if (piece.detail === "powerCrate") {
         context.strokeStyle = highlight;
         context.strokeRect(-hw + 2, -hh + 2, piece.w - 4, piece.h - 4);
-      } else if (piece.material === "wood") {
-        context.strokeStyle = highlight;
-        context.beginPath();
-        context.moveTo(-hw + 2, -hh * 0.2);
-        context.lineTo(hw - 2, -hh * 0.1);
-        context.stroke();
       }
       context.restore();
       return;
@@ -1993,10 +2023,34 @@ export function createRenderer(canvas) {
         context.rotate(ang);
         context.globalAlpha = ghosted ? 0.55 : 1;
         context.fillStyle = ghosted ? "#c8b0ff" : (bullet.color || "#8a7a68");
-        context.fillRect(-w / 2, -h / 2, w, h);
-        context.strokeStyle = ghosted ? "rgba(230,210,255,.7)" : "rgba(255,255,255,.35)";
-        context.lineWidth = 1;
-        context.strokeRect(-w / 2, -h / 2, w, h);
+        if (Array.isArray(bullet.scrapVerts) && bullet.scrapVerts.length >= 3) {
+          context.beginPath();
+          context.moveTo(bullet.scrapVerts[0][0], bullet.scrapVerts[0][1]);
+          for (let i = 1; i < bullet.scrapVerts.length; i++) {
+            context.lineTo(bullet.scrapVerts[i][0], bullet.scrapVerts[i][1]);
+          }
+          context.closePath();
+          context.fill();
+          context.strokeStyle = ghosted
+            ? "rgba(230,210,255,.7)"
+            : (bullet.edge || "rgba(255,255,255,.35)");
+          context.lineWidth = 1;
+          context.stroke();
+          if (Array.isArray(bullet.scrapMarks)) {
+            for (const mark of bullet.scrapMarks) {
+              context.strokeStyle = mark.color || context.strokeStyle;
+              context.beginPath();
+              context.moveTo(mark.x1, mark.y1);
+              context.lineTo(mark.x2, mark.y2);
+              context.stroke();
+            }
+          }
+        } else {
+          context.fillRect(-w / 2, -h / 2, w, h);
+          context.strokeStyle = ghosted ? "rgba(230,210,255,.7)" : "rgba(255,255,255,.35)";
+          context.lineWidth = 1;
+          context.strokeRect(-w / 2, -h / 2, w, h);
+        }
         context.restore();
         continue;
       }
