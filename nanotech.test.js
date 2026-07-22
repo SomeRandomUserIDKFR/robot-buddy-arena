@@ -83,7 +83,9 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(setNanotechChanneling(fighter, true), true);
   assert.equal(fighter.nanotechChanneling, true);
   tickNanotech(fighter, 1);
-  const expectedFlow = Math.min(fighter.nanobotMax, NANOTECH_CHANNEL_RATE);
+  const expectedFlow = Math.min(
+    fighter.nanobotMax, NANOTECH_CHANNEL_RATE, NANOTECH_ARMOR_BOT_CAP
+  );
   assert.equal(fighter.nanobotArmor, expectedFlow);
   assert.equal(fighter.nanobotFree, fighter.nanobotMax - expectedFlow);
   assert.equal(nanotechArmorHp(fighter), Math.floor(expectedFlow / NANOTECH_BOTS_PER_HP));
@@ -160,12 +162,14 @@ function syncDisplay(fighter) {
   assert.equal(chest.nanotechChanneling, false);
 }
 
-// Armor spawn ≤0.5s with particles; nanotech sword hides while bots are in armor.
+// Armor spawn is a quick Mark-85 snap; sword dissolves smoothly into armor.
 {
   const {
-    NANOTECH_ARMOR_SPAWN_DURATION, nanotechSwordHidden
+    NANOTECH_ARMOR_SPAWN_DURATION, NANOTECH_SWORD_DISSOLVE_DURATION,
+    nanotechSwordHidden, nanotechSwordVisibility
   } = await import("./equipment.js");
-  assert.ok(NANOTECH_ARMOR_SPAWN_DURATION > 0 && NANOTECH_ARMOR_SPAWN_DURATION <= 0.5);
+  assert.ok(NANOTECH_ARMOR_SPAWN_DURATION > 0 && NANOTECH_ARMOR_SPAWN_DURATION <= 0.3);
+  assert.ok(NANOTECH_SWORD_DISSOLVE_DURATION > 0 && NANOTECH_SWORD_DISSOLVE_DURATION <= 0.25);
 
   const fighter = applyLoadout(new Fighter({}), loadout({
     body: "nanotech-chestplate",
@@ -174,21 +178,21 @@ function syncDisplay(fighter) {
   assert.equal(nanotechSwordHidden(fighter), false);
   assert.equal(setNanotechChanneling(fighter, true), true);
   assert.equal(fighter.nanotechArmorSpawning, true);
-  assert.equal(nanotechSwordHidden(fighter), true, "sword gone during spawn");
 
-  tickNanotech(fighter, 0.05);
-  assert.ok(fighter.nanobotArmor > 0);
-  assert.equal(nanotechSwordHidden(fighter), true, "sword gone while armor has bots");
+  // Mid dissolve — sword still partially visible.
+  tickNanotech(fighter, NANOTECH_SWORD_DISSOLVE_DURATION * 0.4);
+  assert.ok(nanotechSwordVisibility(fighter) < 1);
+  assert.ok(nanotechSwordVisibility(fighter) > 0.02);
 
-  for (let i = 0; i < 40; i++) tickNanotech(fighter, 0.05);
-  assert.equal(fighter.nanotechArmorSpawning, false, "spawn finishes within 0.5s window");
-  assert.ok((fighter.nanotechArmorSpawnT || 0) >= 1);
-  assert.equal(nanotechSwordHidden(fighter), true);
+  for (let i = 0; i < 20; i++) tickNanotech(fighter, 0.05);
+  assert.equal(fighter.nanotechArmorSpawning, false, "spawn finishes quickly");
+  assert.equal(nanotechSwordHidden(fighter), true, "sword fully dissolved while armored");
 
-  // Drain armor — sword returns.
+  // Drain armor — sword reforms.
   fighter.nanobotArmor = 0;
   fighter.nanotechChanneling = false;
-  syncDisplay(fighter);
+  for (let i = 0; i < 20; i++) tickNanotech(fighter, 0.05);
+  assert.ok(nanotechSwordVisibility(fighter) > 0.9);
   assert.equal(nanotechSwordHidden(fighter), false);
 
   const rifle = applyLoadout(new Fighter({}), loadout({
@@ -200,10 +204,10 @@ function syncDisplay(fighter) {
   assert.equal(nanotechSwordHidden(rifle), false, "rifle stays visible");
 }
 
-// Slow regen rate constant is wired.
+// Channel / regen rates are snappy.
 {
-  assert.equal(NANOTECH_SLOW_REGEN, 35);
-  assert.equal(NANOTECH_CHANNEL_RATE, 220);
+  assert.equal(NANOTECH_SLOW_REGEN, 55);
+  assert.equal(NANOTECH_CHANNEL_RATE, 520);
   assert.equal(NANOTECH_BOTS_PER_HP, 2);
 }
 

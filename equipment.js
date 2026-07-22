@@ -259,12 +259,15 @@ export const RETRACTABLE_ARMOR_SPEED = 0.9;
 export const RETRACTABLE_MORPH_DURATION = 0.32;
 
 /** Nanotech bot pool: channel free→armor, slow regen when weapon starved. */
-export const NANOTECH_CHANNEL_RATE = 220;
-export const NANOTECH_SLOW_REGEN = 35;
+export const NANOTECH_CHANNEL_RATE = 520;
+export const NANOTECH_SLOW_REGEN = 55;
 export const NANOTECH_BOTS_PER_HP = 2;
 export const NANOTECH_ARMOR_BOT_CAP = 500;
-/** Particle armor assemble when channeling starts from empty (≤ 0.5s). */
-export const NANOTECH_ARMOR_SPAWN_DURATION = 0.45;
+/** Snap Mark-85 style assemble when channeling starts from empty. */
+export const NANOTECH_ARMOR_SPAWN_DURATION = 0.22;
+/** Sword melts into the swarm / reforms when armor empties. */
+export const NANOTECH_SWORD_DISSOLVE_DURATION = 0.18;
+export const NANOTECH_SWORD_REFORM_DURATION = 0.2;
 
 export const GEAR_BY_ID = Object.fromEntries(GEAR.map((gear) => [gear.id, gear]));
 export const STARTER_GEAR = [
@@ -653,10 +656,19 @@ export function canNanotechAttack(fighter) {
   return (fighter.nanobotFree || 0) >= cost;
 }
 
-/** Nanotech sword dissolves into armor — hide while bots are armored or spawning. */
+/** Nanotech sword melts into armor — fully hidden near end of dissolve. */
 export function nanotechSwordHidden(fighter) {
   if (fighter?.weaponId !== "nanotech-sword") return false;
-  return (fighter.nanobotArmor || 0) > 0 || !!fighter.nanotechArmorSpawning;
+  return nanotechSwordVisibility(fighter) <= 0.02;
+}
+
+/** 1 = blade out, 0 = fully dissolved into armor swarm. */
+export function nanotechSwordVisibility(fighter) {
+  if (fighter?.weaponId !== "nanotech-sword") return 1;
+  const t = Math.max(0, Math.min(1, fighter.nanotechSwordDissolveT ?? 0));
+  // Ease so the last pop feels snappy (Mark-85 settle).
+  const eased = t * t * (3 - 2 * t);
+  return 1 - eased;
 }
 
 function beginNanotechArmorSpawn(fighter) {
@@ -746,6 +758,20 @@ export function tickNanotech(fighter, dt) {
       fighter.nanotechArmorSpawning = false;
       fighter.nanotechArmorSpawnT = 1;
     }
+  }
+
+  // Sword dissolve ↔ reform (Mark-85 melt / rematerialize).
+  if (fighter.weaponId === "nanotech-sword") {
+    const wantDissolved = (fighter.nanobotArmor || 0) > 0 || !!fighter.nanotechArmorSpawning;
+    let dissolve = Math.max(0, Math.min(1, fighter.nanotechSwordDissolveT ?? 0));
+    if (wantDissolved) {
+      dissolve = Math.min(1, dissolve + dt / NANOTECH_SWORD_DISSOLVE_DURATION);
+    } else {
+      dissolve = Math.max(0, dissolve - dt / NANOTECH_SWORD_REFORM_DURATION);
+    }
+    fighter.nanotechSwordDissolveT = dissolve;
+  } else {
+    fighter.nanotechSwordDissolveT = 0;
   }
 
   syncNanotechDisplayedHp(fighter);
@@ -1240,6 +1266,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.nanotechChanneling = false;
   fighter.nanotechArmorSpawning = false;
   fighter.nanotechArmorSpawnT = 1;
+  fighter.nanotechSwordDissolveT = 0;
   fighter.nanotechWeaponCost = weapon.nanotech ? nanotechCostOf(weapon) : 0;
   fighter.hasNanotechChestplate = fighter.loadout.body === "nanotech-chestplate";
   fighter.forceNanotechMorph = SLOT_ORDER.some((slot) => {

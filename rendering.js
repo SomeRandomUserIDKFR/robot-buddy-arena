@@ -1,6 +1,6 @@
 import { CEILING, SIGHT, SIZE, WORLD } from "./config.js";
 import { armorDummyColor, FORGE_PHASE_DURATIONS, forgeCastColor } from "./debris.js";
-import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID, nanotechArmorHp, nanotechArmorMaxHp, nanotechSwordHidden } from "./equipment.js";
+import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID, nanotechArmorHp, nanotechArmorMaxHp, nanotechSwordVisibility } from "./equipment.js";
 import { normalizeModularMorphStyle } from "./settings.js";
 import { platformsOf } from "./maps.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
@@ -408,23 +408,28 @@ function drawHelmetAndChestplate(context, color, bodyAlpha, u, scatter = 0) {
   context.restore();
 }
 
-function drawNanotechArmorSuit(context, color, glow, half, u, bodyAlpha, morphing) {
-  const swarm = morphing ? Math.sin(u * Math.PI) : 0;
-  const reform = morphing ? morphEase(clamp((u - 0.28) / 0.72, 0, 1)) : 1;
-  const particles = 24;
+function drawNanotechArmorSuit(context, color, glow, half, u, bodyAlpha, morphing, channelHint = false) {
+  const time = performance.now() / 1000;
+  const idle = !morphing && u > 0.05
+    ? (0.14 + 0.07 * Math.sin(time * 3.4)) * (channelHint ? 1.45 : 1)
+    : 0;
+  const swarm = morphing ? Math.sin(u * Math.PI) : idle;
+  // Lock plates in earlier within a short Mark-85 assemble.
+  const reform = morphing ? morphEase(clamp((u - 0.12) / 0.88, 0, 1)) : 1;
+  const particles = morphing ? 28 : 16;
 
   for (let i = 0; i < particles; i++) {
     const seed = i * 9.17;
     // Bias particles toward helmet (upper) and chest (lower) zones.
     const zone = i % 2 === 0 ? -1 : 1;
-    const ang = (i / particles) * Math.PI * 2 + u * 1.8;
+    const ang = (i / particles) * Math.PI * 2 + u * 1.8 + time * (morphing ? 0 : 1.1);
     const radius = half * (0.25 + reform * 0.7)
-      + Math.sin(seed + u * 8) * swarm * 10;
+      + Math.sin(seed + u * 8 + time * 2.2) * swarm * (morphing ? 11 : 5);
     const x = Math.cos(ang) * radius * 0.85;
     const y = Math.sin(ang) * radius * 0.55 + zone * half * (0.35 + reform * 0.25);
-    const size = 1.1 + (i % 3) * 0.6 + swarm * 1.3;
+    const size = 1.1 + (i % 3) * 0.6 + swarm * (morphing ? 1.4 : 0.7);
     context.save();
-    context.globalAlpha = bodyAlpha * (0.28 + swarm * 0.5 + reform * 0.22);
+    context.globalAlpha = bodyAlpha * (0.22 + swarm * 0.55 + reform * 0.2);
     context.fillStyle = i % 3 === 0 ? glow : color;
     context.beginPath();
     context.arc(x, y, size, 0, Math.PI * 2);
@@ -432,11 +437,11 @@ function drawNanotechArmorSuit(context, color, glow, half, u, bodyAlpha, morphin
     context.restore();
   }
 
-  if (swarm > 0.18) {
+  if (swarm > 0.12) {
     context.save();
-    context.globalAlpha = bodyAlpha * swarm * 0.22;
+    context.globalAlpha = bodyAlpha * swarm * (morphing ? 0.24 : 0.12);
     context.strokeStyle = glow;
-    context.lineWidth = 2 + swarm * 2;
+    context.lineWidth = 1.5 + swarm * 2;
     context.beginPath();
     context.ellipse(0, -half * 0.35, half * 0.55, half * 0.4, 0, 0, Math.PI * 2);
     context.stroke();
@@ -447,8 +452,8 @@ function drawNanotechArmorSuit(context, color, glow, half, u, bodyAlpha, morphin
   }
 
   const suitU = morphing ? reform : u;
-  if (suitU > 0.12) {
-    drawHelmetAndChestplate(context, color, bodyAlpha, suitU, swarm * 0.35 * (1 - reform));
+  if (suitU > 0.1) {
+    drawHelmetAndChestplate(context, color, bodyAlpha, suitU, swarm * 0.28 * (1 - reform));
   }
 }
 
@@ -582,7 +587,7 @@ function drawRetractableArmorPlates(context, game, fighter, centerX, centerY, bo
   context.restore();
 }
 
-/** Nanotech chestplate buffer: short particle spawn, then suit scales with armor HP. */
+/** Nanotech chestplate buffer: short particle spawn, then living nano suit. */
 function drawNanotechChestplateArmor(context, game, fighter, centerX, centerY, bodyAlpha) {
   if (!fighter.hasNanotechChestplate) return;
   const spawning = !!fighter.nanotechArmorSpawning;
@@ -596,9 +601,9 @@ function drawNanotechChestplateArmor(context, game, fighter, centerX, centerY, b
   const spawnT = spawning
     ? clamp(fighter.nanotechArmorSpawnT ?? 0, 0, 1)
     : 1;
-  const spawnEase = 1 - (1 - spawnT) * (1 - spawnT);
+  const spawnEase = morphEase(spawnT);
   // During spawn, particles assemble; afterward suit fill tracks armor HP.
-  const u = spawning ? Math.max(0.08, spawnEase) : fillU;
+  const u = spawning ? Math.max(0.1, spawnEase) : Math.max(fillU, 0.2);
   if (u <= 0.02) return;
 
   const faction = fighter.buddy ? "buddy" : fighter.team ? "enemy" : "ally";
@@ -610,14 +615,19 @@ function drawNanotechChestplateArmor(context, game, fighter, centerX, centerY, b
   const half = SIZE / 2 + 4;
   context.save();
   context.translate(centerX, centerY);
-  drawNanotechArmorSuit(context, color, glow, half, u, bodyAlpha, spawning);
+  drawNanotechArmorSuit(
+    context, color, glow, half, u, bodyAlpha, spawning, !!fighter.nanotechChanneling
+  );
   context.restore();
 }
 
 function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
-  // Nanotech sword becomes the armor swarm while bots are channeled.
-  if (nanotechSwordHidden(fighter)) return;
-  const alpha = bodyAlpha * (shieldUp ? .38 : 1);
+  const swordVis = fighter.weaponId === "nanotech-sword"
+    ? nanotechSwordVisibility(fighter)
+    : 1;
+  if (swordVis <= 0.02 && fighter.weaponId === "nanotech-sword") return;
+
+  const alpha = bodyAlpha * (shieldUp ? .38 : 1) * swordVis;
   const morphStyle = morphStyleFor(fighter, game);
   const canMorph = fighter.weaponId === MODULAR_WEAPON_ID
     && visual.morphing
@@ -637,16 +647,34 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
     return;
   }
 
+  const scale = fighter.weaponId === "nanotech-sword"
+    ? 0.55 + 0.45 * swordVis
+    : 1;
+  const length = visual.length * scale;
+  const width = visual.width * Math.max(0.35, scale);
   context.globalAlpha = alpha;
   context.fillStyle = visual.color;
-  context.fillRect(visual.gripOffset, -visual.width / 2, visual.length, visual.width);
+  context.fillRect(visual.gripOffset, -width / 2, length, width);
+
+  // Melting nano flecks while the blade dissolves into armor.
+  if (fighter.weaponId === "nanotech-sword" && swordVis < 0.92 && swordVis > 0.02) {
+    const scatter = 1 - swordVis;
+    for (let i = 0; i < 10; i++) {
+      const along = visual.gripOffset + length * ((i + 0.5) / 10);
+      const drift = Math.sin(i * 2.3 + scatter * 9) * scatter * 14;
+      context.globalAlpha = alpha * (0.25 + scatter * 0.55);
+      context.fillStyle = i % 2 ? "#9fffff" : visual.color;
+      context.fillRect(along, drift - 1.2, 2.2, 2.2);
+    }
+  }
+
   if (visual.morphing && morphStyle === "smooth") {
     context.globalAlpha = alpha * 0.45;
     context.fillRect(
-      visual.gripOffset + visual.length * 0.15,
-      -visual.width * 0.35,
-      visual.length * 0.55,
-      visual.width * 0.7
+      visual.gripOffset + length * 0.15,
+      -width * 0.35,
+      length * 0.55,
+      width * 0.7
     );
   }
 }
