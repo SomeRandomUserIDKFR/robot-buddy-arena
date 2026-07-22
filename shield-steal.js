@@ -1,7 +1,7 @@
 /**
  * Shield Steal — secondary weapon.
  * Hold fire for a short-range beam that drains raised shield durability from
- * the victim and transfers a portion to your own shield pool.
+ * the victim and transfers it 1:1 to your own shield pool.
  */
 import { SIZE } from "./config.js";
 import { angleDiff, dist } from "./utils.js";
@@ -23,8 +23,8 @@ export const SHIELD_STEAL_RANGE = 160;
 export const SHIELD_STEAL_HALF_ANGLE = 0.38;
 /** Shield durability drained from the victim per second. */
 export const SHIELD_STEAL_DRAIN_PER_SEC = 90;
-/** Fraction of drained durability added to the stealer (capped at their max). */
-export const SHIELD_STEAL_TRANSFER = 0.55;
+/** Fraction of drained durability added to the stealer when victim shield is up. */
+export const SHIELD_STEAL_TRANSFER = 1;
 
 export function isShieldSteal(fighterOrId) {
   if (typeof fighterOrId === "string") return fighterOrId === SHIELD_STEAL_ID;

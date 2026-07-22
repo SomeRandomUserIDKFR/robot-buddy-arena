@@ -368,7 +368,7 @@ export const GEAR = [
     SHIELD_STEAL_ID,
     "secondaryWeapon",
     "Shield Steal",
-    "Secondary tool: hold fire for a short siphon beam. Drains raised shield durability from the victim and transfers part of it to your shield pool. Only works on shields facing you. Drop your own shield to fire.",
+    "Secondary tool: hold fire for a short siphon beam. Drains raised shield durability from the victim and transfers it 1:1 to your shield pool (100% while their shield is up). Only works on shields facing you. Drop your own shield to fire.",
     {
       damage: SHIELD_STEAL_DRAIN_PER_SEC / 40,
       fireRate: 120 / 150,
