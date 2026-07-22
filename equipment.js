@@ -78,7 +78,7 @@ export const GEAR = [
     "retractable-armor",
     "body",
     "Retractable Armor",
-    "F deploys folding plates: +120 armor HP while on, ~10% slower. Pool is separate and does not recharge mid-match.",
+    "F deploys folding plates: +120 armor HP while on, ~10% slower. Pool is separate; Protective Rebuilding can refill it mid-match.",
     {},
     { price: 130, retractableArmor: { hp: 120 } }
   ),
@@ -1007,7 +1007,7 @@ export function applyLoadout(fighter, loadout) {
     fighter.sight + (fighter.weaponStats.sightExtension || 0)
   );
   fighter.sightHalfAngle = fighter.weaponStats.sightHalfAngle || 0;
-  // Per-match shield pool: full at spawn, never recharges until the next match.
+  // Per-match shield pool: full at spawn; Protective Rebuilding can refill mid-match.
   fighter.shieldId = shieldGear.id;
   fighter.shieldMaxDurability = shield.durability * perkCombat.shieldDurability;
   fighter.shieldDurability = fighter.shieldMaxDurability;

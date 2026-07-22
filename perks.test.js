@@ -14,7 +14,7 @@ import {
 const clone = (value) => structuredClone(value);
 
 assert.equal(PERK_EXP.rookie, CONQUEST_EXP.rookie);
-assert.ok(PERKS.length >= 10 && PERKS.length <= 14);
+assert.ok(PERKS.length >= 10 && PERKS.length <= 15);
 
 // Old saves migrate to level 1 / 0 EXP / no perks.
 {
@@ -168,6 +168,34 @@ assert.ok(PERKS.length >= 10 && PERKS.length <= 14);
   });
   assert.ok(brace.shieldMaxDurability > plainShield.shieldMaxDurability);
   assert.ok(brace.shieldRaisedSpeed < plainShield.shieldRaisedSpeed);
+
+  const rebuild = applyLoadout(new Fighter({}), {
+    ...DEFAULT_LOADOUT, body: "retractable-armor", shield: "light-buckler",
+    perk: "protective-rebuilding"
+  });
+  assert.equal(rebuild.perkId, "protective-rebuilding");
+  assert.ok(rebuild.damageTaken > base.damageTaken);
+  assert.ok(rebuild.jetRechargeScale < base.jetRechargeScale);
+}
+
+// Protective Rebuilding refills armor + shield at Regen rate; core HP stays flat.
+{
+  const { REGEN_DURATION, REGEN_TOTAL, tickProtectiveRebuilding } = await import("./powerups.js");
+  const fighter = applyLoadout(new Fighter({}), {
+    ...DEFAULT_LOADOUT, body: "retractable-armor", shield: "light-buckler",
+    perk: "protective-rebuilding"
+  });
+  fighter.retractableHp = 10;
+  fighter.shieldDurability = 20;
+  fighter.shieldBroken = true;
+  const coreBefore = fighter.coreHp;
+  const rate = REGEN_TOTAL / REGEN_DURATION;
+  const dt = 3;
+  tickProtectiveRebuilding(fighter, dt);
+  assert.ok(Math.abs(fighter.retractableHp - (10 + rate * dt)) < 1e-6);
+  assert.ok(Math.abs(fighter.shieldDurability - (20 + rate * dt)) < 1e-6);
+  assert.equal(fighter.coreHp, coreBefore, "core HP is not healed by the perk");
+  assert.equal(fighter.shieldBroken, false, "rebuilt shield clears broken flag");
 }
 
 // AI Suggested / Choice only use unlocked perks.

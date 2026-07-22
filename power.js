@@ -131,6 +131,11 @@ export function perkContribution(perkId) {
   if (!perk) return 0;
   let score = 0;
   for (const [key, value] of Object.entries(perk.modifiers || {})) {
+    if (key === "protectiveRebuild") {
+      // Passive armor+shield regen at Regen rate — modest survivability bump.
+      score += 0.12;
+      continue;
+    }
     const delta = Number(value) - 1;
     if (!Number.isFinite(delta) || delta === 0) continue;
     if (key === "cyberWinBonus") {

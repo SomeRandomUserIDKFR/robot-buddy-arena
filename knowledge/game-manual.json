@@ -17,7 +17,7 @@
       "id": "manual-shields",
       "topic": "shield",
       "aliases": ["block", "buckler", "bulwark", "durability", "q"],
-      "text": "Shields are a separate equipment slot. Durability is a per-match block HP pool that does not recharge mid-match. Q raises the shield toward aim; only frontal cone attacks (~±70–80°) are blocked, spending durability equal to damage that would have been dealt. Cannot fire while raised. Depleted shields stay as dead weight with a stronger speed penalty until the next match."
+      "text": "Shields are a separate equipment slot. Durability is a per-match block HP pool that normally does not recharge mid-match (Protective Rebuilding can refill it). Q raises the shield toward aim; only frontal cone attacks (~±70–80°) are blocked, spending durability equal to damage that would have been dealt. Cannot fire while raised. Depleted shields stay as dead weight with a stronger speed penalty until durability returns or the next match."
     },
     {
       "id": "manual-learning",

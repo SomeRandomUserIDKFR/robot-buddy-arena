@@ -42,7 +42,10 @@ export const PERKS = [
     { dodgeCooldown: .84, hp: .92 }),
   perk("anchor-brace", "Anchor Brace",
     "Take less damage, move slower.",
-    { damageTaken: .9, speed: .92 })
+    { damageTaken: .9, speed: .92 }),
+  perk("protective-rebuilding", "Protective Rebuilding",
+    "Armor and shield rebuild at Regen rate; you take more damage and jet fuel recharges slower.",
+    { damageTaken: 1.1, recharge: .88, protectiveRebuild: true })
 ];
 
 export const PERKS_BY_ID = Object.fromEntries(PERKS.map((entry) => [entry.id, entry]));
@@ -222,16 +225,16 @@ function evidenceStyle(profile) {
 
 const STYLE_PREFERENCES = {
   ranged: [
-    "wide-lens", "heavy-trigger", "bastion-brace", "cyber-broker",
-    "deep-tank", "hardened-shell", "ghost-step", "anchor-brace"
+    "wide-lens", "heavy-trigger", "bastion-brace", "protective-rebuilding",
+    "cyber-broker", "deep-tank", "hardened-shell", "ghost-step", "anchor-brace"
   ],
   rusher: [
     "glass-sprint", "slipstream", "ghost-step", "overdrive-jets",
     "quick-clip", "hardened-shell", "deep-tank", "anchor-brace"
   ],
   balanced: [
-    "hardened-shell", "deep-tank", "bastion-brace", "cyber-broker",
-    "glass-sprint", "wide-lens", "quick-clip", "ghost-step"
+    "hardened-shell", "protective-rebuilding", "deep-tank", "bastion-brace",
+    "cyber-broker", "glass-sprint", "wide-lens", "quick-clip", "ghost-step"
   ]
 };
 
@@ -334,6 +337,15 @@ export function perkTradeoffLines(perkId) {
     shieldRaisedSpeed: "Raised shield speed", cyberWinBonus: "Cyber after wins"
   };
   return Object.entries(entry.modifiers).map(([key, value]) => {
+    if (key === "protectiveRebuild") {
+      return {
+        key,
+        label: "Armor / shield",
+        text: "Armor & shield rebuild at Regen rate",
+        good: true,
+        percent: 0
+      };
+    }
     const percent = Math.round((value - 1) * 100);
     const sign = percent > 0 ? "+" : "";
     const beneficialDown = key === "damageTaken" || key === "dodgeCooldown";

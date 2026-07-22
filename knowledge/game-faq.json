@@ -48,7 +48,7 @@
         "how does folding armor work",
         "armor deploy key"
       ],
-      "answer": "F deploys or retracts Retractable Armor (Main Armor) or Retractable Shell (Shield slot). While deployed you gain a separate armor HP pool added to your max and current HP, and move about 10% slower. Damage hits the armor pool first. It does not recharge mid-match; when emptied the plates fold away. You can equip both items, but there is one F toggle and the larger pool is used. Morph style matches Settings → Visual (Panel fold / Flying rearrangement / Nanotech)."
+      "answer": "F deploys or retracts Retractable Armor (Main Armor) or Retractable Shell (Shield slot). While deployed you gain a separate armor HP pool added to your max and current HP, and move about 10% slower. Damage hits the armor pool first. The pool normally does not recharge mid-match (Protective Rebuilding can refill it); when emptied the plates fold away. You can equip both items, but there is one F toggle and the larger pool is used. Morph style matches Settings → Visual (Panel fold / Flying rearrangement / Nanotech)."
     },
     {
       "id": "controls-shield",
@@ -61,7 +61,7 @@
         "how does blocking work",
         "shield controls"
       ],
-      "answer": "Press Q to raise or lower an equipped shield. While raised you cannot fire. It only blocks attacks from the front cone aligned with your aim; rear and flank hits still hurt. Durability is a per-match pool that does not recharge until the next match. If you equip Mechanical Modularity and morph to shield mode with E, Q raises the modular plate the same way."
+      "answer": "Press Q to raise or lower an equipped shield. While raised you cannot fire. It only blocks attacks from the front cone aligned with your aim; rear and flank hits still hurt. Durability is a per-match pool that normally does not recharge until the next match (Protective Rebuilding can refill it). If you equip Mechanical Modularity and morph to shield mode with E, Q raises the modular plate the same way."
     },
     {
       "id": "controls-modular",
@@ -443,7 +443,7 @@
         "broken shield",
         "block cone"
       ],
-      "answer": "Shields have a per-match block HP pool that does not refill mid-match. Raise with Q to block frontal hits only. Heavier shields soak more but slow you more while raised or when broken. A broken shield stays as dead weight and no longer blocks until the next match."
+      "answer": "Shields have a per-match block HP pool that normally does not refill mid-match (Protective Rebuilding can). Raise with Q to block frontal hits only. Heavier shields soak more but slow you more while raised or when broken. A broken shield stays as dead weight and no longer blocks until durability returns or the next match."
     },
     {
       "id": "equipment-buddy-modes",
@@ -468,7 +468,7 @@
         "level milestones",
         "what is a tradeoff perk"
       ],
-      "answer": "Perks are permanent tradeoffs unlocked by Conquest EXP level-ups. Each level grants a classic 3-choice pick; you unlock one. You and I each equip exactly one unlocked perk at a time. Most perks pair an upside with a real downside."
+      "answer": "Perks are permanent tradeoffs unlocked by Conquest EXP level-ups. Each level grants a classic 3-choice pick; you unlock one. You and I each equip exactly one unlocked perk at a time. Most perks pair an upside with a real downside. Example: Protective Rebuilding slowly refills armor and shield at Regen power-up rate, but you take more damage and jet fuel recharges slower."
     },
     {
       "id": "perks-buddy",

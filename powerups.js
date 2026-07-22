@@ -5,7 +5,7 @@
 
 import { SIZE, SIGHT } from "./config.js";
 import { spawnPowerCrateDebris, tryReconquerAtSpawn } from "./debris.js";
-import { healFighter } from "./equipment.js";
+import { healFighter, syncRetractableDisplayedHp } from "./equipment.js";
 import { POWER_CRATE_MAP, POWER_CRATE_SPAWNS } from "./maps.js";
 import { inBeamReveal, inDirectionalSight, hasLineOfSight } from "./vision.js";
 import { clamp, dist } from "./utils.js";
@@ -499,7 +499,9 @@ export function consumeOvercharge(fighter) {
  * Tick regen / timed buffs. Call once per fighter per frame.
  */
 export function tickFighterPowerBuffs(fighter, dt) {
-  if (!fighter?.powerBuffs || fighter.dead) return;
+  if (!fighter || fighter.dead) return;
+  tickProtectiveRebuilding(fighter, dt);
+  if (!fighter.powerBuffs) return;
   const buffs = fighter.powerBuffs;
 
   if (buffs.regen) {
@@ -523,6 +525,38 @@ export function tickFighterPowerBuffs(fighter, dt) {
     }
     if (buffs.counterSlash.remaining <= 0) delete buffs.counterSlash;
   }
+}
+
+/**
+ * Protective Rebuilding perk: refill retractable armor and shield durability at
+ * the same HP/s as the Regen power-up (does not heal core HP).
+ */
+export function tickProtectiveRebuilding(fighter, dt) {
+  if (!fighter || fighter.dead) return;
+  if (fighter.perkId !== "protective-rebuilding") return;
+  if (!(dt > 0)) return;
+  const amount = (REGEN_TOTAL / REGEN_DURATION) * dt;
+  let changed = false;
+
+  if (fighter.retractableMax > 0 && fighter.retractableHp < fighter.retractableMax) {
+    fighter.retractableHp = Math.min(
+      fighter.retractableMax,
+      (fighter.retractableHp || 0) + amount
+    );
+    changed = true;
+  }
+  if (
+    fighter.shieldMaxDurability > 0
+    && (fighter.shieldDurability || 0) < fighter.shieldMaxDurability
+  ) {
+    fighter.shieldDurability = Math.min(
+      fighter.shieldMaxDurability,
+      (fighter.shieldDurability || 0) + amount
+    );
+    if (fighter.shieldDurability > 0) fighter.shieldBroken = false;
+    changed = true;
+  }
+  if (changed) syncRetractableDisplayedHp(fighter);
 }
 
 /**
