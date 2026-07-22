@@ -893,7 +893,7 @@ export function tickGroundDebris(game, dt) {
     if (piece.despawnMode === "gone") continue;
 
     if (!piece.immortal && !piece.despawnMode) {
-      // Reconquer rate 1×–2× ages scraps into the queue that much faster.
+      // Reconquer rate 0.1×–10× ages scraps into the queue that much faster.
       const ageMult = style === "reconquer" ? reconquerRate(game) : 1;
       piece.life -= dt * ageMult;
       if (piece.life <= 0) {
