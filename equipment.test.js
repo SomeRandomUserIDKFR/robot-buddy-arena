@@ -274,4 +274,31 @@ const clone = (value) => structuredClone(value);
   assert.equal(migrated.equipment.player.body, "reactive-frame");
 }
 
+// Developer unlock-all overlays catalog without mutating permanent owned.
+{
+  const { ensureSettingsProfile } = await import("./settings.js");
+  const {
+    effectiveOwned, ownedForSlot, reconcileLoadoutsToOwned
+  } = await import("./equipment.js");
+  const profile = clone(DEFAULT_PROFILE);
+  ensureEquipmentProfile(profile, profile);
+  ensureSettingsProfile(profile, profile);
+  const permanentCount = profile.equipment.owned.length;
+  assert.equal(equipOwned(profile, "player", "weapon", "nanotech-rifle"), false);
+
+  profile.settings.developer.unlockAllGearTemporary = true;
+  assert.equal(effectiveOwned(profile).length, GEAR.length);
+  assert.ok(ownedForSlot(profile, "weapon").some((g) => g.id === "nanotech-rifle"));
+  assert.equal(equipOwned(profile, "player", "weapon", "nanotech-rifle"), true);
+  assert.equal(profile.equipment.player.weapon, "nanotech-rifle");
+  assert.equal(profile.equipment.owned.length, permanentCount, "permanent owned unchanged");
+  assert.equal(purchaseGear(profile, "nanotech-rifle").reason, "owned");
+
+  profile.settings.developer.unlockAllGearTemporary = false;
+  reconcileLoadoutsToOwned(profile);
+  assert.equal(profile.equipment.player.weapon, DEFAULT_LOADOUT.weapon);
+  assert.equal(equipOwned(profile, "player", "weapon", "nanotech-rifle"), false);
+  assert.equal(profile.equipment.owned.length, permanentCount);
+}
+
 console.log("Equipment suite passed.");

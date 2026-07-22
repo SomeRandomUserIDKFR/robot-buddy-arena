@@ -77,6 +77,9 @@ export const DEFAULT_PROFILE = {
       armorDespawnStyle: "fade",
       // Seconds before armor scraps despawn / build a dummy (tenths).
       armorDespawnTimer: 14
+    },
+    developer: {
+      unlockAllGearTemporary: false
     }
   },
   rewardedConquests: [],

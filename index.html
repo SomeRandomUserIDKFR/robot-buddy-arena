@@ -162,6 +162,7 @@
         <h2 id="settingsTitle">Settings</h2>
         <nav class="settings-tabs" aria-label="Settings sections">
           <button type="button" class="active" data-settings-tab="visual" aria-selected="true">Visual</button>
+          <button type="button" data-settings-tab="developer" aria-selected="false">Developer test</button>
         </nav>
         <section id="settingsVisualPanel" class="settings-tab-panel" aria-labelledby="settingsVisualHeading">
           <h3 id="settingsVisualHeading">Visual</h3>
@@ -279,6 +280,20 @@
               <span class="settings-number-input">
                 <input type="number" id="armorDespawnTimer" name="armorDespawnTimer" min="0.1" max="120" step="0.1" value="14.0">
                 <span class="settings-number-suffix">s</span>
+              </span>
+            </label>
+          </fieldset>
+        </section>
+        <section id="settingsDeveloperPanel" class="settings-tab-panel hidden" aria-labelledby="settingsDeveloperHeading">
+          <h3 id="settingsDeveloperHeading">Developer test</h3>
+          <fieldset class="settings-fieldset">
+            <legend>Gear unlocks</legend>
+            <p class="settings-hint">Temporary testing aids. Permanent purchases and owned gear stay unchanged.</p>
+            <label class="settings-toggle">
+              <input type="checkbox" id="unlockAllGearTemporary" name="unlockAllGearTemporary">
+              <span class="settings-toggle-copy">
+                <strong>Unlock all gear temporary</strong>
+                <small>When on, every catalog item is equippable. When off, bay and loadouts revert to your real owned gear.</small>
               </span>
             </label>
           </fieldset>

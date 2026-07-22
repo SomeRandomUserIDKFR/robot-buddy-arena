@@ -6,7 +6,7 @@ import { defaultQuickReplies, ensureCoaching } from "./coaching.js";
 import { FAQ_TOPIC_CHIPS } from "./game-faq.js";
 import { analyzerStatus, initializeLanguageAnalyzer } from "./language-analyzer.js";
 import {
-  effectiveStats, GEAR, GEAR_BY_ID, nanotechArmorHp, nanotechArmorMaxHp, ownedForSlot,
+  effectiveStats, effectiveOwned, GEAR, GEAR_BY_ID, nanotechArmorHp, nanotechArmorMaxHp, ownedForSlot,
   shieldStats, SLOT_LABELS, SLOT_ORDER, theoreticalDps, weaponKind, weaponStats
 } from "./equipment.js";
 import {
@@ -115,6 +115,8 @@ export const ui = {
   settingsBtn: $("#settingsBtn"),
   settingsCloseBtn: $("#settingsCloseBtn"),
   settingsVisualPanel: $("#settingsVisualPanel"),
+  settingsDeveloperPanel: $("#settingsDeveloperPanel"),
+  unlockAllGearTemporaryInput: $("#unlockAllGearTemporary"),
   modularMorphStyleInputs: [...document.querySelectorAll('input[name="modularMorphStyle"]')],
   debrisDespawnStyleInputs: [...document.querySelectorAll('input[name="debrisDespawnStyle"]')],
   reconquerRateInput: $("#reconquerRate"),
@@ -556,6 +558,9 @@ export function refreshSettings(profile) {
   if (ui.armorDespawnTimerInput) {
     ui.armorDespawnTimerInput.value = armorTimer.toFixed(1);
   }
+  if (ui.unlockAllGearTemporaryInput) {
+    ui.unlockAllGearTemporaryInput.checked = !!profile.settings.developer?.unlockAllGearTemporary;
+  }
 }
 
 export function showSettings(open) {
@@ -595,7 +600,7 @@ function slotsMarkup(profile, owner) {
   const loadout = equipment[owner];
   const locked = owner === "buddy" && equipment.buddyMode === "choice";
   return SLOT_ORDER.map((slot) => {
-    const options = ownedForSlot(equipment, slot);
+    const options = ownedForSlot(profile, slot);
     return `
       <div class="gear-slot">
         <div class="slot-label">${escapeHtml(SLOT_LABELS[slot])}</div>
@@ -830,16 +835,18 @@ export function renderShop(profile) {
         <button type="button" class="scroll-arrow prev" data-scroll-dir="-1" aria-label="Previous shop items">‹</button>
         <div class="shop-row hidden-scroll-row" tabindex="0" aria-label="${escapeHtml(SLOT_LABELS[slot])} shop items">
           ${GEAR.filter((gear) => gear.slot === slot).map((gear) => {
-            const owned = profile.equipment.owned.includes(gear.id);
+            const owned = effectiveOwned(profile).includes(gear.id);
+            const permanentlyOwned = profile.equipment.owned.includes(gear.id);
             const equipped = profile.equipment.player[slot] === gear.id
               || profile.equipment.buddy[slot] === gear.id;
+            const unlockLabel = owned && !permanentlyOwned ? "TEMP" : owned ? (equipped ? "EQUIPPED" : "OWNED") : `${gear.price}¢`;
             return `<article class="shop-card ${owned ? "owned" : ""}" data-shop-id="${gear.id}">
               <div class="shop-card-top"><strong>${escapeHtml(gear.name)}</strong>
-                <span>${owned ? (equipped ? "EQUIPPED" : "OWNED") : `${gear.price}¢`}</span></div>
+                <span>${unlockLabel}</span></div>
               <p>${escapeHtml(gear.tradeoff)}</p>
               <div class="modifier-list">${modifierMarkup(gear)}</div>
               <button type="button" data-buy="${gear.id}" ${owned || !gear.price ? "disabled" : ""}>
-                ${owned ? "Unlocked" : `Buy · ${gear.price}¢`}
+                ${owned ? (permanentlyOwned ? "Unlocked" : "Temp unlock") : `Buy · ${gear.price}¢`}
               </button>
             </article>`;
           }).join("")}
@@ -1091,8 +1098,9 @@ export function bindUi(handlers) {
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", String(active));
     }
-    const visual = tab.dataset.settingsTab === "visual";
-    ui.settingsVisualPanel?.classList.toggle("hidden", !visual);
+    const which = tab.dataset.settingsTab;
+    ui.settingsVisualPanel?.classList.toggle("hidden", which !== "visual");
+    ui.settingsDeveloperPanel?.classList.toggle("hidden", which !== "developer");
   });
   ui.settingsModal?.addEventListener("change", (event) => {
     const morph = event.target.closest('input[name="modularMorphStyle"]');
@@ -1118,6 +1126,11 @@ export function bindUi(handlers) {
     const armorTimer = event.target.closest('input[name="armorDespawnTimer"]');
     if (armorTimer) {
       handlers.settingsChange?.({ armorDespawnTimer: armorTimer.value });
+      return;
+    }
+    const unlockAll = event.target.closest('input[name="unlockAllGearTemporary"]');
+    if (unlockAll) {
+      handlers.settingsChange?.({ unlockAllGearTemporary: unlockAll.checked });
     }
   });
   ui.reconquerRateInput?.addEventListener("input", () => {

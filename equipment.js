@@ -915,7 +915,7 @@ export function ensureEconomyProfile(profile, saved = profile) {
 export function purchaseGear(profile, gearId) {
   const gear = GEAR_BY_ID[gearId];
   if (!gear || !Number.isInteger(gear.price)) return { ok: false, reason: "not-for-sale" };
-  if (profile.equipment.owned.includes(gearId)) return { ok: false, reason: "owned" };
+  if (effectiveOwned(profile).includes(gearId)) return { ok: false, reason: "owned" };
   if (profile.cyber < gear.price) return {
     ok: false, reason: "insufficient", shortfall: gear.price - profile.cyber
   };
@@ -928,7 +928,7 @@ export function equipOwned(profile, owner, slot, gearId) {
   const gear = GEAR_BY_ID[gearId];
   if (!["player", "buddy"].includes(owner)
     || gear?.slot !== slot
-    || !profile.equipment.owned.includes(gearId)
+    || !effectiveOwned(profile).includes(gearId)
     || (owner === "buddy" && profile.equipment.buddyMode === "choice")) return false;
   profile.equipment[owner][slot] = gearId;
   if (owner === "buddy" && profile.equipment.buddyMode === "suggested"
@@ -936,6 +936,34 @@ export function equipOwned(profile, owner, slot, gearId) {
     profile.equipment.suggestion.loadout[slot] = gearId;
   }
   return true;
+}
+
+/**
+ * Owned ids usable right now. Developer "unlock all gear temporary" overlays the
+ * catalog without mutating permanent profile.equipment.owned.
+ */
+export function effectiveOwned(profile) {
+  if (profile?.settings?.developer?.unlockAllGearTemporary) {
+    return GEAR.map((gear) => gear.id);
+  }
+  return Array.isArray(profile?.equipment?.owned) ? profile.equipment.owned : [];
+}
+
+/** After turning unlock off, strip loadout slots that are not permanently owned. */
+export function reconcileLoadoutsToOwned(profile) {
+  const owned = Array.isArray(profile?.equipment?.owned) ? profile.equipment.owned : [];
+  for (const owner of ["player", "buddy"]) {
+    const loadout = profile.equipment[owner];
+    if (!loadout) continue;
+    profile.equipment[owner] = normalizeLoadout(loadout, owned);
+    profile.equipment[owner].perk = loadout.perk ?? null;
+  }
+  if (profile.equipment.suggestion?.loadout) {
+    profile.equipment.suggestion.loadout = normalizeLoadout(
+      profile.equipment.suggestion.loadout, owned
+    );
+  }
+  return profile;
 }
 
 /**
@@ -982,8 +1010,11 @@ export function awardConquest(profile, result, random = Math.random) {
   };
 }
 
-export function ownedForSlot(equipment, slot) {
-  return GEAR.filter((gear) => gear.slot === slot && equipment.owned.includes(gear.id));
+export function ownedForSlot(profileOrEquipment, slot) {
+  const owned = profileOrEquipment?.equipment
+    ? effectiveOwned(profileOrEquipment)
+    : (profileOrEquipment?.owned || []);
+  return GEAR.filter((gear) => gear.slot === slot && owned.includes(gear.id));
 }
 
 function evidenceStyle(profile, playerLoadout) {
@@ -999,11 +1030,14 @@ function evidenceStyle(profile, playerLoadout) {
   return "balanced";
 }
 
-function pickOwned(equipment, slot, preferences = []) {
+function pickOwned(profileOrEquipment, slot, preferences = []) {
+  const owned = profileOrEquipment?.equipment
+    ? effectiveOwned(profileOrEquipment)
+    : (profileOrEquipment?.owned || []);
   return (preferences || []).find((id) => (
-    equipment.owned.includes(id) && GEAR_BY_ID[id]?.slot === slot
-  )) || ownedForSlot(equipment, slot)[0]?.id || (
-    equipment.owned.includes(DEFAULT_LOADOUT[slot]) ? DEFAULT_LOADOUT[slot] : null
+    owned.includes(id) && GEAR_BY_ID[id]?.slot === slot
+  )) || ownedForSlot(profileOrEquipment, slot)[0]?.id || (
+    owned.includes(DEFAULT_LOADOUT[slot]) ? DEFAULT_LOADOUT[slot] : null
   ) || DEFAULT_LOADOUT[slot];
 }
 
@@ -1058,7 +1092,7 @@ export function suggestBuddyLoadout(profile) {
         ]
       };
   const loadout = Object.fromEntries(
-    SLOT_ORDER.map((slot) => [slot, pickOwned(equipment, slot, preferences[slot])])
+    SLOT_ORDER.map((slot) => [slot, pickOwned(profile, slot, preferences[slot])])
   );
   const reason = style === "ranged"
     ? "You seem to fight at range, so I favor awareness and reliable reach. I may be wrong."
@@ -1084,7 +1118,7 @@ export function setBuddyMode(profile, mode) {
 export function acceptSuggestion(profile) {
   const suggestion = profile.equipment.suggestion;
   if (suggestion) profile.equipment.buddy = normalizeLoadout(
-    suggestion.loadout, profile.equipment.owned
+    suggestion.loadout, effectiveOwned(profile)
   );
 }
 

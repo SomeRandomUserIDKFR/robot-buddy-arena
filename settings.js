@@ -52,9 +52,15 @@ export function normalizeArmorDespawnTimer(value) {
   return Math.round(clamped * 10) / 10;
 }
 
+export function normalizeUnlockAllGearTemporary(value) {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
 export function ensureSettingsProfile(profile, saved = profile) {
   const defaults = DEFAULT_PROFILE.settings.visual;
   const visual = { ...defaults, ...(saved?.settings?.visual || {}) };
+  const developerDefaults = DEFAULT_PROFILE.settings.developer;
+  const developer = { ...developerDefaults, ...(saved?.settings?.developer || {}) };
   profile.settings = {
     visual: {
       modularMorphStyle: normalizeModularMorphStyle(
@@ -65,6 +71,11 @@ export function ensureSettingsProfile(profile, saved = profile) {
       reconquerRate: normalizeReconquerRate(visual.reconquerRate),
       armorDespawnStyle: normalizeArmorDespawnStyle(visual.armorDespawnStyle),
       armorDespawnTimer: normalizeArmorDespawnTimer(visual.armorDespawnTimer)
+    },
+    developer: {
+      unlockAllGearTemporary: normalizeUnlockAllGearTemporary(
+        developer.unlockAllGearTemporary
+      )
     }
   };
   return profile.settings;
@@ -83,6 +94,11 @@ export function cloneSettings(settings) {
       reconquerRate: normalizeReconquerRate(settings?.visual?.reconquerRate),
       armorDespawnStyle: normalizeArmorDespawnStyle(settings?.visual?.armorDespawnStyle),
       armorDespawnTimer: normalizeArmorDespawnTimer(settings?.visual?.armorDespawnTimer)
+    },
+    developer: {
+      unlockAllGearTemporary: normalizeUnlockAllGearTemporary(
+        settings?.developer?.unlockAllGearTemporary
+      )
     }
   };
 }

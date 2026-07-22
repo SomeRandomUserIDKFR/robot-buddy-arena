@@ -5,7 +5,8 @@ import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
   acceptSuggestion, applyLoadout, awardConquest, cycleModularMode, equipOwned,
-  hasNanotechChestplate, purchaseGear, setBuddyMode, setNanotechChanneling,
+  hasNanotechChestplate, purchaseGear, reconcileLoadoutsToOwned, setBuddyMode,
+  setNanotechChanneling,
   toggleRetractableArmor, toggleShieldRaise, trainerLoadout, weaponKind
 } from "./equipment.js";
 import { tickGroundDebris } from "./debris.js";
@@ -31,7 +32,7 @@ import { profile, saveProfile } from "./storage.js";
 import {
   cloneSettings, ensureSettingsProfile, normalizeArmorDespawnStyle,
   normalizeArmorDespawnTimer, normalizeDebrisDespawnStyle,
-  normalizeModularMorphStyle, normalizeReconquerRate
+  normalizeModularMorphStyle, normalizeReconquerRate, normalizeUnlockAllGearTemporary
 } from "./settings.js";
 import {
   bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, refreshSettings, showBuildStamp,
@@ -504,7 +505,7 @@ bindUi({
   },
   settingsChange({
     modularMorphStyle, debrisDespawnStyle, reconquerRate,
-    armorDespawnStyle, armorDespawnTimer
+    armorDespawnStyle, armorDespawnTimer, unlockAllGearTemporary
   } = {}) {
     ensureSettingsProfile(profile);
     if (modularMorphStyle != null) {
@@ -522,8 +523,17 @@ bindUi({
     if (armorDespawnTimer != null) {
       profile.settings.visual.armorDespawnTimer = normalizeArmorDespawnTimer(armorDespawnTimer);
     }
+    let gearUnlockChanged = false;
+    if (unlockAllGearTemporary != null) {
+      const next = normalizeUnlockAllGearTemporary(unlockAllGearTemporary);
+      const prev = !!profile.settings.developer.unlockAllGearTemporary;
+      profile.settings.developer.unlockAllGearTemporary = next;
+      if (prev && !next) reconcileLoadoutsToOwned(profile);
+      gearUnlockChanged = prev !== next;
+    }
     saveProfile();
     refreshSettings(profile);
+    if (gearUnlockChanged) refreshMenu(profile);
     if (game) game.settings = cloneSettings(profile.settings);
   },
   coaching: async (text, weapon) => {
