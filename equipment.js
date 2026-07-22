@@ -924,8 +924,9 @@ export function tickNanotech(fighter, dt) {
     armor -= flow;
     free += flow;
   } else if (free + armor + weapon < max) {
-    // Rebuild destroyed bots while idle (not firing) and out of combat.
+    // Rebuild destroyed bots only while not trying to shoot and out of combat.
     const canRegen = (fighter.nanotechHitCooldown || 0) <= 0
+      && !fighter.nanotechWantFire
       && (fighter.attackCd || 0) <= 0;
     if (canRegen) {
       const room = Math.max(0, max - free - armor - weapon);
@@ -1475,6 +1476,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.nanotechWeaponAbsorbing = false;
   fighter.nanotechAbsorbStart = 0;
   fighter.nanotechHitCooldown = 0;
+  fighter.nanotechWantFire = false;
   fighter.nanotechArmorSpawning = false;
   fighter.nanotechArmorSpawnT = 1;
   fighter.nanotechSwordDissolveT = 0;

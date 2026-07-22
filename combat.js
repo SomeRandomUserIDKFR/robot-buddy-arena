@@ -431,6 +431,12 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   fighter.shieldFlash -= dt;
   tickModularWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
+  // Humans: know fire intent before nanotech tick so hold-to-shoot blocks regen.
+  let intent = null;
+  if (fighter.human && getHumanIntent) {
+    intent = getHumanIntent(fighter);
+    fighter.nanotechWantFire = !!intent.attack;
+  }
   tickNanotech(fighter, dt);
   if (
     fighter.modularWeapon
@@ -440,9 +446,12 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
     fighter.modularPlateDurability = fighter.shieldDurability;
     fighter.modularPlateBroken = !!fighter.shieldBroken;
   }
-  const intent = fighter.human
-    ? getHumanIntent(fighter)
-    : updateAI(fighter, dt, game, profile);
+  if (!intent) {
+    intent = fighter.human
+      ? getHumanIntent(fighter)
+      : updateAI(fighter, dt, game, profile);
+  }
+  fighter.nanotechWantFire = !!intent.attack;
   const aimDelta = fighter.lastAim == null ? Infinity : Math.abs(angleDiff(fighter.aim, fighter.lastAim));
   fighter.aimSettle = aimDelta <= .012
     ? Math.min(fighter.aimSettleRequired || 0, (fighter.aimSettle || 0) + dt)

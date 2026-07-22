@@ -182,13 +182,19 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(sniper.nanotechWeaponAbsorbing, false);
   assert.ok(sniper.nanobotFree + 1e-6 >= freeBefore - 20 + 175);
 
-  // Slow regen while gun can stay formed — blocked while firing or recently hit.
+  // Slow regen blocked while holding fire (wantFire), on attackCd, or recently hit.
   fighter.nanobotArmor = 40;
   fighter.nanobotFree = 100;
   fighter.nanobotWeapon = 100;
   fighter.nanotechHitCooldown = 0;
-  fighter.attackCd = 0.5;
+  fighter.attackCd = 0;
+  fighter.nanotechWantFire = true;
   const blockedBefore = fighter.nanobotFree;
+  tickNanotech(fighter, 0.4);
+  assert.equal(fighter.nanobotFree, blockedBefore, "no regen while holding fire");
+
+  fighter.nanotechWantFire = false;
+  fighter.attackCd = 0.5;
   tickNanotech(fighter, 0.4);
   assert.equal(fighter.nanobotFree, blockedBefore, "no regen while attackCd active");
 
