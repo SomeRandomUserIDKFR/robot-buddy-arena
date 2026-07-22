@@ -601,12 +601,14 @@ function beginArmorDespawn(game, piece) {
 
 /**
  * Melt a broken armor set into a metal training dummy near the scrap pile.
- * Stands on a real floor (not the mid-air average of multi-height debris).
+ * Uses the same furnace cinematic as metal reconquer, then stands the dummy
+ * on a real floor (not the mid-air average of multi-height debris).
  */
 export function beginArmorDummyBuild(game, piece) {
   if (!game || !piece?.sourceId) return null;
-  game.armorDummyBuilds ||= [];
-  if (game.armorDummyBuilds.some((build) => build.sourceId === piece.sourceId)) return null;
+  game.forgeCasts ||= [];
+  if (game.forgeCasts.some((forge) => forge.sourceId === piece.sourceId)) return null;
+  if (game.armorDummyBuilds?.some((build) => build.sourceId === piece.sourceId)) return null;
 
   const group = piecesForSource(game, piece.sourceId).filter((p) => p.material === "armor");
   if (!group.length) return null;
@@ -632,22 +634,20 @@ export function beginArmorDummyBuild(game, piece) {
     targetX,
     targetY,
     color,
-    armorMaxHp,
-    phase: "melt",
-    t: 0,
-    cool: 0
+    armorMaxHp
   };
-  game.armorDummyBuilds.push(build);
 
-  for (const scrap of group) {
-    scrap.despawnMode = "build-dummy-melt";
-    scrap.despawnT = 0;
-    scrap.grounded = false;
-    scrap.homeX = targetX;
-    scrap.homeY = targetY;
-    scrap.scale = 1;
-    scrap.alpha = 1;
-  }
+  beginMetalForgeCast(game, {
+    sourceId: piece.sourceId,
+    sourceType: "armor",
+    sourceKind: "armorDummy",
+    castX: targetX,
+    castY: targetY,
+    castW: dummyW,
+    castH: dummyH,
+    finalColor: color,
+    restore: () => finishArmorDummyBuild(game, build)
+  });
   return build;
 }
 

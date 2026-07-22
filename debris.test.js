@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-  ARMOR_DUMMY_COOL_DURATION, ARMOR_DUMMY_MELT_DURATION, buildPropJigsaw, damageArmorDummy,
+  ARMOR_DUMMY_COOL_DURATION, buildPropJigsaw, damageArmorDummy,
   forgeCastColor, FORGE_PHASE_DURATIONS, NON_ARMOR_DEBRIS_LIFE, pickNearbyRestoreProp,
   PROP_DEBRIS_COLORS, pullSpawnTowardOrigin, RECONQUER_BONUS_INTERVAL, RECONQUER_NEAR_RANGE,
   restoreMapProp, spawnBrokenArmorDebris, spawnPropDebris, tickGroundDebris,
@@ -186,7 +186,7 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   assert.equal(game.groundDebris.length, 0, "armor fade clears scraps");
 }
 
-// Build dummy melts armor scraps into a lasting metal training dummy.
+// Build dummy: furnace ingests armor scraps, then casts a lasting training dummy.
 {
   const fighter = applyLoadout(new Fighter({
     x: 400, y: 300, team: 0, aim: 0
@@ -205,6 +205,7 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
     props: [],
     groundDebris: [],
     effects: [],
+    forgeCasts: [],
     armorDummyBuilds: [],
     armorDummies: []
   };
@@ -213,14 +214,15 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   assert.ok(game.groundDebris.every((p) => p.material === "armor" && !p.immortal));
   for (const piece of game.groundDebris) piece.life = 0.01;
   tickGroundDebris(game, 0.02);
-  assert.ok(game.armorDummyBuilds.length >= 1, "dummy melt starts");
-  assert.ok(game.groundDebris.every((p) => p.despawnMode === "build-dummy-melt"));
-  for (let i = 0; i < Math.ceil(ARMOR_DUMMY_MELT_DURATION * 60) + 5; i++) {
+  assert.ok(game.forgeCasts.length >= 1, "armor build starts a furnace cast");
+  assert.ok(game.groundDebris.every((p) => p.despawnMode === "forge-ingest"));
+  const totalForge = Object.values(FORGE_PHASE_DURATIONS).reduce((a, b) => a + b, 0);
+  for (let i = 0; i < Math.ceil(totalForge * 60) + 10; i++) {
     tickGroundDebris(game, 1 / 60);
   }
-  assert.equal(game.groundDebris.length, 0, "scraps consumed by dummy");
+  assert.equal(game.groundDebris.length, 0, "scraps consumed by furnace");
   assert.ok(game.armorDummies.length >= 1, "training dummy spawned");
-  assert.equal(game.armorDummyBuilds.length, 0);
+  assert.equal(game.forgeCasts.length, 0);
   const dummy = game.armorDummies[0];
   assert.equal(dummy.maxHp, fighter.retractableMax, "dummy HP matches full armor pool");
   assert.equal(dummy.hp, fighter.retractableMax);
@@ -234,7 +236,7 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   assert.ok(game.groundDebris.every((p) => p.armorMaxHp === fighter.retractableMax));
   for (const piece of game.groundDebris) piece.life = 0.01;
   tickGroundDebris(game, 0.02);
-  for (let i = 0; i < Math.ceil((ARMOR_DUMMY_MELT_DURATION + ARMOR_DUMMY_COOL_DURATION) * 60) + 5; i++) {
+  for (let i = 0; i < Math.ceil((totalForge + ARMOR_DUMMY_COOL_DURATION) * 60) + 10; i++) {
     tickGroundDebris(game, 1 / 60);
   }
   assert.ok(game.armorDummies.length >= 1, "remelted into a new dummy");
@@ -259,6 +261,7 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
     props: [],
     groundDebris: [],
     effects: [],
+    forgeCasts: [],
     armorDummyBuilds: [],
     armorDummies: []
   };
@@ -303,13 +306,14 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
     });
   }
   tickGroundDebris(game, 0.02);
-  assert.ok(game.armorDummyBuilds.length >= 1, "multi-height melt starts");
-  const build = game.armorDummyBuilds[0];
+  assert.ok(game.forgeCasts.length >= 1, "multi-height furnace starts");
+  const forge = game.forgeCasts[0];
   assert.ok(
-    Math.abs(build.targetY - (upper.y - 58 * 0.5)) < 1,
-    "build target snaps to upper floor, not scrap average"
+    Math.abs(forge.castY - (upper.y - 58 * 0.5)) < 1,
+    "forge cast snaps to upper floor, not scrap average"
   );
-  for (let i = 0; i < Math.ceil(ARMOR_DUMMY_MELT_DURATION * 60) + 5; i++) {
+  const totalForge = Object.values(FORGE_PHASE_DURATIONS).reduce((a, b) => a + b, 0);
+  for (let i = 0; i < Math.ceil(totalForge * 60) + 10; i++) {
     tickGroundDebris(game, 1 / 60);
   }
   const dummy = game.armorDummies[0];
