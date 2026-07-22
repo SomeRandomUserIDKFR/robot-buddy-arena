@@ -92,8 +92,8 @@ export const MATERIAL_CONSUMER_CHUCK_DAMAGE = 10;
 export const MATERIAL_CONSUMER_CHUCK_SPEED = 1100;
 /** Hold-RMB debris beam fire rate (scraps/min). */
 export const MATERIAL_CONSUMER_BEAM_RPM = 480;
-/** Cap on excess scraps stored while holding V (~10 objects' worth). */
-export const MATERIAL_CONSUMER_EJECTION_TANK_CAP = 10;
+/** Cap on excess scraps stored while holding V (~10 pipes / ~160 tiles). */
+export const MATERIAL_CONSUMER_EJECTION_TANK_CAP = 160;
 export const MATERIAL_CONSUMER_ID = "material-consumer-nanotech";
 export { THROW_BREAKABLE_ID } from "./throw-breakable.js";
 export const NO_SECONDARY_ID = "no-secondary";
