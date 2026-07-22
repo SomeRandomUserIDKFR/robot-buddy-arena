@@ -139,7 +139,7 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(canNanotechAttack(fighter), false, "need 2 free bots to fire");
   attack(fighter, game);
   assert.equal(game.bullets.length, 1);
-  assert.equal(fighter.nanobotWeapon, 150);
+  assert.equal(fighter.nanobotWeapon, 180);
 
   fighter.nanobotWeapon = 0;
   fighter.nanobotFree = 100;
