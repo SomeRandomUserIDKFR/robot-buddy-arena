@@ -268,8 +268,8 @@ function update(dt) {
   game.elapsed += dt;
   game.announcement -= dt;
   game.thoughtClock -= dt;
-  // Drive nanotech channel from live F key so a missed keyup can't stick CHANNEL…
   const player = game.fighters[0];
+  // Drive nanotech channel from live F key so a missed keyup can't stick CHANNEL…
   if (player && hasNanotechChestplate(player) && !player.dead) {
     setNanotechChanneling(player, !!keys.KeyF);
   }
@@ -312,7 +312,6 @@ function update(dt) {
     game.thoughtClock = 10 + Math.random() * 8;
   }
 
-  const player = game.fighters[0];
   updateCamera(game.camera, player, { width: canvas.width, height: canvas.height }, dt);
   updateHud(game);
 
