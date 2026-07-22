@@ -53,7 +53,8 @@ import { profile, saveProfile } from "./storage.js";
 import {
   cloneSettings, ensureSettingsProfile, normalizeArmorDespawnStyle,
   normalizeArmorDespawnTimer, normalizeDebrisDespawnStyle,
-  normalizeModularMorphStyle, normalizeReconquerRate, normalizeUnlockAllGearTemporary
+  normalizeModularMorphStyle, normalizeOptimizeIllusions, normalizeReconquerRate,
+  normalizeUnlockAllGearTemporary
 } from "./settings.js";
 import {
   bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, refreshSettings, showBuildStamp,
@@ -622,7 +623,7 @@ bindUi({
   },
   settingsChange({
     modularMorphStyle, debrisDespawnStyle, reconquerRate,
-    armorDespawnStyle, armorDespawnTimer, unlockAllGearTemporary
+    armorDespawnStyle, armorDespawnTimer, optimizeIllusions, unlockAllGearTemporary
   } = {}) {
     ensureSettingsProfile(profile);
     if (modularMorphStyle != null) {
@@ -639,6 +640,9 @@ bindUi({
     }
     if (armorDespawnTimer != null) {
       profile.settings.visual.armorDespawnTimer = normalizeArmorDespawnTimer(armorDespawnTimer);
+    }
+    if (optimizeIllusions != null) {
+      profile.settings.gameplay.optimizeIllusions = normalizeOptimizeIllusions(optimizeIllusions);
     }
     let gearUnlockChanged = false;
     if (unlockAllGearTemporary != null) {

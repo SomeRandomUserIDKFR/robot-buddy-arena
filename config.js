@@ -78,6 +78,10 @@ export const DEFAULT_PROFILE = {
       // Seconds before armor scraps despawn / build a dummy (tenths).
       armorDespawnTimer: 14
     },
+    gameplay: {
+      // Light decoy AI, no summon team-vision, leaner Illusionist/Doppel draw.
+      optimizeIllusions: true
+    },
     developer: {
       unlockAllGearTemporary: false
     }

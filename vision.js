@@ -3,6 +3,7 @@ import { isCombatClone } from "./combat-clone.js";
 import { isIllusionFighter } from "./illusionist.js";
 import { inLightCondensationReveal } from "./light-condensation.js";
 import { sightBlockers } from "./maps.js";
+import { optimizeIllusionsEnabled } from "./settings.js";
 import { angleDiff, dist, segmentHitsBox } from "./utils.js";
 
 function cachedSightBlockers(game) {
@@ -57,12 +58,13 @@ function canSeeTarget(game, observer, target) {
 }
 
 export function visibleToTeam(game, observer, target) {
-  // Decoys / Doppels must not act as extra team eyes (LOS cost + unfair reveal).
+  // With Optimize illusions: decoys / Doppels must not act as extra team eyes.
+  const skipSummons = optimizeIllusionsEnabled(game);
   return game.fighters.some(
     (fighter) => (
       !fighter.dead
-      && !isIllusionFighter(fighter)
-      && !isCombatClone(fighter)
+      && !(skipSummons && isIllusionFighter(fighter))
+      && !(skipSummons && isCombatClone(fighter))
       && fighter.team === observer.team
       && canSeeTarget(game, fighter, target)
     )
