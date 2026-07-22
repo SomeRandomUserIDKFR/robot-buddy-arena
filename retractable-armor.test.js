@@ -124,7 +124,7 @@ function finishMorph(fighter) {
   assert.equal(defender.retractableHp, armorBefore - 35);
 }
 
-// Breaking armor drops lasting helmet/plate debris for the match.
+// Breaking armor drops helmet/plate debris that despawns via Armor disappear settings.
 {
   const fighter = applyLoadout(new Fighter({
     x: 400, y: 300, team: 0, aim: 0, vx: 40
@@ -135,7 +135,15 @@ function finishMorph(fighter) {
     platforms: [{ x: 0, y: 500, w: 2000, h: 40 }],
     props: [],
     groundDebris: [],
-    effects: []
+    effects: [],
+    settings: {
+      visual: {
+        armorDespawnStyle: "fade",
+        armorDespawnTimer: 30
+      }
+    },
+    armorDummyBuilds: [],
+    armorDummies: []
   };
   applyHpDamage(fighter, fighter.retractableHp, game);
   assert.equal(fighter.retractableHp, 0);
@@ -144,8 +152,9 @@ function finishMorph(fighter) {
   assert.ok(game.groundDebris.some((piece) => piece.kind === "helmet"));
   assert.ok(game.groundDebris.some((piece) => piece.kind === "breast"));
   assert.ok(game.effects.some((effect) => effect.type === "debris" && effect.kind === "armor"));
+  assert.ok(game.groundDebris.every((piece) => !piece.immortal && piece.life <= 30));
 
-  // Pieces settle on the platform and stay for the match (no life expiry).
+  // Pieces settle on the platform while waiting out the armor timer.
   for (let i = 0; i < 120; i++) tickGroundDebris(game, 1 / 60);
   assert.ok(game.groundDebris.every((piece) => piece.grounded));
   assert.equal(game.groundDebris.length >= 8, true);

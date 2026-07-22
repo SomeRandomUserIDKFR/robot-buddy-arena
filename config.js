@@ -73,7 +73,10 @@ export const DEFAULT_PROFILE = {
       modularMorphStyle: "fold",
       debrisDespawnStyle: "fade",
       // 0.1×–10× baseline reconquer cadence (1× = default).
-      reconquerRate: 1
+      reconquerRate: 1,
+      armorDespawnStyle: "fade",
+      // Seconds before armor scraps despawn / build a dummy (tenths).
+      armorDespawnTimer: 14
     }
   },
   rewardedConquests: [],

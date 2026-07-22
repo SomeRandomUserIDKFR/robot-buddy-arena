@@ -28,7 +28,8 @@ import {
 import { createRenderer } from "./rendering.js";
 import { profile, saveProfile } from "./storage.js";
 import {
-  cloneSettings, ensureSettingsProfile, normalizeDebrisDespawnStyle,
+  cloneSettings, ensureSettingsProfile, normalizeArmorDespawnStyle,
+  normalizeArmorDespawnTimer, normalizeDebrisDespawnStyle,
   normalizeModularMorphStyle, normalizeReconquerRate
 } from "./settings.js";
 import {
@@ -136,6 +137,8 @@ function makeGame(mode) {
     groundDebris: [],
     reconquerQueue: [],
     forgeCasts: [],
+    armorDummyBuilds: [],
+    armorDummies: [],
     reconquerBonusAcc: 0,
     beamReveals: [],
     pings: [],
@@ -483,7 +486,10 @@ bindUi({
   refreshSettings() {
     refreshSettings(profile);
   },
-  settingsChange({ modularMorphStyle, debrisDespawnStyle, reconquerRate } = {}) {
+  settingsChange({
+    modularMorphStyle, debrisDespawnStyle, reconquerRate,
+    armorDespawnStyle, armorDespawnTimer
+  } = {}) {
     ensureSettingsProfile(profile);
     if (modularMorphStyle != null) {
       profile.settings.visual.modularMorphStyle = normalizeModularMorphStyle(modularMorphStyle);
@@ -493,6 +499,12 @@ bindUi({
     }
     if (reconquerRate != null) {
       profile.settings.visual.reconquerRate = normalizeReconquerRate(reconquerRate);
+    }
+    if (armorDespawnStyle != null) {
+      profile.settings.visual.armorDespawnStyle = normalizeArmorDespawnStyle(armorDespawnStyle);
+    }
+    if (armorDespawnTimer != null) {
+      profile.settings.visual.armorDespawnTimer = normalizeArmorDespawnTimer(armorDespawnTimer);
     }
     saveProfile();
     refreshSettings(profile);

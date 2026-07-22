@@ -198,7 +198,7 @@
           </fieldset>
           <fieldset class="settings-fieldset">
             <legend>Debris disappear</legend>
-            <p class="settings-hint">Non-armor scraps (wood, metal, plants) leave after a short while. Armor plates stay for the match.</p>
+            <p class="settings-hint">Non-armor scraps (wood, metal, plants) leave after a short while. Armor plates use Armor disappear below.</p>
             <label class="settings-choice">
               <input type="radio" name="debrisDespawnStyle" value="fade" checked>
               <span class="settings-choice-copy">
@@ -239,6 +239,48 @@
                 </span>
               </div>
             </div>
+          </fieldset>
+          <fieldset class="settings-fieldset">
+            <legend>Armor disappear</legend>
+            <p class="settings-hint">Broken retractable-armor plates leave after the timer, using the style below.</p>
+            <label class="settings-choice">
+              <input type="radio" name="armorDespawnStyle" value="fade" checked>
+              <span class="settings-choice-copy">
+                <strong>Fade out</strong>
+                <small>Plates quietly fade away.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="armorDespawnStyle" value="shrink">
+              <span class="settings-choice-copy">
+                <strong>Shrink out</strong>
+                <small>Plates collapse into nothing.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="armorDespawnStyle" value="decimate">
+              <span class="settings-choice-copy">
+                <strong>Decimate</strong>
+                <small>Thanos-snap scatter — fragments fling off and vanish.</small>
+              </span>
+            </label>
+            <label class="settings-choice">
+              <input type="radio" name="armorDespawnStyle" value="buildDummy">
+              <span class="settings-choice-copy">
+                <strong>Build dummy</strong>
+                <small>Melts the chunks into a metal training dummy.</small>
+              </span>
+            </label>
+            <label class="settings-number" id="armorDespawnTimerControl">
+              <span class="settings-slider-copy">
+                <strong>Armor timer</strong>
+                <small>Seconds before armor scraps despawn or forge a dummy (tenths).</small>
+              </span>
+              <span class="settings-number-input">
+                <input type="number" id="armorDespawnTimer" name="armorDespawnTimer" min="0.1" max="120" step="0.1" value="14.0">
+                <span class="settings-number-suffix">s</span>
+              </span>
+            </label>
           </fieldset>
         </section>
         <div class="button-row settings-actions">

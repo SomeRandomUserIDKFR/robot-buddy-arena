@@ -1,14 +1,20 @@
 /**
- * Match ground debris: armor plates (persist), plus non-armor scraps that
- * despawn via Settings → Visual → Debris disappear (fade / shrink / decimate / reconquer).
+ * Match ground debris: non-armor scraps (Debris disappear) and armor plates
+ * (Armor disappear — fade / shrink / decimate / build dummy).
  */
 import { GRAVITY, SIZE, WORLD } from "./config.js";
-import { normalizeDebrisDespawnStyle, normalizeReconquerRate } from "./settings.js";
+import {
+  normalizeArmorDespawnStyle, normalizeArmorDespawnTimer,
+  normalizeDebrisDespawnStyle, normalizeReconquerRate
+} from "./settings.js";
 import { clamp } from "./utils.js";
 
 export const NON_ARMOR_DEBRIS_LIFE = 14;
 export const DEBRIS_DESPAWN_DURATION = 1.05;
 export const RECONQUER_DURATION = 1.45;
+export const ARMOR_DUMMY_MELT_DURATION = 0.95;
+export const ARMOR_DUMMY_COOL_DURATION = 1.1;
+export const ARMOR_DUMMY_METAL = "#7a848e";
 /** Bonus reconquer attempts accrue against this baseline (seconds at +1× rate). */
 export const RECONQUER_BONUS_INTERVAL = 8;
 /** Prefer restore / cast targets within this distance of the break origin. */
@@ -57,6 +63,7 @@ function burstPiece(game, {
   const burst = 100 + (index % 5) * 28;
   const ang = (-Math.PI / 2) + (Math.random() - 0.5) * 1.5 + facing * 0.12;
   const armor = material === "armor";
+  const armorLife = armor ? armorDespawnTimer(game) : NON_ARMOR_DEBRIS_LIFE;
   pushPiece(game, {
     material,
     kind,
@@ -79,10 +86,9 @@ function burstPiece(game, {
     homeLy,
     grounded: false,
     settle: 0,
-    // Armor never despawns mid-match; everything else ages out.
-    immortal: armor,
-    life: armor ? Infinity : NON_ARMOR_DEBRIS_LIFE,
-    maxLife: armor ? Infinity : NON_ARMOR_DEBRIS_LIFE,
+    immortal: false,
+    life: armorLife,
+    maxLife: armorLife,
     alpha: 1,
     scale: 1,
     despawnMode: null,
@@ -286,6 +292,14 @@ function despawnStyle(game) {
   return normalizeDebrisDespawnStyle(game?.settings?.visual?.debrisDespawnStyle);
 }
 
+function armorDespawnStyle(game) {
+  return normalizeArmorDespawnStyle(game?.settings?.visual?.armorDespawnStyle);
+}
+
+export function armorDespawnTimer(game) {
+  return normalizeArmorDespawnTimer(game?.settings?.visual?.armorDespawnTimer);
+}
+
 /** 0.1×–10× multiplier for how often reconquer queues and fires. */
 export function reconquerRate(game) {
   return normalizeReconquerRate(game?.settings?.visual?.reconquerRate);
@@ -313,8 +327,8 @@ export function tickReconquerBonus(game, dt) {
 }
 
 /**
- * When retractable armor is destroyed, drop helmet/plate pieces that stay
- * on the ground for the rest of the match.
+ * When retractable armor is destroyed, drop helmet/plate pieces that later
+ * despawn via Settings → Visual → Armor disappear.
  */
 export function spawnBrokenArmorDebris(game, fighter) {
   if (!game || !fighter || fighter.armorDebrisDropped) return;
@@ -324,6 +338,7 @@ export function spawnBrokenArmorDebris(game, fighter) {
   const cy = fighter.y + SIZE / 2;
   const color = armorDebrisColor(fighter);
   const facing = Math.cos(fighter.aim || 0) >= 0 ? 1 : -1;
+  const sourceId = nextSourceId(game);
   const specs = [
     { kind: "helmet", ox: 0, oy: -20, w: 30, h: 12 },
     { kind: "crest", ox: 0, oy: -28, w: 10, h: 6 },
@@ -349,7 +364,12 @@ export function spawnBrokenArmorDebris(game, fighter) {
       vx: (fighter.vx || 0) * 0.25,
       vy: (fighter.vy || 0) * 0.15,
       facing,
-      index: i
+      index: i,
+      sourceType: "armor",
+      sourceKind: "armor",
+      sourceId,
+      originX: cx,
+      originY: cy
     });
   }
 
@@ -442,6 +462,115 @@ function beginDespawn(piece, style) {
   if (style === "reconquer") {
     piece.despawnMode = "reconquer-wait";
   }
+}
+
+/** Start armor-plate despawn using Armor disappear settings. */
+function beginArmorDespawn(game, piece) {
+  if (!piece || piece.despawnMode) return;
+  const style = armorDespawnStyle(game);
+  if (style === "buildDummy") {
+    beginArmorDummyBuild(game, piece);
+    return;
+  }
+  beginDespawn(piece, style);
+}
+
+/**
+ * Melt a broken armor set into a metal training dummy near the scrap pile.
+ */
+export function beginArmorDummyBuild(game, piece) {
+  if (!game || !piece?.sourceId) return null;
+  game.armorDummyBuilds ||= [];
+  if (game.armorDummyBuilds.some((build) => build.sourceId === piece.sourceId)) return null;
+
+  const group = piecesForSource(game, piece.sourceId).filter((p) => p.material === "armor");
+  if (!group.length) return null;
+
+  let sx = 0;
+  let sy = 0;
+  for (const p of group) {
+    sx += p.x;
+    sy += p.y;
+  }
+  const targetX = sx / group.length;
+  const targetY = sy / group.length;
+  const color = group[0].color || ARMOR_DUMMY_METAL;
+
+  const build = {
+    sourceId: piece.sourceId,
+    targetX,
+    targetY,
+    color,
+    phase: "melt",
+    t: 0,
+    cool: 0
+  };
+  game.armorDummyBuilds.push(build);
+
+  for (const scrap of group) {
+    scrap.despawnMode = "build-dummy-melt";
+    scrap.despawnT = 0;
+    scrap.grounded = false;
+    scrap.homeX = targetX;
+    scrap.homeY = targetY;
+    scrap.scale = 1;
+    scrap.alpha = 1;
+  }
+  return build;
+}
+
+function finishArmorDummyBuild(game, build) {
+  game.armorDummies ||= [];
+  game.armorDummies.push({
+    x: build.targetX,
+    y: build.targetY,
+    w: 36,
+    h: 58,
+    color: build.color || ARMOR_DUMMY_METAL,
+    cool: 0,
+    phase: "cool"
+  });
+  removeSourcePieces(game, build.sourceId);
+}
+
+/** Tick armor → training-dummy melt / cool sequences. */
+export function tickArmorDummyBuilds(game, dt) {
+  const builds = game?.armorDummyBuilds;
+  if (!builds?.length) {
+    tickArmorDummies(game, dt);
+    return;
+  }
+  const keep = [];
+  for (const build of builds) {
+    build.t += dt;
+    if (build.phase === "melt") {
+      if (build.t >= ARMOR_DUMMY_MELT_DURATION) {
+        finishArmorDummyBuild(game, build);
+        build.phase = "done";
+      } else {
+        keep.push(build);
+      }
+    }
+  }
+  game.armorDummyBuilds = keep;
+  tickArmorDummies(game, dt);
+}
+
+function tickArmorDummies(game, dt) {
+  for (const dummy of game?.armorDummies || []) {
+    if (dummy.phase !== "cool") continue;
+    dummy.cool = Math.min(1, (dummy.cool || 0) + dt / ARMOR_DUMMY_COOL_DURATION);
+    if (dummy.cool >= 1) dummy.phase = "idle";
+  }
+}
+
+/** Molten → metal tint while a fresh dummy cools. */
+export function armorDummyColor(dummy) {
+  const cool = dummy?.cool || 0;
+  if (dummy?.phase === "cool" && cool < 0.02) return "#ffe14a";
+  if (dummy?.phase !== "cool") return dummy?.color || ARMOR_DUMMY_METAL;
+  if (cool < 0.45) return mixHex("#ffe14a", "#ff4a00", cool / 0.45);
+  return mixHex("#ff4a00", dummy.color || ARMOR_DUMMY_METAL, (cool - 0.45) / 0.55);
 }
 
 function queueReconquer(game, piece) {
@@ -880,8 +1009,9 @@ function finishReconquerHome(game, piece) {
 export function tickGroundDebris(game, dt) {
   const pieces = game?.groundDebris;
   if (!pieces?.length) {
-    // Forge casts can outlive their scraps (molten cool after ingest).
+    // Forge casts / armor dummies can outlive their scraps.
     tickForgeCasts(game, dt);
+    tickArmorDummyBuilds(game, dt);
     tickReconquerBonus(game, dt);
     return;
   }
@@ -893,12 +1023,18 @@ export function tickGroundDebris(game, dt) {
     if (piece.despawnMode === "gone") continue;
 
     if (!piece.immortal && !piece.despawnMode) {
-      // Reconquer rate 0.1×–10× ages scraps into the queue that much faster.
-      const ageMult = style === "reconquer" ? reconquerRate(game) : 1;
+      // Reconquer rate 0.1×–10× ages non-armor scraps into the queue faster.
+      const ageMult = piece.material !== "armor" && style === "reconquer"
+        ? reconquerRate(game)
+        : 1;
       piece.life -= dt * ageMult;
       if (piece.life <= 0) {
-        beginDespawn(piece, style);
-        if (piece.despawnMode === "reconquer-wait") queueReconquer(game, piece);
+        if (piece.material === "armor") {
+          beginArmorDespawn(game, piece);
+        } else {
+          beginDespawn(piece, style);
+          if (piece.despawnMode === "reconquer-wait") queueReconquer(game, piece);
+        }
       }
     }
 
@@ -906,6 +1042,23 @@ export function tickGroundDebris(game, dt) {
       // Idle until a spawn opportunity claims this source.
       piece.alpha = 0.55 + Math.sin((game.elapsed || 0) * 4 + (piece.x || 0) * 0.01) * 0.2;
       piece.scale = 1;
+    } else if (piece.despawnMode === "build-dummy-melt") {
+      const tx = piece.homeX;
+      const ty = piece.homeY;
+      piece.despawnT = Math.min(1, piece.despawnT + dt / ARMOR_DUMMY_MELT_DURATION);
+      piece.x += (tx - piece.x) * Math.min(1, dt * 6.5);
+      piece.y += (ty - piece.y) * Math.min(1, dt * 6.5);
+      piece.rot += piece.spin * dt;
+      piece.spin *= Math.max(0, 1 - dt * 4);
+      piece.scale = Math.max(0.12, 1 - piece.despawnT * 0.88);
+      piece.alpha = Math.max(0.2, 1 - piece.despawnT * 0.7);
+      // Glow molten while melting into the dummy.
+      piece.color = piece.despawnT < 0.55 ? "#ff4a00" : "#ffe14a";
+      if (Math.hypot(tx - piece.x, ty - piece.y) < 6 || piece.despawnT >= 1) {
+        continue;
+      }
+      keep.push(piece);
+      continue;
     } else if (piece.despawnMode === "forge-ingest") {
       // Metal scraps get sucked into the furnace mouth.
       const tx = piece.homeX;
@@ -1028,6 +1181,7 @@ export function tickGroundDebris(game, dt) {
 
   game.groundDebris = keep;
   tickForgeCasts(game, dt);
+  tickArmorDummyBuilds(game, dt);
   tickReconquerBonus(game, dt);
 }
 

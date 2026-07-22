@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import {
-  buildPropJigsaw, forgeCastColor, FORGE_PHASE_DURATIONS, NON_ARMOR_DEBRIS_LIFE,
-  pickNearbyRestoreProp, PROP_DEBRIS_COLORS, pullSpawnTowardOrigin,
-  RECONQUER_BONUS_INTERVAL, RECONQUER_NEAR_RANGE, restoreMapProp, spawnPropDebris,
-  tickGroundDebris, tryReconquerAtSpawn
+  ARMOR_DUMMY_MELT_DURATION, buildPropJigsaw, forgeCastColor, FORGE_PHASE_DURATIONS,
+  NON_ARMOR_DEBRIS_LIFE, pickNearbyRestoreProp, PROP_DEBRIS_COLORS, pullSpawnTowardOrigin,
+  RECONQUER_BONUS_INTERVAL, RECONQUER_NEAR_RANGE, restoreMapProp, spawnBrokenArmorDebris,
+  spawnPropDebris, tickGroundDebris, tryReconquerAtSpawn
 } from "./debris.js";
+import { Fighter } from "./combat.js";
+import { applyLoadout, beginRetractableMorph, DEFAULT_LOADOUT, tickRetractableArmor, RETRACTABLE_MORPH_DURATION } from "./equipment.js";
 import { createMapRuntime, damageProp } from "./maps.js";
 import { createPowerCrate } from "./powerups.js";
-import { normalizeDebrisDespawnStyle, normalizeReconquerRate } from "./settings.js";
+import {
+  normalizeArmorDespawnStyle, normalizeArmorDespawnTimer, normalizeDebrisDespawnStyle,
+  normalizeReconquerRate
+} from "./settings.js";
 
 assert.equal(normalizeDebrisDespawnStyle("decimate"), "decimate");
 assert.equal(normalizeDebrisDespawnStyle("nope"), "fade");
@@ -19,6 +24,11 @@ assert.equal(normalizeReconquerRate(0), 0.1);
 assert.equal(normalizeReconquerRate(9), 9);
 assert.equal(normalizeReconquerRate(10), 10);
 assert.equal(normalizeReconquerRate(99), 10);
+assert.equal(normalizeArmorDespawnStyle("buildDummy"), "buildDummy");
+assert.equal(normalizeArmorDespawnStyle("nope"), "fade");
+assert.equal(normalizeArmorDespawnTimer(14), 14);
+assert.equal(normalizeArmorDespawnTimer(1.24), 1.2);
+assert.equal(normalizeArmorDespawnTimer(0), 0.1);
 
 // Jigsaw uses exact prop colors and full fragment coverage.
 {
@@ -128,11 +138,17 @@ assert.equal(normalizeReconquerRate(99), 10);
   assert.equal(game.groundDebris.length, 0);
 }
 
-// Armor scraps ignore despawn timers.
+// Armor scraps fade out after the armor timer.
 {
   const game = {
     elapsed: 0,
-    settings: { visual: { debrisDespawnStyle: "fade" } },
+    settings: {
+      visual: {
+        debrisDespawnStyle: "fade",
+        armorDespawnStyle: "fade",
+        armorDespawnTimer: 0.5
+      }
+    },
     platforms: [{ x: 0, y: 500, w: 2000, h: 40 }],
     props: [],
     groundDebris: [{
@@ -151,17 +167,59 @@ assert.equal(normalizeReconquerRate(99), 10);
       color: "#8aa4b0",
       grounded: true,
       settle: 1,
-      immortal: true,
-      life: Infinity,
-      maxLife: Infinity,
+      immortal: false,
+      life: 0.5,
+      maxLife: 0.5,
       alpha: 1,
       scale: 1,
-      despawnMode: null
-    }]
+      despawnMode: null,
+      sourceId: "armor-1",
+      sourceType: "armor"
+    }],
+    armorDummyBuilds: [],
+    armorDummies: []
   };
-  for (let i = 0; i < 200; i++) tickGroundDebris(game, 1 / 60);
-  assert.equal(game.groundDebris.length, 1);
-  assert.equal(game.groundDebris[0].despawnMode, null);
+  for (let i = 0; i < 40; i++) tickGroundDebris(game, 1 / 60);
+  assert.ok(game.groundDebris.every((p) => p.despawnMode === "fade"));
+  for (let i = 0; i < 90; i++) tickGroundDebris(game, 1 / 60);
+  assert.equal(game.groundDebris.length, 0, "armor fade clears scraps");
+}
+
+// Build dummy melts armor scraps into a lasting metal training dummy.
+{
+  const fighter = applyLoadout(new Fighter({
+    x: 400, y: 300, team: 0, aim: 0
+  }), { ...DEFAULT_LOADOUT, body: "retractable-armor" });
+  beginRetractableMorph(fighter, true);
+  tickRetractableArmor(fighter, RETRACTABLE_MORPH_DURATION + 0.01);
+  const game = {
+    elapsed: 0,
+    settings: {
+      visual: {
+        armorDespawnStyle: "buildDummy",
+        armorDespawnTimer: 0.2
+      }
+    },
+    platforms: [{ x: 0, y: 500, w: 2000, h: 40 }],
+    props: [],
+    groundDebris: [],
+    effects: [],
+    armorDummyBuilds: [],
+    armorDummies: []
+  };
+  spawnBrokenArmorDebris(game, fighter);
+  assert.ok(game.groundDebris.length >= 8);
+  assert.ok(game.groundDebris.every((p) => p.material === "armor" && !p.immortal));
+  for (const piece of game.groundDebris) piece.life = 0.01;
+  tickGroundDebris(game, 0.02);
+  assert.ok(game.armorDummyBuilds.length >= 1, "dummy melt starts");
+  assert.ok(game.groundDebris.every((p) => p.despawnMode === "build-dummy-melt"));
+  for (let i = 0; i < Math.ceil(ARMOR_DUMMY_MELT_DURATION * 60) + 5; i++) {
+    tickGroundDebris(game, 1 / 60);
+  }
+  assert.equal(game.groundDebris.length, 0, "scraps consumed by dummy");
+  assert.ok(game.armorDummies.length >= 1, "training dummy spawned");
+  assert.equal(game.armorDummyBuilds.length, 0);
 }
 
 // Metal reconquer: furnace ingest → cast → cool restores the prop.

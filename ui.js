@@ -22,7 +22,9 @@ import {
   ensureProgressionProfile, getPerk, perkTradeoffLines
 } from "./perks.js";
 import { escapeHtml, formatTime } from "./utils.js";
-import { ensureSettingsProfile, normalizeReconquerRate } from "./settings.js";
+import {
+  ensureSettingsProfile, normalizeArmorDespawnTimer, normalizeReconquerRate
+} from "./settings.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -117,7 +119,10 @@ export const ui = {
   debrisDespawnStyleInputs: [...document.querySelectorAll('input[name="debrisDespawnStyle"]')],
   reconquerRateInput: $("#reconquerRate"),
   reconquerRateValue: $("#reconquerRateValue"),
-  reconquerRateControl: $("#reconquerRateControl")
+  reconquerRateControl: $("#reconquerRateControl"),
+  armorDespawnStyleInputs: [...document.querySelectorAll('input[name="armorDespawnStyle"]')],
+  armorDespawnTimerInput: $("#armorDespawnTimer"),
+  armorDespawnTimerControl: $("#armorDespawnTimerControl")
 };
 
 /** Show git commit / sync identity so localhost builds are easy to verify. */
@@ -526,6 +531,15 @@ export function refreshSettings(profile) {
     ui.reconquerRateValue.textContent = `${rate.toFixed(1)}×`;
   }
   ui.reconquerRateControl?.classList.toggle("is-disabled", debrisStyle !== "reconquer");
+
+  const armorStyle = profile.settings.visual.armorDespawnStyle;
+  for (const input of ui.armorDespawnStyleInputs) {
+    input.checked = input.value === armorStyle;
+  }
+  const armorTimer = normalizeArmorDespawnTimer(profile.settings.visual.armorDespawnTimer);
+  if (ui.armorDespawnTimerInput) {
+    ui.armorDespawnTimerInput.value = armorTimer.toFixed(1);
+  }
 }
 
 export function showSettings(open) {
@@ -1070,6 +1084,16 @@ export function bindUi(handlers) {
     const rate = event.target.closest('input[name="reconquerRate"]');
     if (rate) {
       handlers.settingsChange?.({ reconquerRate: rate.value });
+      return;
+    }
+    const armor = event.target.closest('input[name="armorDespawnStyle"]');
+    if (armor) {
+      handlers.settingsChange?.({ armorDespawnStyle: armor.value });
+      return;
+    }
+    const armorTimer = event.target.closest('input[name="armorDespawnTimer"]');
+    if (armorTimer) {
+      handlers.settingsChange?.({ armorDespawnTimer: armorTimer.value });
     }
   });
   ui.reconquerRateInput?.addEventListener("input", () => {
@@ -1077,6 +1101,11 @@ export function bindUi(handlers) {
     if (ui.reconquerRateValue) {
       ui.reconquerRateValue.textContent = `${rate.toFixed(1)}×`;
     }
+  });
+  ui.armorDespawnTimerInput?.addEventListener("change", () => {
+    const timer = normalizeArmorDespawnTimer(ui.armorDespawnTimerInput.value);
+    ui.armorDespawnTimerInput.value = timer.toFixed(1);
+    handlers.settingsChange?.({ armorDespawnTimer: timer });
   });
   $("#menu").addEventListener("keydown", (event) => {
     const row = event.target.closest(".hidden-scroll-row");

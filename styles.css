@@ -450,6 +450,33 @@ button span { opacity: .6; font-size: 11px; }
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+.settings-number {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 12px;
+  border: 1px solid #29404c;
+  background: rgba(255, 255, 255, .025);
+}
+.settings-number-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-number-input input[type="number"] {
+  width: 6.5em;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #3d6672;
+  background: #102028;
+  color: #e7f9ff;
+  font-variant-numeric: tabular-nums;
+}
+.settings-number-suffix {
+  color: #88a0ab;
+  font-size: 13px;
+}
 .settings-actions { justify-content: flex-end; margin-top: 18px; }
 .settings-actions button { width: auto; min-width: 120px; }
 .perk-modal-card {

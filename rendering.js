@@ -1,5 +1,5 @@
 import { CEILING, SIGHT, SIZE, WORLD } from "./config.js";
-import { FORGE_PHASE_DURATIONS, forgeCastColor } from "./debris.js";
+import { armorDummyColor, FORGE_PHASE_DURATIONS, forgeCastColor } from "./debris.js";
 import { MODULAR_MODE_DEFS, MODULAR_WEAPON_ID } from "./equipment.js";
 import { normalizeModularMorphStyle } from "./settings.js";
 import { platformsOf } from "./maps.js";
@@ -632,6 +632,7 @@ export function createRenderer(canvas) {
     drawProps(game, .35, false);
     drawGroundDebris(game, .35);
     drawForgeCasts(game, .35);
+    drawArmorDummies(game, .35);
     drawCeiling(game, .35);
     const player = game.fighters[0];
     const allies = game.fighters.filter((fighter) => !fighter.dead && fighter.team === player.team);
@@ -665,6 +666,7 @@ export function createRenderer(canvas) {
     drawProps(game, 1, false);
     drawGroundDebris(game, 1);
     drawForgeCasts(game, 1);
+    drawArmorDummies(game, 1);
     drawPowerCrates(game, player);
     drawCeiling(game, 1);
     context.restore();
@@ -1430,6 +1432,47 @@ export function createRenderer(canvas) {
   function drawGroundDebris(game, fogAlpha = 1) {
     const pieces = game.groundDebris || game.armorDebris || [];
     for (const piece of pieces) drawGroundDebrisPiece(piece, fogAlpha);
+  }
+
+  /** Metal training dummies forged from melted armor plates. */
+  function drawArmorDummies(game, fogAlpha = 1) {
+    for (const dummy of game.armorDummies || []) {
+      drawArmorDummy(dummy, fogAlpha);
+    }
+  }
+
+  function drawArmorDummy(dummy, fogAlpha) {
+    const color = armorDummyColor(dummy);
+    const rim = mixHexColors(color, "#061018", 0.35);
+    const highlight = mixHexColors(color, "#ffffff", 0.18);
+    const cx = dummy.x;
+    const cy = dummy.y;
+    const w = dummy.w || 36;
+    const h = dummy.h || 58;
+    context.save();
+    context.globalAlpha = Math.max(0, Math.min(1, fogAlpha));
+    // Stand / base
+    context.fillStyle = rim;
+    context.fillRect(cx - w * 0.35, cy + h * 0.42, w * 0.7, 6);
+    // Pole
+    context.fillStyle = color;
+    context.fillRect(cx - 3, cy - h * 0.05, 6, h * 0.5);
+    // Torso
+    context.fillRect(cx - w * 0.28, cy - h * 0.22, w * 0.56, h * 0.34);
+    context.fillStyle = highlight;
+    context.fillRect(cx - w * 0.2, cy - h * 0.18, w * 0.4, 3);
+    // Arms
+    context.fillStyle = color;
+    context.fillRect(cx - w * 0.48, cy - h * 0.14, w * 0.2, 7);
+    context.fillRect(cx + w * 0.28, cy - h * 0.14, w * 0.2, 7);
+    // Head
+    context.beginPath();
+    context.ellipse(cx, cy - h * 0.34, w * 0.18, w * 0.2, 0, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = rim;
+    context.lineWidth = 1.5;
+    context.strokeRect(cx - w * 0.28 + 1, cy - h * 0.22 + 1, w * 0.56 - 2, h * 0.34 - 2);
+    context.restore();
   }
 
   function drawBullets(game) {
