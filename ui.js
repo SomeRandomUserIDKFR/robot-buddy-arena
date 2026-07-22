@@ -345,7 +345,8 @@ export function updateHud(game) {
       ui.armorMeter.classList.toggle("morphing", !!player.nanotechArmorSpawning);
       ui.armorMeter.classList.toggle("empty", curHp <= 0 && !player.nanotechArmorSpawning);
       const weaponCost = player.nanotechWeaponCost || 0;
-      const freeLow = weaponCost > 0 && (player.nanobotFree || 0) < weaponCost;
+      const weaponFormed = weaponCost <= 0
+        || (player.nanobotWeapon || 0) >= weaponCost;
       const armorFull = maxHp > 0 && curHp >= maxHp;
       const filling = !!player.nanotechChanneling && !armorFull && !player.nanotechArmorSpawning;
       const recalling = !player.nanotechChanneling && curHp > 0;
@@ -357,8 +358,8 @@ export function updateHud(game) {
             ? "RECALL…"
             : armorFull && player.nanotechChanneling
               ? "NANO FULL"
-              : freeLow
-                ? "NANO LOW"
+              : !weaponFormed
+                ? "WEAPON LOW"
                 : "NANO";
     } else if (hasArmor) {
       const armorPct = player.retractableMax > 0

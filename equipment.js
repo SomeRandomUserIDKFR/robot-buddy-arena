@@ -182,16 +182,16 @@ export const GEAR = [
   }, 135),
 
   // Nanotech: counterpart weapon stats; shared bot pool. Weapons need free bots ≥ cost to fire.
-  melee("nanotech-sword", "Nanotech Sword", "Arc Saber stats. Forms from 100 free reserve bots.", {
+  melee("nanotech-sword", "Nanotech Sword", "Arc Saber. E forms from bots (partial OK). Incomplete swings bleed 2% bots.", {
     baseDamage: 55, rpm: 150, range: 120
   }, 100, { nanotech: true, nanobotCost: 100 }),
-  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle stats. Forms from 150 free reserve bots.", {
+  gun("nanotech-rifle", "Nanotech Rifle", "Pulse Rifle. E forms from bots; damage scales with form %.", {
     baseDamage: 12, rpm: 500, range: 1317.5, projectileSpeed: 1550,
     dropoff: { start: 300, end: 1200, minMultiplier: 10 / 12 },
     aimSettle: 0, unsettledSpread: 0, cameraLead: .08, sightExtension: 0,
     movementMultiplier: 1, iframeMultiplier: 1
   }, 150, { nanotech: true, nanobotCost: 150 }),
-  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper stats. Forms from 175 free reserve bots.", {
+  gun("nanotech-sniper", "Nanotech Sniper", "Classic Sniper. E forms from bots; damage scales with form %.", {
     baseDamage: 180, rpm: 30, range: 2450, projectileSpeed: 3200,
     dropoff: null, aimSettle: .45, unsettledSpread: .42, cameraLead: .35,
     sightExtension: 1580, sightHalfAngle: .17, movementMultiplier: 1,
@@ -654,22 +654,89 @@ export function nanotechArmorMaxHp(fighter) {
 export function canNanotechAttack(fighter) {
   const cost = fighter?.nanotechWeaponCost || 0;
   if (cost <= 0) return true;
-  return (fighter.nanobotFree || 0) >= cost;
+  return (fighter.nanobotWeapon || 0) > 0;
 }
 
-/** Nanotech sword melts into armor — fully hidden near end of dissolve. */
+/** 0–1 how fully the nanotech weapon is formed. */
+export function nanotechFormPct(fighter) {
+  const cost = fighter?.nanotechWeaponCost || 0;
+  if (cost <= 0) return 1;
+  return Math.max(0, Math.min(1, (fighter.nanobotWeapon || 0) / cost));
+}
+
+/**
+ * E: pull free reserve bots into the weapon, trying to reach full cost.
+ * Partial form is allowed when free bots run short.
+ */
+export function tryFormNanotechWeapon(fighter) {
+  if (!fighter || fighter.dead) return { ok: false, reason: "dead" };
+  const cost = fighter.nanotechWeaponCost || 0;
+  if (cost <= 0) return { ok: false, reason: "no-nanotech-weapon" };
+  const need = Math.max(0, cost - (fighter.nanobotWeapon || 0));
+  if (need <= 0) return { ok: true, fullyFormed: true, pulled: 0 };
+  const pull = Math.min(need, Math.max(0, fighter.nanobotFree || 0));
+  if (pull <= 0) return { ok: false, reason: "no-free-bots", fullyFormed: false, pulled: 0 };
+  fighter.nanobotFree -= pull;
+  fighter.nanobotWeapon = (fighter.nanobotWeapon || 0) + pull;
+  clampNanotechPool(fighter);
+  return {
+    ok: true,
+    fullyFormed: (fighter.nanobotWeapon || 0) >= cost,
+    pulled: pull,
+    formPct: nanotechFormPct(fighter)
+  };
+}
+
+/** Incomplete melee hit destroys 2% of the weapon's full bot cost. */
+export function applyNanotechSlashBotLoss(fighter) {
+  const cost = fighter?.nanotechWeaponCost || 0;
+  if (cost <= 0 || fighter.weapon !== "saber") return 0;
+  if (nanotechFormPct(fighter) >= 1) return 0;
+  const loss = cost * 0.02;
+  const before = fighter.nanobotWeapon || 0;
+  fighter.nanobotWeapon = Math.max(0, before - loss);
+  clampNanotechPool(fighter);
+  return before - fighter.nanobotWeapon;
+}
+
+function clampNanotechPool(fighter) {
+  if (!fighter) return;
+  const max = Math.max(0, fighter.nanobotMax || 0);
+  let weapon = Math.max(0, fighter.nanobotWeapon || 0);
+  let armor = Math.max(0, fighter.nanobotArmor || 0);
+  let free = Math.max(0, fighter.nanobotFree || 0);
+  const cost = fighter.nanotechWeaponCost || 0;
+  if (cost > 0) weapon = Math.min(cost, weapon);
+  armor = Math.min(max, armor);
+  free = Math.min(max, free);
+  let used = free + armor + weapon;
+  if (used > max) {
+    // Prefer trimming free, then armor — never auto-strip the formed weapon first.
+    const over = used - max;
+    const fromFree = Math.min(free, over);
+    free -= fromFree;
+    const rest = over - fromFree;
+    if (rest > 0) armor = Math.max(0, armor - rest);
+  }
+  fighter.nanobotWeapon = weapon;
+  fighter.nanobotArmor = armor;
+  fighter.nanobotFree = free;
+}
+
+/** Nanotech sword melts when unformed — fully hidden near end of dissolve. */
 export function nanotechSwordHidden(fighter) {
   if (fighter?.weaponId !== "nanotech-sword") return false;
   return nanotechSwordVisibility(fighter) <= 0.02;
 }
 
-/** 1 = blade out, 0 = fully dissolved into armor swarm. */
+/** 1 = blade out, 0 = fully dissolved into particles. */
 export function nanotechSwordVisibility(fighter) {
   if (fighter?.weaponId !== "nanotech-sword") return 1;
+  const form = nanotechFormPct(fighter);
   const t = Math.max(0, Math.min(1, fighter.nanotechSwordDissolveT ?? 0));
-  // Ease so the last pop feels snappy (Mark-85 settle).
   const eased = t * t * (3 - 2 * t);
-  return 1 - eased;
+  // Scale by form % so a half-built sword looks thinner / fainter.
+  return form * (1 - eased * 0.15);
 }
 
 function beginNanotechArmorSpawn(fighter) {
@@ -716,33 +783,32 @@ export function tickNanotech(fighter, dt) {
   const max = fighter.nanobotMax;
   let free = Math.max(0, fighter.nanobotFree || 0);
   let armor = Math.max(0, fighter.nanobotArmor || 0);
+  let weapon = Math.max(0, fighter.nanobotWeapon || 0);
   const armorBefore = armor;
   const weaponCost = fighter.nanotechWeaponCost || 0;
 
   if (fighter.nanotechChanneling && hasNanotechChestplate(fighter)) {
-    // Hold F: loan any free reserve into armor (HP only counts first 500 bots).
-    const room = Math.max(0, max - armor);
+    // Hold F: loan free reserve into armor (never steals committed weapon bots).
+    const room = Math.max(0, max - armor - weapon);
     const flow = Math.min(free, room, NANOTECH_CHANNEL_RATE * dt);
     free -= flow;
     armor += flow;
   } else if (hasNanotechChestplate(fighter) && armor > 0) {
-    // Release F: armor returns to the shared reserve (weapon can reform).
+    // Release F: armor returns to free reserve.
     const flow = Math.min(armor, NANOTECH_RECALL_RATE * dt);
     armor -= flow;
     free += flow;
-  } else if (weaponCost > 0 && free < weaponCost && free + armor < max) {
-    // Only when bots were destroyed (damage) — slowly rebuild reserve.
-    const room = Math.max(0, max - free - armor);
+  } else if (free + armor + weapon < max) {
+    // Rebuild free reserve when bots were destroyed (slash bleed / armor damage).
+    const room = Math.max(0, max - free - armor - weapon);
     const gain = Math.min(room, NANOTECH_SLOW_REGEN * dt);
     free += gain;
   }
 
-  fighter.nanobotFree = Math.max(0, Math.min(max - armor, free));
-  fighter.nanobotArmor = Math.max(0, Math.min(max, armor));
-  // Keep free+armor ≤ max.
-  if (fighter.nanobotFree + fighter.nanobotArmor > max) {
-    fighter.nanobotFree = Math.max(0, max - fighter.nanobotArmor);
-  }
+  fighter.nanobotFree = free;
+  fighter.nanobotArmor = armor;
+  fighter.nanobotWeapon = weapon;
+  clampNanotechPool(fighter);
 
   // Rising edge into armor while already channeling (e.g. bots arrive mid-hold).
   if (
@@ -765,9 +831,9 @@ export function tickNanotech(fighter, dt) {
     }
   }
 
-  // Weapon forms from free reserve — dissolves when free bots < conjure cost.
+  // Particle dissolve when the weapon has no committed bots.
   if (fighter.weaponId === "nanotech-sword") {
-    const wantDissolved = weaponCost > 0 && (fighter.nanobotFree || 0) < weaponCost;
+    const wantDissolved = weaponCost > 0 && (fighter.nanobotWeapon || 0) <= 0;
     let dissolve = Math.max(0, Math.min(1, fighter.nanotechSwordDissolveT ?? 0));
     if (wantDissolved) {
       dissolve = Math.min(1, dissolve + dt / NANOTECH_SWORD_DISSOLVE_DURATION);
@@ -1268,6 +1334,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.nanobotMax = nanobotMax;
   fighter.nanobotFree = nanobotMax;
   fighter.nanobotArmor = 0;
+  fighter.nanobotWeapon = 0;
   fighter.nanotechChanneling = false;
   fighter.nanotechArmorSpawning = false;
   fighter.nanotechArmorSpawnT = 1;
@@ -1278,6 +1345,10 @@ export function applyLoadout(fighter, loadout) {
     const gear = GEAR_BY_ID[fighter.loadout[slot]];
     return !!gear?.nanotech;
   });
+  // Start with a formed weapon when reserve allows (E still tops up after bleeds).
+  if (fighter.nanotechWeaponCost > 0) {
+    tryFormNanotechWeapon(fighter);
+  }
   syncNanotechDisplayedHp(fighter);
   fighter.damageTaken = stats.damageTaken / 100;
   fighter.sight = stats.sight;

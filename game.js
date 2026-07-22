@@ -5,8 +5,8 @@ import { buddyChatReply, ensureCoaching } from "./coaching.js";
 import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
   acceptSuggestion, applyLoadout, awardConquest, cycleModularMode, equipOwned,
-  hasNanotechChestplate, purchaseGear, reconcileLoadoutsToOwned, setBuddyMode,
-  setNanotechChanneling,
+  hasNanotechChestplate, isModularWeapon, purchaseGear, reconcileLoadoutsToOwned,
+  setBuddyMode, setNanotechChanneling, tryFormNanotechWeapon,
   toggleRetractableArmor, toggleShieldRaise, trainerLoadout, weaponKind
 } from "./equipment.js";
 import { tickGroundDebris } from "./debris.js";
@@ -352,7 +352,12 @@ function handleKeyDown(event) {
     }
   }
   if (event.code === "KeyE" && !event.repeat) {
-    cycleModularMode(game.fighters[0]);
+    const player = game.fighters[0];
+    if (isModularWeapon(player)) {
+      cycleModularMode(player);
+    } else if ((player.nanotechWeaponCost || 0) > 0) {
+      tryFormNanotechWeapon(player);
+    }
   }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
   if (event.code === "KeyG") {

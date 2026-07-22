@@ -4,9 +4,9 @@ import {
 } from "./config.js";
 import { updateAI } from "./ai.js";
 import {
-  applyHpDamage, canNanotechAttack, modularAttackLocked, retractableSpeedMultiplier,
-  shieldBlocksAttack, shieldSpeedMultiplier, tickModularWeapon, tickNanotech,
-  tickRetractableArmor
+  applyHpDamage, applyNanotechSlashBotLoss, canNanotechAttack, modularAttackLocked,
+  nanotechFormPct, retractableSpeedMultiplier, shieldBlocksAttack, shieldSpeedMultiplier,
+  tickModularWeapon, tickNanotech, tickRetractableArmor
 } from "./equipment.js";
 import { armorDummyBlockers, damageArmorDummy } from "./debris.js";
 import {
@@ -226,7 +226,7 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy) {
   const reach = fighter.weaponReach || 1720;
   const ex = ox + Math.cos(shotAngle) * reach;
   const ey = oy + Math.sin(shotAngle) * reach;
-  const dmg = fighter.weaponBaseDamage * consumeOvercharge(fighter);
+  const dmg = fighter.weaponBaseDamage * consumeOvercharge(fighter) * nanotechFormPct(fighter);
   const boxes = [
     ...platformsOf(game).map((platform) => ({
       x: platform.x, y: platform.y, w: platform.w, h: platform.h, kind: "platform"
@@ -312,13 +312,14 @@ export function attack(fighter, game, random = Math.random) {
   const oy = fighter.y + SIZE / 2 + Math.sin(shotAngle) * 31;
   const rateMult = fireRateBuffMult(fighter);
   const attackInterval = (60 / fighter.weaponRpm) / rateMult;
+  const formPct = nanotechFormPct(fighter);
   if (fighter.weapon === "gun") {
     fighter.attackCd = attackInterval;
     if (fighter.weaponStats?.hitscan) {
       fireHitscanLaser(fighter, game, shotAngle, ox, oy);
     } else {
       const speed = fighter.weaponStats?.projectileSpeed || 1550 * fighter.projectileSpeed;
-      const shotDmg = fighter.weaponBaseDamage * consumeOvercharge(fighter);
+      const shotDmg = fighter.weaponBaseDamage * consumeOvercharge(fighter) * formPct;
       game.bullets.push({
         x: ox, y: oy, px: ox, py: oy,
         vx: Math.cos(shotAngle) * speed,
@@ -336,20 +337,23 @@ export function attack(fighter, game, random = Math.random) {
     }
   } else {
     fighter.attackCd = attackInterval;
-    const swingDmg = fighter.weaponBaseDamage * consumeOvercharge(fighter);
+    const swingDmg = fighter.weaponBaseDamage * consumeOvercharge(fighter) * formPct;
     fighter.vx += Math.cos(fighter.aim) * 95;
     game.effects.push({
       type: "saber", x: fighter.x + SIZE / 2, y: fighter.y + SIZE / 2,
       life: .14, angle: fighter.aim, owner: fighter
     });
+    let slashedFighter = false;
     for (const enemy of game.fighters) {
       if (!enemy.dead && enemy.team !== fighter.team && dist(fighter, enemy) < fighter.weaponReach) {
         const angle = Math.atan2(enemy.y - fighter.y, enemy.x - fighter.x);
         if (Math.abs(angleDiff(angle, fighter.aim)) < .85) {
           hit(enemy, fighter, swingDmg, fighter.aim, game);
+          slashedFighter = true;
         }
       }
     }
+    if (slashedFighter) applyNanotechSlashBotLoss(fighter);
     const cx = fighter.x + SIZE / 2;
     const cy = fighter.y + SIZE / 2;
     for (const prop of allProjectileBlockers(game)) {

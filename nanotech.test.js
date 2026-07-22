@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { attack, Fighter } from "./combat.js";
 import {
-  applyHpDamage, applyLoadout, canNanotechAttack, DEFAULT_LOADOUT, GEAR_BY_ID,
-  hasNanotechChestplate, nanotechArmorHp, nanotechArmorMaxHp, nanotechCostOf,
-  nanotechPoolCapacity, NANOTECH_ARMOR_BOT_CAP, NANOTECH_BOTS_PER_HP,
-  NANOTECH_CHANNEL_RATE, NANOTECH_SLOW_REGEN, PRECISION_AIM_WEAPONS,
-  setNanotechChanneling, STARTER_GEAR, tickNanotech, weaponStats
+  applyHpDamage, applyLoadout, applyNanotechSlashBotLoss, canNanotechAttack,
+  DEFAULT_LOADOUT, GEAR_BY_ID, hasNanotechChestplate, nanotechArmorHp,
+  nanotechArmorMaxHp, nanotechCostOf, nanotechFormPct, nanotechPoolCapacity,
+  NANOTECH_ARMOR_BOT_CAP, NANOTECH_BOTS_PER_HP, NANOTECH_CHANNEL_RATE,
+  NANOTECH_SLOW_REGEN, PRECISION_AIM_WEAPONS, setNanotechChanneling, STARTER_GEAR,
+  tickNanotech, tryFormNanotechWeapon, weaponStats
 } from "./equipment.js";
 
 const loadout = (overrides = {}) => ({ ...DEFAULT_LOADOUT, ...overrides });
@@ -55,7 +56,7 @@ function assertWeaponStatsMatch(a, b) {
   );
 }
 
-// applyLoadout seeds pool; chestplate damageTaken; reserve speed.
+// applyLoadout seeds pool and auto-forms the weapon when reserve allows.
 {
   const fighter = applyLoadout(new Fighter({}), loadout({
     body: "nanotech-chestplate",
@@ -63,10 +64,12 @@ function assertWeaponStatsMatch(a, b) {
     jetpack: "nanotech-reserve"
   }));
   assert.equal(fighter.nanobotMax, 1600);
-  assert.equal(fighter.nanobotFree, 1600);
+  assert.equal(fighter.nanobotWeapon, 100);
+  assert.equal(fighter.nanobotFree, 1500);
   assert.equal(fighter.nanobotArmor, 0);
   assert.equal(fighter.nanotechChanneling, false);
   assert.equal(fighter.nanotechWeaponCost, 100);
+  assert.equal(nanotechFormPct(fighter), 1);
   assert.equal(fighter.hasNanotechChestplate, true);
   assert.equal(fighter.forceNanotechMorph, true);
   assert.equal(fighter.damageTaken, 0.9);
@@ -74,25 +77,29 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(hasNanotechChestplate(fighter), true);
 }
 
-// Channel moves free→armor; 2 bots = 1 HP; armor bot cap 500.
+// Channel moves free→armor without stealing weapon bots; 2 bots = 1 HP.
 {
   const fighter = applyLoadout(new Fighter({}), loadout({
     body: "nanotech-chestplate",
     weapon: "nanotech-sword"
   }));
+  assert.equal(fighter.nanobotWeapon, 100);
+  assert.equal(fighter.nanobotFree, 500);
   assert.equal(setNanotechChanneling(fighter, true), true);
   assert.equal(fighter.nanotechChanneling, true);
   tickNanotech(fighter, 1);
-  const expectedFlow = Math.min(fighter.nanobotMax, NANOTECH_CHANNEL_RATE);
-  assert.equal(fighter.nanobotArmor, expectedFlow);
-  assert.equal(fighter.nanobotFree, fighter.nanobotMax - expectedFlow);
+  // After 1s: free was 500, room = max - weapon = 500 → armor gets 500.
+  assert.equal(fighter.nanobotArmor, 500);
+  assert.equal(fighter.nanobotFree, 0);
+  assert.equal(fighter.nanobotWeapon, 100);
   assert.equal(nanotechArmorHp(fighter), Math.floor(
-    Math.min(expectedFlow, NANOTECH_ARMOR_BOT_CAP) / NANOTECH_BOTS_PER_HP
+    Math.min(500, NANOTECH_ARMOR_BOT_CAP) / NANOTECH_BOTS_PER_HP
   ));
 
-  // Drain all free into armor; HP still caps at 500 bots / 250 HP.
+  // Loan remaining free into armor; HP still caps at 500 bots / 250 HP.
   fighter.nanobotFree = 600;
   fighter.nanobotArmor = 0;
+  fighter.nanobotWeapon = 0;
   setNanotechChanneling(fighter, true);
   for (let i = 0; i < 20; i++) tickNanotech(fighter, 1);
   assert.equal(fighter.nanobotArmor, 600);
@@ -103,30 +110,59 @@ function assertWeaponStatsMatch(a, b) {
   assert.equal(fighter.nanotechChanneling, false);
 }
 
-// Attack blocked when free < cost; slow regen restores attack.
+// E forms weapon (partial OK); attack needs committed bots; damage scales.
 {
   const fighter = applyLoadout(new Fighter({
     x: 100, y: 400, team: 0, aim: 0
   }), loadout({ weapon: "nanotech-rifle", jetpack: "nanotech-reserve" }));
   assert.equal(fighter.nanobotMax, 1150);
+  assert.equal(fighter.nanobotWeapon, 150);
+  fighter.nanobotWeapon = 0;
   fighter.nanobotFree = 149;
   assert.equal(canNanotechAttack(fighter), false);
   const game = { bullets: [], effects: [], fighters: [fighter] };
   attack(fighter, game);
   assert.equal(game.bullets.length, 0);
 
-  // Slow regen fills unused pool capacity; does not pull from armor.
-  fighter.nanobotArmor = 40;
-  fighter.nanobotFree = 100;
-  tickNanotech(fighter, 2);
-  assert.ok(fighter.nanobotFree > 100);
-  assert.equal(fighter.nanobotArmor, 40);
-  while (fighter.nanobotFree < 150) {
-    tickNanotech(fighter, 1);
-  }
+  const formed = tryFormNanotechWeapon(fighter);
+  assert.equal(formed.ok, true);
+  assert.equal(formed.fullyFormed, false);
+  assert.equal(fighter.nanobotWeapon, 149);
+  assert.equal(fighter.nanobotFree, 0);
+  assert.ok(Math.abs(nanotechFormPct(fighter) - 149 / 150) < 1e-9);
   assert.equal(canNanotechAttack(fighter), true);
   attack(fighter, game);
   assert.equal(game.bullets.length, 1);
+  assert.ok(Math.abs(game.bullets[0].damage - fighter.weaponBaseDamage * (149 / 150)) < 1e-6);
+
+  // Slow regen fills unused pool capacity; does not pull from armor or weapon.
+  fighter.nanobotArmor = 40;
+  fighter.nanobotFree = 100;
+  fighter.nanobotWeapon = 100;
+  const freeBefore = fighter.nanobotFree;
+  tickNanotech(fighter, 2);
+  assert.ok(fighter.nanobotFree > freeBefore);
+  assert.equal(fighter.nanobotArmor, 40);
+  assert.equal(fighter.nanobotWeapon, 100);
+}
+
+// Incomplete sword slash bleeds 2% of full bot cost.
+{
+  const fighter = applyLoadout(new Fighter({
+    x: 100, y: 400, team: 0, aim: 0
+  }), loadout({ weapon: "nanotech-sword" }));
+  fighter.nanobotWeapon = 50;
+  fighter.nanobotFree = 0;
+  assert.equal(nanotechFormPct(fighter), 0.5);
+  const foe = new Fighter({ x: 150, y: 400, team: 1 });
+  const game = { bullets: [], effects: [], fighters: [fighter, foe] };
+  attack(fighter, game);
+  assert.equal(fighter.nanobotWeapon, 48);
+  // Full form does not bleed.
+  fighter.nanobotWeapon = 100;
+  fighter.attackCd = 0;
+  applyNanotechSlashBotLoss(fighter);
+  assert.equal(fighter.nanobotWeapon, 100);
 }
 
 // Nano armor absorbs damage before core (2 bots per HP).
@@ -164,7 +200,7 @@ function syncDisplay(fighter) {
   assert.equal(chest.nanotechChanneling, false);
 }
 
-// Armor spawn is a quick Mark-85 snap; sword forms from free reserve bots.
+// Armor spawn is a quick Mark-85 snap; sword visibility tracks committed weapon bots.
 {
   const {
     NANOTECH_ARMOR_SPAWN_DURATION, NANOTECH_SWORD_DISSOLVE_DURATION,
@@ -179,22 +215,32 @@ function syncDisplay(fighter) {
     weapon: "nanotech-sword"
   }));
   assert.equal(nanotechSwordHidden(fighter), false);
-  assert.equal(fighter.nanobotFree, 600);
+  assert.equal(fighter.nanobotWeapon, 100);
+  assert.equal(fighter.nanobotFree, 500);
   assert.equal(setNanotechChanneling(fighter, true), true);
   assert.equal(fighter.nanotechArmorSpawning, true);
 
-  // Channel enough that free drops below the 100-bot sword cost.
+  // Channeling can drain free to 0 without dissolving the formed sword.
   for (let i = 0; i < 30; i++) tickNanotech(fighter, 0.05);
   assert.ok(fighter.nanobotArmor > 0);
-  assert.ok(fighter.nanobotFree < 100);
-  assert.equal(nanotechSwordHidden(fighter), true, "sword gone when reserve < 100");
+  assert.equal(fighter.nanobotFree, 0);
+  assert.equal(fighter.nanobotWeapon, 100);
+  assert.equal(nanotechSwordHidden(fighter), false, "formed sword survives channel");
 
-  // Release F — armor recalls to reserve; sword reforms.
+  // Dump weapon bots → dissolve; E reforms from recalled free.
+  fighter.nanobotWeapon = 0;
+  for (let i = 0; i < 20; i++) tickNanotech(fighter, 0.05);
+  assert.equal(nanotechSwordHidden(fighter), true, "sword gone when weapon bots = 0");
+
   setNanotechChanneling(fighter, false);
   for (let i = 0; i < 40; i++) tickNanotech(fighter, 0.05);
   assert.equal(fighter.nanobotArmor, 0, "armor returns to reserve");
   assert.ok(fighter.nanobotFree >= 100);
-  assert.equal(nanotechSwordHidden(fighter), false, "sword reforms from reserve");
+  const reform = tryFormNanotechWeapon(fighter);
+  assert.equal(reform.ok, true);
+  assert.equal(reform.fullyFormed, true);
+  for (let i = 0; i < 20; i++) tickNanotech(fighter, 0.05);
+  assert.equal(nanotechSwordHidden(fighter), false, "E reforms sword from free");
   assert.ok(nanotechSwordVisibility(fighter) > 0.9);
 
   const rifle = applyLoadout(new Fighter({}), loadout({

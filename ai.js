@@ -5,7 +5,7 @@ import { platformsOf } from "./maps.js";
 import { directiveStrength } from "./coaching.js";
 import {
   beginModularMorph, beginRetractableMorph, hasNanotechChestplate, hasRetractableArmor,
-  isModularWeapon, setNanotechChanneling
+  isModularWeapon, nanotechFormPct, setNanotechChanneling, tryFormNanotechWeapon
 } from "./equipment.js";
 import {
   ensureLearningProfile, evidenceReliability, evidenceState, mimicBlendFactor,
@@ -512,17 +512,23 @@ export function updateAiRetractableArmor(fighter, state, game, visible, target, 
   if (want) state.retractableHoldUntil = now + RETRACTABLE_AI_MIN_HOLD;
 }
 
-/** Minimal nanotech channel: under fire with spare free bots → hold channel. */
+/** Minimal nanotech: form weapon from free bots; under fire with spare free → channel. */
 export function updateAiNanotech(fighter, state, game, visible, target) {
-  if (!hasNanotechChestplate(fighter) || fighter.dead) {
+  if (fighter.dead) {
     setNanotechChanneling(fighter, false);
     return;
   }
-  const weaponCost = fighter.nanotechWeaponCost || 0;
+  if ((fighter.nanotechWeaponCost || 0) > 0 && nanotechFormPct(fighter) < 1) {
+    tryFormNanotechWeapon(fighter);
+  }
+  if (!hasNanotechChestplate(fighter)) {
+    setNanotechChanneling(fighter, false);
+    return;
+  }
   const free = fighter.nanobotFree || 0;
   const underFire = (visible || []).some((foe) => foe && !foe.dead)
     || (!!target && !target.dead);
-  const want = underFire && free > weaponCost + 40
+  const want = underFire && free > 40
     && (fighter.nanobotArmor || 0) < 500;
   setNanotechChanneling(fighter, want);
 }
