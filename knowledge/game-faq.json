@@ -35,7 +35,7 @@
         "keyboard controls",
         "what buttons do I use"
       ],
-      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. 1 and 2 (or mouse wheel) swap between your primary weapon and secondary when a secondary is equipped. Mouse aims; left click fires or swings. G pings for me. Escape pauses."
+      "answer": "Movement is A/D. Jump with W or Space (hold while airborne to jet). Shift also thrusts the jetpack. C dodges. Q raises or lowers your shield. F deploys or retracts Retractable Armor / Shell when equipped; with Nanotech Chestplate, tap F loans +100 bots to armor and hold F returns them to reserve. E cycles Mechanical Modularity modes or forms/absorbs nanotech weapons (including the Adaptive Nanotech Unit's active body). R cycles the Adaptive Nanotech Unit between Sword, Rifle, and Sniper bodies. 1 and 2 (or mouse wheel) swap between your primary weapon and secondary when a secondary is equipped. Mouse aims; left click fires or swings. Right-click chucks stored Material Consumer scraps. G pings for me. Escape pauses."
     },
     {
       "id": "controls-retractable-armor",
@@ -451,9 +451,11 @@
         "what is material consumer",
         "material consumer nanotech",
         "how do I vacuum debris",
-        "debris into nanobots"
+        "debris into nanobots",
+        "chuck scraps",
+        "right click material consumer"
       ],
-      "answer": "Material Consumer is a secondary-slot nanotech tool-sword. Equip it in the Secondary bay, then press 2 (or scroll) to draw it; 1 returns to your primary. While active it vacuums nearby debris into free nanobots (as if they regenerated, still capped by your pool), and those scraps cannot reconquer. It adds 120 bots to the shared nanotech pool and swings as a physical saber — no E form step."
+      "answer": "Material Consumer is a secondary-slot nanotech tool-sword. Equip it in the Secondary bay, then press 2 (or scroll) to draw it; 1 returns to your primary. While active it vacuums nearby debris into free nanobots (as if they regenerated, still capped by your pool), remembers those scraps, and those scraps cannot reconquer. Right-click chucks one stored scrap for light damage — it spends the free bots that scrap gave you. It adds 120 bots to the shared nanotech pool and swings as a physical saber — no E form step."
     },
     {
       "id": "equipment-throw-breakable",

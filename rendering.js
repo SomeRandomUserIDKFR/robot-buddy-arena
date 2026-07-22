@@ -1687,6 +1687,21 @@ export function createRenderer(canvas) {
 
   function drawBullets(game) {
     for (const bullet of game.bullets) {
+      if (bullet.scrapChuck) {
+        const ang = Math.atan2(bullet.vy, bullet.vx) + (bullet.scrapSpin || 0) * 0.08;
+        const w = bullet.scrapW || 8;
+        const h = bullet.scrapH || 6;
+        context.save();
+        context.translate(bullet.x, bullet.y);
+        context.rotate(ang);
+        context.fillStyle = bullet.color || "#8a7a68";
+        context.fillRect(-w / 2, -h / 2, w, h);
+        context.strokeStyle = "rgba(255,255,255,.35)";
+        context.lineWidth = 1;
+        context.strokeRect(-w / 2, -h / 2, w, h);
+        context.restore();
+        continue;
+      }
       const hose = bullet.tracer && (bullet.owner?.weaponId === "gattler" || bullet.owner?.weaponStats?.shieldDamageMult);
       context.lineWidth = hose ? 2.5 : bullet.tracer ? 5 : 3;
       context.strokeStyle = bullet.owner.team

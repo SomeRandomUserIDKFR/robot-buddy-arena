@@ -86,6 +86,10 @@ export const MATERIAL_CONSUMER_VACUUM_RADIUS = 150;
 export const MATERIAL_CONSUMER_BOTS_PER_PIECE = 4;
 /** Reach from fighter center to saber tip (gripOffset 17 + length 44). */
 export const MATERIAL_CONSUMER_TIP_REACH = 61;
+/** Light damage per chucked inhaled scrap. */
+export const MATERIAL_CONSUMER_CHUCK_DAMAGE = 10;
+/** Chuck projectile speed. */
+export const MATERIAL_CONSUMER_CHUCK_SPEED = 1100;
 export const MATERIAL_CONSUMER_ID = "material-consumer-nanotech";
 export { THROW_BREAKABLE_ID } from "./throw-breakable.js";
 export const NO_SECONDARY_ID = "no-secondary";
@@ -296,7 +300,7 @@ export const GEAR = [
     MATERIAL_CONSUMER_ID,
     "secondaryWeapon",
     "Material Consumer",
-    "Nanotech tool-sword. Vacuums nearby debris into free bots (no reconquer). Adds 120 pool bots. Swap with 1/2 or scroll.",
+    "Nanotech tool-sword. Vacuums debris into free bots (no reconquer; remembers scraps). RMB chucks stored scraps for light damage — costs the bots those scraps gave. Adds 120 pool bots.",
     {
       damage: (48 * NANOTECH_DAMAGE_MULT) / 40,
       fireRate: 150 / 150,
@@ -1215,6 +1219,69 @@ export function isMaterialConsumer(fighterOrId) {
     || fighterOrId?.materialConsumer === true;
 }
 
+export function materialScrapBank(fighter) {
+  if (!fighter.materialScrapBank) fighter.materialScrapBank = [];
+  return fighter.materialScrapBank;
+}
+
+/**
+ * Right-click: spit one inhaled scrap as a light projectile.
+ * Costs the free bots that scrap originally granted.
+ * @returns {boolean}
+ */
+export function chuckMaterialConsumerScrap(fighter, game) {
+  if (!fighter || fighter.dead || !isMaterialConsumer(fighter) || !game) return false;
+  if (fighter.attackCd > 0) return false;
+  if (fighter.shieldRaised && !fighter.shieldBroken) return false;
+  const bank = materialScrapBank(fighter);
+  if (!bank.length) return false;
+  const scrap = bank[0];
+  const cost = Math.max(0, scrap.bots || 0);
+  if (cost <= 0 || (fighter.nanobotFree || 0) < cost) return false;
+
+  fighter.nanobotFree -= cost;
+  bank.shift();
+  clampNanotechPool(fighter);
+
+  const tip = materialConsumerTip(fighter);
+  const aim = Number.isFinite(fighter.aim) ? fighter.aim : 0;
+  const speed = MATERIAL_CONSUMER_CHUCK_SPEED;
+  const rpm = Math.max(60, fighter.weaponRpm || 150);
+  fighter.attackCd = 60 / rpm;
+  fighter.materialConsumeFlash = Math.max(fighter.materialConsumeFlash || 0, 0.14);
+
+  game.bullets ||= [];
+  game.bullets.push({
+    x: tip.x,
+    y: tip.y,
+    px: tip.x,
+    py: tip.y,
+    vx: Math.cos(aim) * speed,
+    vy: Math.sin(aim) * speed,
+    owner: fighter,
+    life: 900 / speed,
+    traveled: 0,
+    damage: MATERIAL_CONSUMER_CHUCK_DAMAGE,
+    dropoff: null,
+    scrapChuck: true,
+    color: scrap.color || "#8a7a68",
+    scrapW: Math.max(4, Math.min(14, scrap.w || 8)),
+    scrapH: Math.max(4, Math.min(14, scrap.h || 8)),
+    scrapSpin: (Math.random() - 0.5) * 14
+  });
+  if (game.effects) {
+    game.effects.push({
+      type: "muzzle",
+      x: tip.x,
+      y: tip.y,
+      life: 0.07,
+      angle: aim,
+      report: false
+    });
+  }
+  return true;
+}
+
 export function hasSecondaryWeapon(fighter) {
   const id = fighter?.loadout?.secondaryWeapon;
   return !!id && id !== NO_SECONDARY_ID && !!GEAR_BY_ID[id];
@@ -1359,6 +1426,7 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
   const arrivals = game.materialConsumeArrivals || [];
   if (arrivals.length) {
     const keep = [];
+    const bank = materialScrapBank(fighter);
     for (const arrival of arrivals) {
       if (arrival.owner !== fighter) {
         keep.push(arrival);
@@ -1366,6 +1434,17 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
       }
       const got = grantFreeNanobots(fighter, arrival.bots || 0);
       gained += got;
+      // Remember only scraps that actually paid bots — chucking spends that amount.
+      if (got > 0) {
+        bank.push({
+          bots: got,
+          color: arrival.color || "#8a7a68",
+          kind: arrival.kind || null,
+          material: arrival.material || null,
+          w: arrival.w || 8,
+          h: arrival.h || 8
+        });
+      }
       if (got > 0 && game.effects) {
         game.effects.push({
           type: "nanoBotGrant",
@@ -2119,6 +2198,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.materialConsumer = false;
   fighter.throwBreakable = false;
   fighter.heldProp = null;
+  fighter.materialScrapBank = [];
   if (weapon.id === ADAPTIVE_NANOTECH_ID) {
     applyAdaptiveCombatStats(fighter, "sword");
     syncAdaptiveNanotechCosts(fighter, "sword");

@@ -1,5 +1,5 @@
 export const keys = Object.create(null);
-export const mouse = { x: 0, y: 0, down: false };
+export const mouse = { x: 0, y: 0, down: false, right: false };
 
 export function installInput(canvas, onKeyDown, onKeyUp, onWheel) {
   addEventListener("keydown", (event) => {
@@ -13,6 +13,8 @@ export function installInput(canvas, onKeyDown, onKeyUp, onWheel) {
   // Lost focus can miss keyup — clear held keys so channel/hold actions release.
   addEventListener("blur", () => {
     for (const code of Object.keys(keys)) keys[code] = false;
+    mouse.down = false;
+    mouse.right = false;
   });
   canvas.addEventListener("mousemove", (event) => {
     const bounds = canvas.getBoundingClientRect();
@@ -21,9 +23,11 @@ export function installInput(canvas, onKeyDown, onKeyUp, onWheel) {
   });
   canvas.addEventListener("mousedown", (event) => {
     if (event.button === 0) mouse.down = true;
+    if (event.button === 2) mouse.right = true;
   });
-  addEventListener("mouseup", () => {
-    mouse.down = false;
+  addEventListener("mouseup", (event) => {
+    if (event.button === 0) mouse.down = false;
+    if (event.button === 2) mouse.right = false;
   });
   canvas.addEventListener("contextmenu", (event) => event.preventDefault());
   // Secondary weapon swap: capture so the page does not scroll while fighting.

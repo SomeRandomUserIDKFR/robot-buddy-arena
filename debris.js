@@ -1047,7 +1047,12 @@ function finishMaterialConsumePiece(game, piece) {
     owner: piece.consumeOwner,
     bots: Math.max(0, piece.consumeBots || 0),
     x: tipX,
-    y: tipY
+    y: tipY,
+    color: piece.consumeBaseColor || piece.color || "#8a7a68",
+    kind: piece.kind || null,
+    material: piece.material || null,
+    w: piece.w || 8,
+    h: piece.h || 8
   });
 }
 

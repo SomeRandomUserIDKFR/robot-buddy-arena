@@ -9,9 +9,9 @@ import {
 } from "./debris.js";
 import { Fighter } from "./combat.js";
 import {
-  applyLoadout, beginRetractableMorph, DEFAULT_LOADOUT, MATERIAL_CONSUMER_BOTS_PER_PIECE,
-  MATERIAL_CONSUMER_ID, selectWeaponSlot, tickMaterialConsumerVacuum, tickRetractableArmor,
-  RETRACTABLE_MORPH_DURATION
+  applyLoadout, beginRetractableMorph, chuckMaterialConsumerScrap, DEFAULT_LOADOUT,
+  MATERIAL_CONSUMER_BOTS_PER_PIECE, MATERIAL_CONSUMER_CHUCK_DAMAGE, MATERIAL_CONSUMER_ID,
+  selectWeaponSlot, tickMaterialConsumerVacuum, tickRetractableArmor, RETRACTABLE_MORPH_DURATION
 } from "./equipment.js";
 import { createMapRuntime, damageProp } from "./maps.js";
 import { createPowerCrate } from "./powerups.js";
@@ -618,11 +618,31 @@ assert.equal(restoreMapProp(null), false);
   assert.equal(game.groundDebris.length, 0);
   assert.ok(game.effects.some((e) => e.type === "nanoIngest"), "ingest swirl at tip");
   assert.ok(game.effects.some((e) => e.type === "nanoBotGrant"), "bots bloom from tip");
+  assert.equal(fighter.materialScrapBank.length, pieces, "remembers inhaled scraps");
+  assert.ok(fighter.materialScrapBank.every((s) => s.bots === MATERIAL_CONSUMER_BOTS_PER_PIECE));
+
+  // Chuck spends those bots and fires a scrap projectile.
+  game.bullets = [];
+  fighter.attackCd = 0;
+  const freeBeforeChuck = fighter.nanobotFree;
+  assert.ok(chuckMaterialConsumerScrap(fighter, game));
+  assert.equal(fighter.materialScrapBank.length, pieces - 1);
+  assert.equal(fighter.nanobotFree, freeBeforeChuck - MATERIAL_CONSUMER_BOTS_PER_PIECE);
+  assert.equal(game.bullets.length, 1);
+  assert.equal(game.bullets[0].scrapChuck, true);
+  assert.equal(game.bullets[0].damage, MATERIAL_CONSUMER_CHUCK_DAMAGE);
+
+  // Cannot chuck without enough free bots (spend them elsewhere).
+  fighter.attackCd = 0;
+  fighter.nanobotFree = 0;
+  assert.equal(chuckMaterialConsumerScrap(fighter, game), false);
+  assert.equal(fighter.materialScrapBank.length, pieces - 1);
 
   // Full pool: leave debris alone.
   fighter.nanobotFree = fighter.nanobotMax;
   fighter.nanobotArmor = 0;
   fighter.nanobotWeapon = 0;
+  fighter.materialScrapBank = [];
   game.groundDebris = [{
     x: fighter.x + 10, y: fighter.y + 10, w: 8, h: 8,
     sourceId: "mc-full", despawnMode: null, color: "#888", vx: 0, vy: 0, spin: 0, rot: 0

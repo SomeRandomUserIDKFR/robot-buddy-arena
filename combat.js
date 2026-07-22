@@ -4,10 +4,10 @@ import {
 } from "./config.js";
 import { updateAI } from "./ai.js";
 import {
-  applyHpDamage, applyNanotechSlashBotLoss, canNanotechAttack, consumeNanotechShot,
-  nanotechFormPct, retractableSpeedMultiplier, shieldBlocksAttack,
-  shieldSpeedMultiplier, tickAdaptiveWeapon, tickModularWeapon, tickNanotech,
-  tickRetractableArmor, weaponAttackLocked
+  applyHpDamage, applyNanotechSlashBotLoss, canNanotechAttack, chuckMaterialConsumerScrap,
+  consumeNanotechShot, nanotechFormPct, retractableSpeedMultiplier,
+  shieldBlocksAttack, shieldSpeedMultiplier, tickAdaptiveWeapon, tickModularWeapon,
+  tickNanotech, tickRetractableArmor, weaponAttackLocked
 } from "./equipment.js";
 import { armorDummyBlockers, damageArmorDummy } from "./debris.js";
 import {
@@ -532,6 +532,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
     }
   }
   if (fighter.y > WORLD.h + 100) hit(fighter, fighter, 999, -Math.PI / 2, game);
+  if (intent.chuck) chuckMaterialConsumerScrap(fighter, game);
   if (intent.attack) attack(fighter, game);
 }
 

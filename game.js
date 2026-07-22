@@ -266,6 +266,7 @@ function humanIntent(fighter) {
     // these are released, so holding jump or spamming Shift can't cheat it.
     jetHeld: !!(keys.ShiftLeft || keys.ShiftRight || keys.KeyW || keys.Space),
     attack: mouse.down,
+    chuck: mouse.right,
     dodge: false
   };
 }
