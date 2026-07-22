@@ -4,6 +4,7 @@ import {
   ADAPTIVE_MODE_DEFS, ADAPTIVE_NANOTECH_ID, MODULAR_MODE_DEFS, MODULAR_WEAPON_ID,
   nanotechArmorHp, nanotechArmorMaxHp, nanotechWeaponVisibility
 } from "./equipment.js";
+import { isCombatClone } from "./combat-clone.js";
 import {
   displayedHp, displayedMaxHp, hasIllusionTruthSight, isIllusionFighter
 } from "./illusionist.js";
@@ -840,13 +841,20 @@ export function createRenderer(canvas) {
     drawArmorDummies(game, .35);
     drawCeiling(game, .35);
     const player = game.fighters[0];
-    // Real allies only for fog / sight discs — decoys must not expand vision.
+    // Real allies only for fog / sight discs — summons must not expand vision.
     const allies = game.fighters.filter(
-      (fighter) => !fighter.dead && !isIllusionFighter(fighter) && fighter.team === player.team
+      (fighter) => (
+        !fighter.dead
+        && !isIllusionFighter(fighter)
+        && !isCombatClone(fighter)
+        && fighter.team === player.team
+      )
     );
     const viewerTruth = hasIllusionTruthSight(player);
     const winningTeam = game.over
-      ? (game.fighters.some((other) => other.team === 0 && !other.dead && !isIllusionFighter(other)) ? 0 : 1)
+      ? (game.fighters.some((other) => (
+        other.team === 0 && !other.dead && !isIllusionFighter(other) && !isCombatClone(other)
+      )) ? 0 : 1)
       : -1;
     context.save();
     context.beginPath();
@@ -1384,6 +1392,7 @@ export function createRenderer(canvas) {
     const centerY = fighter.y + SIZE / 2;
     const truth = truthSight == null ? hasIllusionTruthSight(viewer) : truthSight;
     const decoy = isIllusionFighter(fighter);
+    const clone = isCombatClone(fighter);
     context.save();
     if (fighter.dead) context.globalAlpha = .45;
     if (fighter.buddy) {
@@ -1401,11 +1410,25 @@ export function createRenderer(canvas) {
       context.setLineDash([]);
       context.lineWidth = 1;
     }
+    // Ally-only Doppel tell — enemies see a perfect fake; you don't shoot your twin.
+    if (
+      clone
+      && !fighter.dead
+      && viewer
+      && viewer.team === fighter.team
+    ) {
+      context.strokeStyle = "rgba(160,220,255,.75)";
+      context.lineWidth = 1.5;
+      context.setLineDash([3, 4]);
+      context.strokeRect(fighter.x - 3, fighter.y - 3, SIZE + 6, SIZE + 6);
+      context.setLineDash([]);
+      context.lineWidth = 1;
+    }
     context.fillStyle = fighter.hitFlash > 0 ? "#fff" : fighter.color;
     context.fillRect(fighter.x, fighter.y, SIZE, SIZE);
     context.shadowBlur = 0;
-    // Decoys skip heavy armor plate flair — silhouette + gun is enough gaslight.
-    if (!decoy) {
+    // Summons skip heavy armor plate flair — silhouette + gun is enough.
+    if (!decoy && !clone) {
       drawRetractableArmorPlates(
         context, game, fighter, centerX, centerY, fighter.dead ? .45 : 1
       );
@@ -1420,7 +1443,9 @@ export function createRenderer(canvas) {
     const winningTeam = winningTeamHint != null
       ? winningTeamHint
       : (game.over
-        ? (game.fighters.some((other) => other.team === 0 && !other.dead && !isIllusionFighter(other)) ? 0 : 1)
+        ? (game.fighters.some((other) => (
+          other.team === 0 && !other.dead && !isIllusionFighter(other) && !isCombatClone(other)
+        )) ? 0 : 1)
         : -1);
     const face = fighter.dead
       ? "-_-"
@@ -1509,7 +1534,7 @@ export function createRenderer(canvas) {
         3
       );
     }
-    if (!decoy) drawBuffClocks(fighter);
+    if (!decoy && !clone) drawBuffClocks(fighter);
   }
 
   function drawBuffClocks(fighter) {

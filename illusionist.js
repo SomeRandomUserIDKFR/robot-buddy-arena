@@ -429,7 +429,10 @@ export function illusionObjectHitBySegment(ill, x1, y1, x2, y2) {
     || (x2 >= ill.x && x2 <= ill.x + ill.w && y2 >= ill.y && y2 <= ill.y + ill.h);
 }
 
-/** Living fighters that count for match win/loss (excludes decoys). */
+/** Living fighters that count for match win/loss (excludes decoys / Doppels). */
 export function isRealCombatant(fighter) {
-  return !!fighter && !fighter.dead && !isIllusionFighter(fighter);
+  return !!fighter
+    && !fighter.dead
+    && !isIllusionFighter(fighter)
+    && !fighter.combatClone;
 }

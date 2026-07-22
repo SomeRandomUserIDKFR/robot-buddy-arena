@@ -333,8 +333,10 @@ export function updateHud(game) {
   if (ui.trapHud) {
     const showTrap = !!player?.trapper && !player.dead;
     const showIllu = !!player?.illusionist && !player.dead;
-    ui.trapHud.classList.toggle("hidden", !showTrap && !showIllu);
+    const showDoppel = !!player?.combatCloneGear && !player.dead;
+    ui.trapHud.classList.toggle("hidden", !showTrap && !showIllu && !showDoppel);
     ui.trapHud.classList.toggle("illusion", showIllu);
+    ui.trapHud.classList.toggle("doppel", showDoppel && !showIllu);
     if (showIllu) {
       const t = player.illusionistType === "prop"
         ? "prop"
@@ -347,6 +349,16 @@ export function updateHud(game) {
       if (ui.trapHudType) {
         ui.trapHudType.textContent = t === "prop" ? "PROP" : t === "plat" ? "PLAT" : "FIGHTER";
       }
+    } else if (showDoppel) {
+      ui.trapHud.classList.toggle("fake", false);
+      ui.trapHud.classList.toggle("bear", false);
+      const cd = player.combatCloneCd || 0;
+      if (ui.trapHudKicker) {
+        ui.trapHudKicker.textContent = cd > 0 ? "DOPPEL · COOLDOWN" : "DOPPEL · PRESS 3";
+      }
+      if (ui.trapHudType) {
+        ui.trapHudType.textContent = cd > 0 ? `${Math.ceil(cd)}s` : "READY";
+      }
     } else if (showTrap) {
       const type = player.trapperType === "fakePlatform" ? "fake" : "bear";
       ui.trapHud.classList.toggle("fake", type === "fake");
@@ -357,7 +369,7 @@ export function updateHud(game) {
       }
     }
   }
-  ui.teamBars.innerHTML = game.fighters.filter((f) => !f.illusion).map((fighter) => {
+  ui.teamBars.innerHTML = game.fighters.filter((f) => !f.illusion && !f.combatClone).map((fighter) => {
     // Illusionists see real HP; everyone else can be gaslit by phantom damage.
     const showHp = player?.illusionist
       ? Math.max(0, fighter.hp || 0)
@@ -924,6 +936,16 @@ function modifierMarkup(gear) {
         "<span>Short arm time before triggers</span>",
         "<span>Ally outline · faint enemy cue</span>",
         "<span class=\"stat-down\">Owner immune · max 3 active</span>"
+      ].join("");
+    }
+    if (gear.combatClone) {
+      return [
+        "<span>Extension · press 3 to spawn</span>",
+        "<span class=\"stat-up\">Real twin · looks like an illusion fighter</span>",
+        "<span class=\"stat-up\">25% of your max HP · real damage</span>",
+        "<span>Max 2 alive · 30s cooldown</span>",
+        "<span>Ally outline only · dies with you</span>",
+        "<span class=\"stat-down\">Under Illusionist on price</span>"
       ].join("");
     }
     if (gear.illusionist) {

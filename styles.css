@@ -1047,6 +1047,10 @@ button span { opacity: .6; font-size: 11px; }
   border-color: rgba(200, 180, 255, .5);
 }
 .trap-hud.illusion b { color: #e0d0ff; }
+.trap-hud.doppel {
+  border-color: rgba(140, 210, 255, .55);
+}
+.trap-hud.doppel b { color: #b8e4ff; }
 #readinessLabel { color: var(--cyan); margin-top: 5px; }
 #hudCyber { margin-top: 5px; color: var(--cyan); font-size: 14px; }
 #hudRanking { margin-top: 5px; color: #7ddca9; font-size: 13px; font-weight: 700; }

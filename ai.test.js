@@ -7,16 +7,17 @@ import {
   isGreenEnemyAi, mindDodgeScale, pickEscapeCrateHop, pickNearestGrabbable,
   pickNearestVisibleCrate, ROOKIE_BUDDY, SHIELD_MAX_HOLD, shieldHoldDuration,
   shieldLowerCooldown, shieldRaiseAllowed, shieldStyleBias, stepAimSmoothing,
-  tickAiShieldHold, updateAI, updateAiIllusionist, updateAiLightCondensation,
-  updateAiMaterialConsumer, updateAiReconjurer, updateAiRetractableArmor, updateAiShield,
-  updateAiThrowBreakable, updateAiTrapper, updateAiWeaponSlot, wantAiSecondarySlot,
-  wantRetractableDeployed
+  tickAiShieldHold, updateAI, updateAiCombatClone, updateAiIllusionist,
+  updateAiLightCondensation, updateAiMaterialConsumer, updateAiReconjurer,
+  updateAiRetractableArmor, updateAiShield, updateAiThrowBreakable, updateAiTrapper,
+  updateAiWeaponSlot, wantAiSecondarySlot, wantRetractableDeployed
 } from "./ai.js";
 import { Fighter } from "./combat.js";
+import { isCombatClone } from "./combat-clone.js";
 import { AI_PRESETS, DEFAULT_PROFILE, SIZE, WORLD } from "./config.js";
 import { spawnPropDebris } from "./debris.js";
 import {
-  applyLoadout, DEFAULT_LOADOUT, ILLUSIONIST_ID, isPrecisionAimWeapon,
+  applyLoadout, COMBAT_CLONE_ID, DEFAULT_LOADOUT, ILLUSIONIST_ID, isPrecisionAimWeapon,
   LIGHT_CONDENSATION_ID, MATERIAL_CONSUMER_ID, RECONJURER_BUILDER_ID,
   RETRACTABLE_MORPH_DURATION, selectWeaponSlot, tickRetractableArmor, trainerLoadout,
   TRAPPER_ID
@@ -1551,5 +1552,29 @@ console.log("Trapper AI suite passed.");
 
 console.log("Illusionist AI suite passed.");
 
+// --- Doppel AI ---
+{
+  assert.match(thoughtReason("spawning doppel"), /twin|focus/i);
+}
 
+{
+  const buddy = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 0, buddy: true, ai: "balanced",
+    grounded: true, aim: 0, hp: 180, name: "Pixel", color: "#42dff5"
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: COMBAT_CLONE_ID,
+    weapon: "pulse-rifle"
+  });
+  const enemy = new Fighter({
+    x: 700, y: 700, team: 1, weapon: "saber", grounded: true, hp: 500
+  });
+  const state = { plan: "idle", desiredAim: null };
+  const game = { fighters: [buddy, enemy], effects: [] };
+  updateAiCombatClone(buddy, state, game, [enemy], enemy);
+  assert.equal(state.plan, "spawning doppel");
+  assert.ok(game.fighters.some((f) => isCombatClone(f)));
+}
+
+console.log("Doppel AI suite passed.");
 

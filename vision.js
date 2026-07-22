@@ -1,4 +1,5 @@
 import { SIGHT, SIZE } from "./config.js";
+import { isCombatClone } from "./combat-clone.js";
 import { isIllusionFighter } from "./illusionist.js";
 import { inLightCondensationReveal } from "./light-condensation.js";
 import { sightBlockers } from "./maps.js";
@@ -56,12 +57,12 @@ function canSeeTarget(game, observer, target) {
 }
 
 export function visibleToTeam(game, observer, target) {
-  // Decoys are visual gaslights — they must not act as extra team eyes
-  // (that squared LOS cost when Illusionist swarms get large).
+  // Decoys / Doppels must not act as extra team eyes (LOS cost + unfair reveal).
   return game.fighters.some(
     (fighter) => (
       !fighter.dead
       && !isIllusionFighter(fighter)
+      && !isCombatClone(fighter)
       && fighter.team === observer.team
       && canSeeTarget(game, fighter, target)
     )

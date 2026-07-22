@@ -22,6 +22,9 @@ import {
   stepThrownBreakables
 } from "./throw-breakable.js";
 import {
+  isCombatClone, tickCombatCloneFighter
+} from "./combat-clone.js";
+import {
   applyPhantomDamage, ghostBulletThroughIllusion, isIllusionFighter,
   ILLUSION_PHANTOM_DAMAGE, registerIllusionFighterHit, registerIllusionObjectHit,
   tickIllusionistFighter
@@ -517,6 +520,7 @@ export function stepJetFuel(fighter, jetHeld, wantsThrust, dt) {
 export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   if (fighter.dead) return;
   const decoy = isIllusionFighter(fighter);
+  const clone = isCombatClone(fighter);
   fighter.attackCd -= dt;
   fighter.dodgeCd -= dt;
   fighter.iframe -= dt;
@@ -525,12 +529,13 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   fighter.dodgeFace -= dt;
   fighter.spotted -= dt;
   fighter.shieldFlash -= dt;
-  // Decoys keep weapon morph ticks (kit clone) but skip trapper bookkeeping.
+  // Decoys / Doppels keep weapon morph ticks but skip trapper bookkeeping.
   tickModularWeapon(fighter, dt);
   tickAdaptiveWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
-  if (!decoy) tickTrapperFighter(fighter, dt);
+  if (!decoy && !clone) tickTrapperFighter(fighter, dt);
   tickIllusionistFighter(fighter, dt);
+  tickCombatCloneFighter(fighter, dt);
   // Humans: know fire intent before nanotech tick so hold-to-shoot blocks regen.
   let intent = null;
   if (fighter.human && getHumanIntent) {

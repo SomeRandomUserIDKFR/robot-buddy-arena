@@ -26,6 +26,9 @@ import {
   canGrabBreakable, isThrowBreakable, THROW_BREAKABLE_GRAB_RANGE, THROW_BREAKABLE_ID
 } from "./throw-breakable.js";
 import {
+  isCombatClone, isCombatCloneGear, listCombatClones, tryCombatCloneSpawn
+} from "./combat-clone.js";
+import {
   cycleIllusionistType, isIllusionFighter, isIllusionist, listIllusionFighters,
   listIllusionObjects, tryIllusionistPlant
 } from "./illusionist.js";
@@ -1241,11 +1244,12 @@ export function buddySkill(preset, learned, aiId = "balanced") {
 }
 
 /**
- * Lightweight combat brain for fighter decoys.
- * Keeps chase / shoot / jet / nested Illusionist planting; skips learning,
- * Mimic, shield policy, and every other extension (huge win under swarm loads).
+ * Shared light combat brain for Illusionist decoys and Doppel twins.
+ * @param {{ plantIllusions?: boolean, planPrefix?: string }} [opts]
  */
-export function updateAIDecoy(fighter, dt, game) {
+export function updateAISummon(fighter, dt, game, opts = {}) {
+  const plantIllusions = !!opts.plantIllusions;
+  const planPrefix = opts.planPrefix || "illusion";
   const state = fighter.aiState;
   const preset = AI_PRESETS[fighter.ai] || AI_PRESETS.balanced;
   const turnRate = preset.aimTurnRate ?? AI_PRESETS.balanced.aimTurnRate;
@@ -1267,7 +1271,7 @@ export function updateAIDecoy(fighter, dt, game) {
   for (const enemy of game.fighters) {
     if (!enemy || enemy.dead || enemy.team === fighter.team || enemy === fighter) continue;
     const d = dist(fighter, enemy);
-    const weight = isIllusionFighter(enemy) ? d + 80 : d;
+    const weight = (isIllusionFighter(enemy) || isCombatClone(enemy)) ? d + 80 : d;
     if (weight < best) {
       best = weight;
       target = enemy;
@@ -1291,25 +1295,70 @@ export function updateAIDecoy(fighter, dt, game) {
     const needLift = target.y < fighter.y - 90;
     state.jet = !fighter.grounded && needLift && fighter.fuel > 0.18 && !fighter.jetLocked;
     state.jetHeld = state.jet;
-    state.plan = "illusion pressing";
+    state.plan = `${planPrefix} pressing`;
   } else {
     state.attack = false;
     state.mx = 0;
     state.jump = false;
     state.jet = false;
     state.jetHeld = false;
-    state.plan = "illusion idle";
+    state.plan = `${planPrefix} idle`;
   }
 
-  const visible = target ? [target] : [];
-  updateAiIllusionist(fighter, state, game, visible, target);
+  if (plantIllusions) {
+    const visible = target ? [target] : [];
+    updateAiIllusionist(fighter, state, game, visible, target);
+  }
   stepAimSmoothing(fighter, dt, turnRate);
   return state;
+}
+
+/** Lightweight combat brain for fighter decoys (may nest-plant illusions). */
+export function updateAIDecoy(fighter, dt, game) {
+  return updateAISummon(fighter, dt, game, {
+    plantIllusions: true,
+    planPrefix: "illusion"
+  });
+}
+
+/** Lightweight combat brain for real Doppel twins (no extension planting). */
+export function updateAIClone(fighter, dt, game) {
+  return updateAISummon(fighter, dt, game, {
+    plantIllusions: false,
+    planPrefix: "doppel"
+  });
+}
+
+/**
+ * Owner AI: spawn Doppel twins when pressed or when a visible foe is mid-range.
+ */
+export function updateAiCombatClone(fighter, state, game, visible, target) {
+  if (!isCombatCloneGear(fighter) || fighter.dead || !game) return;
+  if ((fighter.combatCloneCd || 0) > 0) return;
+  const owned = listCombatClones(game).filter((c) => c.cloneOwner === fighter).length;
+  if (owned >= 2) return;
+  const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
+  const pressed = (fighter.hp || 0) < 280;
+  const midFight = !!foe && dist(fighter, foe) < 720;
+  if (!pressed && !midFight) return;
+  if (foe || target) {
+    const aimAt = foe || target;
+    state.desiredAim = Math.atan2(
+      aimAt.y + SIZE / 2 - (fighter.y + SIZE / 2),
+      aimAt.x + SIZE / 2 - (fighter.x + SIZE / 2)
+    );
+  }
+  if (tryCombatCloneSpawn(fighter, game, Fighter)) {
+    state.plan = "spawning doppel";
+  }
 }
 
 export function updateAI(fighter, dt, game, profile) {
   if (isIllusionFighter(fighter)) {
     return updateAIDecoy(fighter, dt, game);
+  }
+  if (isCombatClone(fighter)) {
+    return updateAIClone(fighter, dt, game);
   }
   const state = fighter.aiState;
   const priorRetreatDecision = state.plan === "covering retreat";
@@ -1831,6 +1880,7 @@ export function updateAI(fighter, dt, game, profile) {
   updateAiLightCondensation(fighter, state, game, visible, target);
   updateAiTrapper(fighter, state, game, visible, target);
   updateAiIllusionist(fighter, state, game, visible, target);
+  updateAiCombatClone(fighter, state, game, visible, target);
 
   // Enemy trainers stay on the baseline tactical shield policy (bias 0).
   // Buddies blend toward player shieldUse; Mimic scales by intensity blend.
