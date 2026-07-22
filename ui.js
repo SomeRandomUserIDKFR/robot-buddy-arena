@@ -846,9 +846,10 @@ function modifierMarkup(gear) {
       return [
         nanoCostLine,
         "<span>Secondary tool-sword · 1/2 or scroll</span>",
-        `<span>${stats.baseDamage} slash · RMB chuck scraps</span>`,
+        `<span>${stats.baseDamage} slash · hold RMB debris beam</span>`,
         "<span class=\"stat-up\">Vacuums debris → free bots</span>",
-        "<span class=\"stat-up\">Remembers scraps · chuck costs those bots</span>",
+        "<span class=\"stat-up\">Hold V · excess → ejection tank</span>",
+        "<span class=\"stat-up\">Tank shoots first · then remembered scraps</span>",
         "<span class=\"stat-down\">Vacuumed scraps cannot reconquer</span>"
       ].filter(Boolean).join("");
     }

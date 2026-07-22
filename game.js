@@ -267,6 +267,8 @@ function humanIntent(fighter) {
     jetHeld: !!(keys.ShiftLeft || keys.ShiftRight || keys.KeyW || keys.Space),
     attack: mouse.down,
     chuck: mouse.right,
+    // Hold V: Material Consumer excess vacuum → ejection tank.
+    ejectVacuum: !!keys.KeyV,
     dodge: false
   };
 }

@@ -758,6 +758,7 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
   if (fighter.materialConsumer) {
     const tipX = visual.gripOffset + length;
     const flash = Math.max(0, fighter.materialConsumeFlash || 0);
+    const beamFlash = Math.max(0, fighter.materialBeamFlash || 0);
     const pulse = 0.35 + flash * 3.2;
     context.save();
     context.globalAlpha = alpha * Math.min(1, 0.35 + flash * 2.5);
@@ -773,6 +774,31 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
       context.beginPath();
       context.arc(tipX, 0, 6 + flash * 22, 0, Math.PI * 2);
       context.stroke();
+    }
+    // Hold-RMB debris beam: scrap stream from the tip along aim (+x in local blade space).
+    const tankN = fighter.materialEjectionTank?.length || 0;
+    const bankN = fighter.materialScrapBank?.length || 0;
+    if (fighter.materialBeamHeld && (tankN + bankN > 0 || beamFlash > 0.02)) {
+      const beamLen = 210 + beamFlash * 40;
+      const t = performance.now() / 1000;
+      context.globalAlpha = alpha * (0.28 + beamFlash * 2.2);
+      context.strokeStyle = tankN > 0 ? "rgba(210,180,140,.9)" : "rgba(140,220,190,.85)";
+      context.lineWidth = 3.2 + beamFlash * 4;
+      context.shadowColor = tankN > 0 ? "#c8a878" : "#6cffb0";
+      context.shadowBlur = 10 + beamFlash * 18;
+      context.beginPath();
+      context.moveTo(tipX, 0);
+      context.lineTo(tipX + beamLen, Math.sin(t * 28) * 3);
+      context.stroke();
+      context.lineWidth = 1.2;
+      context.globalAlpha = alpha * (0.45 + beamFlash);
+      for (let i = 0; i < 5; i++) {
+        const u = ((t * 9 + i * 0.17) % 1);
+        const px = tipX + u * beamLen;
+        const py = Math.sin(t * 22 + i * 1.7) * (4 + i);
+        context.fillStyle = i % 2 ? "#d8c4a0" : "#9a8a78";
+        context.fillRect(px - 2.5, py - 2, 5, 4);
+      }
     }
     context.restore();
   }

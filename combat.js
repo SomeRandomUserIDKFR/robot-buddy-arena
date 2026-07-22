@@ -535,6 +535,8 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
     }
   }
   if (fighter.y > WORLD.h + 100) hit(fighter, fighter, 999, -Math.PI / 2, game);
+  fighter.materialEjectHeld = !!intent.ejectVacuum;
+  fighter.materialBeamHeld = !!(intent.chuck && fighter.materialConsumer);
   if (intent.chuck) chuckMaterialConsumerScrap(fighter, game);
   if (intent.attack) attack(fighter, game);
 }

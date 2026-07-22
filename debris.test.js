@@ -10,8 +10,10 @@ import {
 import { Fighter } from "./combat.js";
 import {
   applyLoadout, beginRetractableMorph, chuckMaterialConsumerScrap, DEFAULT_LOADOUT,
-  MATERIAL_CONSUMER_BOTS_PER_PIECE, MATERIAL_CONSUMER_CHUCK_DAMAGE, MATERIAL_CONSUMER_ID,
-  selectWeaponSlot, tickMaterialConsumerVacuum, tickRetractableArmor, RETRACTABLE_MORPH_DURATION
+  MATERIAL_CONSUMER_BEAM_RPM, MATERIAL_CONSUMER_BOTS_PER_PIECE,
+  MATERIAL_CONSUMER_CHUCK_DAMAGE, MATERIAL_CONSUMER_ID,
+  materialEjectionTank, selectWeaponSlot, tickMaterialConsumerVacuum,
+  tickRetractableArmor, RETRACTABLE_MORPH_DURATION
 } from "./equipment.js";
 import { createMapRuntime, damageProp } from "./maps.js";
 import { createPowerCrate } from "./powerups.js";
@@ -638,11 +640,13 @@ assert.equal(restoreMapProp(null), false);
   assert.equal(chuckMaterialConsumerScrap(fighter, game), false);
   assert.equal(fighter.materialScrapBank.length, pieces - 1);
 
-  // Full pool: leave debris alone.
+  // Full pool without V: leave debris alone.
   fighter.nanobotFree = fighter.nanobotMax;
   fighter.nanobotArmor = 0;
   fighter.nanobotWeapon = 0;
   fighter.materialScrapBank = [];
+  fighter.materialEjectionTank = [];
+  fighter.materialEjectHeld = false;
   game.groundDebris = [{
     x: fighter.x + 10, y: fighter.y + 10, w: 8, h: 8,
     sourceId: "mc-full", despawnMode: null, color: "#888", vx: 0, vy: 0, spin: 0, rot: 0
@@ -652,6 +656,99 @@ assert.equal(restoreMapProp(null), false);
   assert.equal(game.groundDebris.length, 1);
   assert.equal(game.groundDebris[0].despawnMode, null);
   assert.equal(game.reconquerQueue.length, 1);
+}
+
+// Hold V at full pool: excess scraps stream into the ejection tank (no bots).
+{
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: MATERIAL_CONSUMER_ID,
+    body: "nanotech-chestplate"
+  });
+  fighter.x = 100;
+  fighter.y = 200;
+  fighter.aim = 0;
+  assert.ok(selectWeaponSlot(fighter, "secondaryWeapon"));
+  fighter.nanobotFree = fighter.nanobotMax;
+  fighter.nanobotArmor = 0;
+  fighter.nanobotWeapon = 0;
+  fighter.materialScrapBank = [];
+  fighter.materialEjectionTank = [];
+  fighter.materialEjectHeld = true;
+  const freeBefore = fighter.nanobotFree;
+  const pieces = 2;
+  const game = {
+    elapsed: 0,
+    groundDebris: Array.from({ length: pieces }, (_, i) => ({
+      x: fighter.x + 16 + i,
+      y: fighter.y + 16,
+      w: 8,
+      h: 8,
+      sourceId: "mc-eject",
+      despawnMode: null,
+      color: "#b09070",
+      vx: 0,
+      vy: 0,
+      spin: 0,
+      rot: 0
+    })),
+    reconquerQueue: [{ sourceId: "mc-eject" }],
+    forgeCasts: [],
+    armorDummyBuilds: [],
+    effects: [],
+    materialConsumeArrivals: []
+  };
+  assert.equal(tickMaterialConsumerVacuum(fighter, game, 1 / 60), 0);
+  assert.ok(game.groundDebris.every((p) => p.despawnMode === "material-consume"));
+  assert.ok(game.groundDebris.every((p) => p.consumeToEjection === true));
+  const frames = Math.ceil(MATERIAL_CONSUME_DURATION * 60) + 20;
+  for (let i = 0; i < frames; i++) {
+    game.elapsed += 1 / 60;
+    tickGroundDebris(game, 1 / 60);
+    tickMaterialConsumerVacuum(fighter, game, 1 / 60);
+  }
+  assert.equal(fighter.nanobotFree, freeBefore, "excess vacuum grants no bots");
+  assert.equal(materialEjectionTank(fighter).length, pieces);
+  assert.equal(fighter.materialScrapBank.length, 0);
+  assert.ok(materialEjectionTank(fighter).every((s) => s.ejection && s.bots === 0));
+}
+
+// Debris beam: ejection tank fires first (free), then remembered bank (costs bots).
+{
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: MATERIAL_CONSUMER_ID,
+    body: "nanotech-chestplate"
+  });
+  assert.ok(selectWeaponSlot(fighter, "secondaryWeapon"));
+  fighter.nanobotFree = 40;
+  fighter.materialEjectionTank = [{
+    bots: 0, ejection: true, color: "#c8a878", w: 8, h: 8
+  }];
+  fighter.materialScrapBank = [{
+    bots: MATERIAL_CONSUMER_BOTS_PER_PIECE, color: "#8a7a68", w: 8, h: 8
+  }];
+  const game = { bullets: [], effects: [] };
+  fighter.attackCd = 0;
+  const freeBefore = fighter.nanobotFree;
+  assert.ok(chuckMaterialConsumerScrap(fighter, game));
+  assert.equal(fighter.materialEjectionTank.length, 0, "tank emptied first");
+  assert.equal(fighter.materialScrapBank.length, 1, "bank untouched until tank empty");
+  assert.equal(fighter.nanobotFree, freeBefore, "tank scrap costs no bots");
+  assert.equal(game.bullets[0].scrapSource, "tank");
+  assert.equal(game.bullets[0].scrapBeam, true);
+  assert.ok(fighter.attackCd > 0);
+  assert.ok(
+    Math.abs(fighter.attackCd - 60 / MATERIAL_CONSUMER_BEAM_RPM) < 0.001,
+    "beam uses beam RPM"
+  );
+
+  fighter.attackCd = 0;
+  assert.ok(chuckMaterialConsumerScrap(fighter, game));
+  assert.equal(fighter.materialScrapBank.length, 0);
+  assert.equal(fighter.nanobotFree, freeBefore - MATERIAL_CONSUMER_BOTS_PER_PIECE);
+  assert.equal(game.bullets[1].scrapSource, "bank");
+  assert.equal(game.bullets[1].damage, MATERIAL_CONSUMER_CHUCK_DAMAGE);
 }
 
 console.log("debris.test.js passed.");

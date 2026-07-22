@@ -86,10 +86,14 @@ export const MATERIAL_CONSUMER_VACUUM_RADIUS = 150;
 export const MATERIAL_CONSUMER_BOTS_PER_PIECE = 4;
 /** Reach from fighter center to saber tip (gripOffset 17 + length 44). */
 export const MATERIAL_CONSUMER_TIP_REACH = 61;
-/** Light damage per chucked inhaled scrap. */
+/** Light damage per chucked / beamed scrap. */
 export const MATERIAL_CONSUMER_CHUCK_DAMAGE = 10;
-/** Chuck projectile speed. */
+/** Debris beam / chuck projectile speed. */
 export const MATERIAL_CONSUMER_CHUCK_SPEED = 1100;
+/** Hold-RMB debris beam fire rate (scraps/min). */
+export const MATERIAL_CONSUMER_BEAM_RPM = 480;
+/** Cap on excess scraps stored while holding V (ejection tank). */
+export const MATERIAL_CONSUMER_EJECTION_TANK_CAP = 48;
 export const MATERIAL_CONSUMER_ID = "material-consumer-nanotech";
 export { THROW_BREAKABLE_ID } from "./throw-breakable.js";
 export const NO_SECONDARY_ID = "no-secondary";
@@ -300,7 +304,7 @@ export const GEAR = [
     MATERIAL_CONSUMER_ID,
     "secondaryWeapon",
     "Material Consumer",
-    "Nanotech tool-sword. Vacuums debris into free bots (no reconquer; remembers scraps). RMB chucks stored scraps for light damage — costs the bots those scraps gave. Adds 120 pool bots.",
+    "Nanotech tool-sword. Vacuums debris into free bots (no reconquer; remembers scraps). Hold RMB for a debris beam (ejection tank first, then remembered scraps). Hold V to vacuum excess into an ejection tank when the pool is full. Adds 120 pool bots.",
     {
       damage: (48 * NANOTECH_DAMAGE_MULT) / 40,
       fireRate: 150 / 150,
@@ -1224,31 +1228,58 @@ export function materialScrapBank(fighter) {
   return fighter.materialScrapBank;
 }
 
+/** Excess scraps vacuumed on V while the nanobot pool is full (free to eject). */
+export function materialEjectionTank(fighter) {
+  if (!fighter.materialEjectionTank) fighter.materialEjectionTank = [];
+  return fighter.materialEjectionTank;
+}
+
+export function materialDebrisAmmoCount(fighter) {
+  return materialEjectionTank(fighter).length + materialScrapBank(fighter).length;
+}
+
 /**
- * Right-click: spit one inhaled scrap as a light projectile.
- * Costs the free bots that scrap originally granted.
+ * Pull next debris ammo: ejection tank first (no bot cost), then remembered bank.
+ * @returns {{ scrap: object, source: "tank"|"bank" } | null}
+ */
+function takeNextDebrisAmmo(fighter) {
+  const tank = materialEjectionTank(fighter);
+  if (tank.length) {
+    return { scrap: tank.shift(), source: "tank" };
+  }
+  const bank = materialScrapBank(fighter);
+  if (!bank.length) return null;
+  const scrap = bank[0];
+  const cost = Math.max(0, scrap.bots || 0);
+  if (cost > 0 && (fighter.nanobotFree || 0) < cost) return null;
+  bank.shift();
+  if (cost > 0) {
+    fighter.nanobotFree -= cost;
+    clampNanotechPool(fighter);
+  }
+  return { scrap, source: "bank" };
+}
+
+/**
+ * Hold RMB: fire the debris beam (rapid scrap stream).
+ * Ejection-tank scraps shoot first (free); remembered bank scraps cost their bots.
  * @returns {boolean}
  */
 export function chuckMaterialConsumerScrap(fighter, game) {
   if (!fighter || fighter.dead || !isMaterialConsumer(fighter) || !game) return false;
   if (fighter.attackCd > 0) return false;
   if (fighter.shieldRaised && !fighter.shieldBroken) return false;
-  const bank = materialScrapBank(fighter);
-  if (!bank.length) return false;
-  const scrap = bank[0];
-  const cost = Math.max(0, scrap.bots || 0);
-  if (cost <= 0 || (fighter.nanobotFree || 0) < cost) return false;
-
-  fighter.nanobotFree -= cost;
-  bank.shift();
-  clampNanotechPool(fighter);
+  const ammo = takeNextDebrisAmmo(fighter);
+  if (!ammo) return false;
+  const { scrap, source } = ammo;
 
   const tip = materialConsumerTip(fighter);
   const aim = Number.isFinite(fighter.aim) ? fighter.aim : 0;
   const speed = MATERIAL_CONSUMER_CHUCK_SPEED;
-  const rpm = Math.max(60, fighter.weaponRpm || 150);
+  const rpm = Math.max(120, MATERIAL_CONSUMER_BEAM_RPM);
   fighter.attackCd = 60 / rpm;
-  fighter.materialConsumeFlash = Math.max(fighter.materialConsumeFlash || 0, 0.14);
+  fighter.materialConsumeFlash = Math.max(fighter.materialConsumeFlash || 0, 0.16);
+  fighter.materialBeamFlash = Math.max(fighter.materialBeamFlash || 0, 0.12);
 
   game.bullets ||= [];
   game.bullets.push({
@@ -1264,6 +1295,8 @@ export function chuckMaterialConsumerScrap(fighter, game) {
     damage: MATERIAL_CONSUMER_CHUCK_DAMAGE,
     dropoff: null,
     scrapChuck: true,
+    scrapBeam: true,
+    scrapSource: source,
     color: scrap.color || "#8a7a68",
     scrapW: Math.max(4, Math.min(14, scrap.w || 8)),
     scrapH: Math.max(4, Math.min(14, scrap.h || 8)),
@@ -1274,7 +1307,7 @@ export function chuckMaterialConsumerScrap(fighter, game) {
       type: "muzzle",
       x: tip.x,
       y: tip.y,
-      life: 0.07,
+      life: 0.06,
       angle: aim,
       report: false
     });
@@ -1408,9 +1441,34 @@ export function cycleWeaponSlot(fighter) {
   return selectWeaponSlot(fighter, next);
 }
 
+function claimMaterialConsumerNear(fighter, game, tip, botsPerPiece, options = {}) {
+  claimDebrisForMaterialConsume(
+    game,
+    tip.x,
+    tip.y,
+    MATERIAL_CONSUMER_VACUUM_RADIUS,
+    fighter,
+    botsPerPiece,
+    options
+  );
+  const cx = fighter.x + SIZE / 2;
+  const cy = fighter.y + SIZE / 2;
+  claimDebrisForMaterialConsume(
+    game,
+    cx,
+    cy,
+    MATERIAL_CONSUMER_VACUUM_RADIUS,
+    fighter,
+    botsPerPiece,
+    options
+  );
+  retargetMaterialConsumeTip(game, fighter, tip.x, tip.y);
+}
+
 /**
  * While Material Consumer is active: claim nearby scraps (they stream to the tip),
  * retarget in-flight suction, and convert arrived scraps into free nanobots.
+ * Hold V to vacuum excess into the ejection tank when the pool is full.
  * Vacuumed scraps cannot reconquer (queues cleared on claim).
  * @returns {number} bots gained this tick
  */
@@ -1420,8 +1478,10 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
 
   const tip = materialConsumerTip(fighter);
   retargetMaterialConsumeTip(game, fighter, tip.x, tip.y);
+  const ejectHeld = !!fighter.materialEjectHeld;
+  const tank = materialEjectionTank(fighter);
 
-  // Scraps that reached the tip this debris tick → free bots + conversion FX.
+  // Scraps that reached the tip this debris tick → bots / ejection tank + FX.
   let gained = 0;
   const arrivals = game.materialConsumeArrivals || [];
   if (arrivals.length) {
@@ -1430,6 +1490,30 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
     for (const arrival of arrivals) {
       if (arrival.owner !== fighter) {
         keep.push(arrival);
+        continue;
+      }
+      if (arrival.ejection) {
+        if (tank.length < MATERIAL_CONSUMER_EJECTION_TANK_CAP) {
+          tank.push({
+            bots: 0,
+            ejection: true,
+            color: arrival.color || "#8a7a68",
+            kind: arrival.kind || null,
+            material: arrival.material || null,
+            w: arrival.w || 8,
+            h: arrival.h || 8
+          });
+          if (game.effects) {
+            game.effects.push({
+              type: "nanoIngest",
+              x: arrival.x ?? tip.x,
+              y: arrival.y ?? tip.y,
+              life: 0.22,
+              color: "#c8b090"
+            });
+          }
+          fighter.materialConsumeFlash = Math.max(fighter.materialConsumeFlash || 0, 0.14);
+        }
         continue;
       }
       const got = grantFreeNanobots(fighter, arrival.bots || 0);
@@ -1460,32 +1544,24 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
     game.materialConsumeArrivals = keep;
   }
 
-  // Only claim new scraps when the pool still has room.
+  // Pool room: normal vacuum → free bots + scrap bank.
   if (nanotechPoolRoom(fighter) > 0) {
-    claimDebrisForMaterialConsume(
-      game,
-      tip.x,
-      tip.y,
-      MATERIAL_CONSUMER_VACUUM_RADIUS,
-      fighter,
-      MATERIAL_CONSUMER_BOTS_PER_PIECE
+    claimMaterialConsumerNear(
+      fighter, game, tip, MATERIAL_CONSUMER_BOTS_PER_PIECE
     );
-    // Also claim relative to body center so tip offset does not miss ground piles.
-    const cx = fighter.x + SIZE / 2;
-    const cy = fighter.y + SIZE / 2;
-    claimDebrisForMaterialConsume(
-      game,
-      cx,
-      cy,
-      MATERIAL_CONSUMER_VACUUM_RADIUS,
-      fighter,
-      MATERIAL_CONSUMER_BOTS_PER_PIECE
-    );
-    retargetMaterialConsumeTip(game, fighter, tip.x, tip.y);
+  } else if (
+    ejectHeld
+    && tank.length < MATERIAL_CONSUMER_EJECTION_TANK_CAP
+  ) {
+    // Hold V: pick up excess into the ejection tank (no bots).
+    claimMaterialConsumerNear(fighter, game, tip, 0, { toEjection: true });
   }
 
   if (fighter.materialConsumeFlash > 0) {
     fighter.materialConsumeFlash = Math.max(0, fighter.materialConsumeFlash - dt);
+  }
+  if (fighter.materialBeamFlash > 0) {
+    fighter.materialBeamFlash = Math.max(0, fighter.materialBeamFlash - dt);
   }
   return gained;
 }
@@ -2199,6 +2275,10 @@ export function applyLoadout(fighter, loadout) {
   fighter.throwBreakable = false;
   fighter.heldProp = null;
   fighter.materialScrapBank = [];
+  fighter.materialEjectionTank = [];
+  fighter.materialEjectHeld = false;
+  fighter.materialBeamHeld = false;
+  fighter.materialBeamFlash = 0;
   if (weapon.id === ADAPTIVE_NANOTECH_ID) {
     applyAdaptiveCombatStats(fighter, "sword");
     syncAdaptiveNanotechCosts(fighter, "sword");

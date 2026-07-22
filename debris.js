@@ -966,9 +966,12 @@ function isVacuumLockedMode(mode) {
  * immediately so leftovers cannot rebuild.
  * @returns {{ pieces: number, sources: number }}
  */
-export function claimDebrisForMaterialConsume(game, tipX, tipY, radius, owner, botsPerPiece = 4) {
+export function claimDebrisForMaterialConsume(
+  game, tipX, tipY, radius, owner, botsPerPiece = 4, options = {}
+) {
   const pieces = game?.groundDebris || [];
   if (!pieces.length || !(radius > 0) || !owner) return { pieces: 0, sources: 0 };
+  const toEjection = !!options.toEjection;
   const r2 = radius * radius;
   const hitIds = new Set();
   for (const piece of pieces) {
@@ -995,7 +998,8 @@ export function claimDebrisForMaterialConsume(game, tipX, tipY, radius, owner, b
       piece.homeX = tipX;
       piece.homeY = tipY;
       piece.consumeOwner = owner;
-      piece.consumeBots = Math.max(0, botsPerPiece | 0);
+      piece.consumeToEjection = toEjection;
+      piece.consumeBots = toEjection ? 0 : Math.max(0, botsPerPiece | 0);
       piece.consumeBaseColor = piece.color || "#8a7a68";
       piece.scale = 1;
       piece.alpha = 1;
@@ -1054,9 +1058,11 @@ function finishMaterialConsumePiece(game, piece) {
     color: piece.color || "#6cffb0"
   });
   game.materialConsumeArrivals ||= [];
+  const ejection = !!piece.consumeToEjection;
   game.materialConsumeArrivals.push({
     owner: piece.consumeOwner,
-    bots: Math.max(0, piece.consumeBots || 0),
+    bots: ejection ? 0 : Math.max(0, piece.consumeBots || 0),
+    ejection,
     x: tipX,
     y: tipY,
     color: piece.consumeBaseColor || piece.color || "#8a7a68",
