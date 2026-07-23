@@ -9,9 +9,9 @@ let enabled = true;
 let masterGain = null;
 let masterVolume = 0.55;
 
-/** Shared jetpack loop nodes. */
-let jetOsc = null;
-let jetNoise = null;
+/** Shared jetpack loop nodes (filtered noise whoosh — no buzzing oscillator). */
+let jetNoiseLow = null;
+let jetNoiseHigh = null;
 let jetGain = null;
 let jetActive = false;
 
