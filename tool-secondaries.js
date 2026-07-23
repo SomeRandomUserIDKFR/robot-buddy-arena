@@ -97,9 +97,9 @@ export const TOOL_DEFS = Object.freeze({
     name: "Hookshot Winch",
     label: "HOOK",
     cd: 5,
-    damage: 12,
+    damage: 24,
     color: "#5a8aaa",
-    blurb: "Latch to cover/terrain and reel to the hit, or yank a foe. Infinite while equipped (5s CD). Also drops from crates / breakables / maps as 1–10 use packs."
+    blurb: "Latch to cover and reel in, or pull fighters to you — enemies take 2× Pulse Rifle hit damage, teammates pull free. Infinite while equipped (5s CD). Also drops from crates / breakables / maps as 1–10 use packs."
   }
 });
 
@@ -127,6 +127,10 @@ export const HOOK_REEL_SPEED = 720;
 export const HOOK_REEL_MAX_TIME = 2.2;
 /** Stop reeling once the fighter center is this close to the latch point. */
 export const HOOK_REEL_ARRIVE = 36;
+/** Pulse Rifle single-hit damage — hook enemy hits deal this × mult. */
+export const PULSE_RIFLE_HIT_DAMAGE = 12;
+export const HOOK_ENEMY_DAMAGE_MULT = 2;
+export const HOOK_ENEMY_DAMAGE = PULSE_RIFLE_HIT_DAMAGE * HOOK_ENEMY_DAMAGE_MULT;
 
 export function isToolSecondaryId(id) {
   return TOOL_SECONDARY_IDS.includes(id);
@@ -331,8 +335,8 @@ function fireBolas(fighter, game, fromPickup) {
 
 function rayHit(game, owner, ox, oy, aim, range) {
   const steps = Math.ceil(range / 10);
-  let bestFoe = null;
-  let bestFoeD = range;
+  let bestFighter = null;
+  let bestFighterD = range;
   let bestPoint = null;
   let bestPointD = range;
   const solids = [
@@ -352,15 +356,16 @@ function rayHit(game, owner, ox, oy, aim, range) {
         d
       };
     }
-    for (const foe of livingFighters(game)) {
-      if (foe === owner || foe.team === owner.team) continue;
+    // Allies and enemies both latch — damage is decided at fire time.
+    for (const other of livingFighters(game)) {
+      if (other === owner) continue;
       if (
-        x >= foe.x && x <= foe.x + SIZE
-        && y >= foe.y && y <= foe.y + SIZE
+        x >= other.x && x <= other.x + SIZE
+        && y >= other.y && y <= other.y + SIZE
       ) {
-        if (d < bestFoeD) {
-          bestFoeD = d;
-          bestFoe = foe;
+        if (d < bestFighterD) {
+          bestFighterD = d;
+          bestFighter = other;
         }
       }
     }
@@ -387,16 +392,41 @@ function rayHit(game, owner, ox, oy, aim, range) {
       }
     }
   }
-  if (bestFoe && bestFoeD <= bestPointD) {
+  if (bestFighter && bestFighterD <= bestPointD) {
     return {
       kind: "fighter",
-      foe: bestFoe,
-      x: bestFoe.x + SIZE / 2,
-      y: bestFoe.y + SIZE / 2,
-      d: bestFoeD
+      foe: bestFighter,
+      target: bestFighter,
+      friendly: bestFighter.team === owner.team,
+      x: bestFighter.x + SIZE / 2,
+      y: bestFighter.y + SIZE / 2,
+      d: bestFighterD
     };
   }
   return bestPoint;
+}
+
+/** Start dragging a hooked fighter toward the owner. */
+export function beginHookDrag(owner, target, opts = {}) {
+  if (!owner || !target || target.dead) return null;
+  const ox = owner.x + SIZE / 2;
+  const oy = owner.y + SIZE / 2;
+  const tx = target.x + SIZE / 2;
+  const ty = target.y + SIZE / 2;
+  const dist = Math.hypot(tx - ox, ty - oy);
+  const reelT = Math.max(0.28, Math.min(HOOK_REEL_MAX_TIME, dist / HOOK_REEL_SPEED + 0.18));
+  clearHookHang(target);
+  target.hookReel = null;
+  target.hookDrag = {
+    owner,
+    t: reelT,
+    friendly: !!opts.friendly,
+    fromPickup: !!opts.fromPickup
+  };
+  target.grounded = false;
+  target.vx = 0;
+  target.vy = 0;
+  return target.hookDrag;
 }
 
 function fireHook(fighter, game, fromPickup) {
@@ -417,25 +447,27 @@ function fireHook(fighter, game, fromPickup) {
     });
     return null;
   }
-  if (hit.kind === "fighter" && hit.foe) {
+  if (hit.kind === "fighter" && (hit.target || hit.foe)) {
+    const victim = hit.target || hit.foe;
+    const friendly = hit.friendly ?? (victim.team === fighter.team);
+    if (!friendly) {
+      hurt(victim, HOOK_ENEMY_DAMAGE, game);
+      victim.hitFlash = Math.max(victim.hitFlash || 0, 0.18);
+    }
+    const drag = beginHookDrag(fighter, victim, { friendly, fromPickup });
+    const reelT = drag?.t || 0.4;
     game.effects.push({
       type: "hookLine",
       x1: x,
       y1: y,
       x2: tx,
       y2: ty,
-      life: 0.35,
-      color: TOOL_DEFS[HOOKSHOT_WINCH_ID].color
+      life: reelT + 0.12,
+      color: TOOL_DEFS[HOOKSHOT_WINCH_ID].color,
+      followOwner: fighter,
+      followTarget: victim,
+      friendlyPull: friendly
     });
-    hurt(hit.foe, TOOL_DEFS[HOOKSHOT_WINCH_ID].damage, game);
-    hit.foe.hitFlash = Math.max(hit.foe.hitFlash || 0, 0.16);
-    const pull = 340;
-    const ang = Math.atan2(
-      fighter.y + SIZE / 2 - (hit.foe.y + SIZE / 2),
-      fighter.x + SIZE / 2 - (hit.foe.x + SIZE / 2)
-    );
-    hit.foe.vx = (hit.foe.vx || 0) + Math.cos(ang) * pull;
-    hit.foe.vy = (hit.foe.vy || 0) + Math.sin(ang) * pull * 0.7;
   } else {
     const cx = fighter.x + SIZE / 2;
     const cy = fighter.y + SIZE / 2;
@@ -539,6 +571,39 @@ export function tickToolSecondary(fighter, dt) {
       fighter.vx = Math.cos(ang) * HOOK_REEL_SPEED;
       fighter.vy = Math.sin(ang) * HOOK_REEL_SPEED;
     }
+  } else if (fighter.hookDrag) {
+    const drag = fighter.hookDrag;
+    const owner = drag.owner;
+    drag.t -= step;
+    fighter.grounded = false;
+    if (!owner || owner.dead) {
+      fighter.hookDrag = null;
+      fighter.vx *= 0.25;
+      fighter.vy *= 0.25;
+    } else {
+      const ox = owner.x + SIZE / 2;
+      const oy = owner.y + SIZE / 2;
+      const cx = fighter.x + SIZE / 2;
+      const cy = fighter.y + SIZE / 2;
+      const dx = ox - cx;
+      const dy = oy - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= HOOK_REEL_ARRIVE || drag.t <= 0) {
+        if (dist > 1 && dist < HOOK_REEL_ARRIVE * 2.5) {
+          const nx = dx / dist;
+          const ny = dy / dist;
+          fighter.x += nx * Math.min(dist - HOOK_REEL_ARRIVE * 0.35, HOOK_REEL_SPEED * step);
+          fighter.y += ny * Math.min(dist - HOOK_REEL_ARRIVE * 0.35, HOOK_REEL_SPEED * step);
+        }
+        fighter.hookDrag = null;
+        fighter.vx *= 0.2;
+        fighter.vy *= 0.2;
+      } else {
+        const ang = Math.atan2(dy, dx);
+        fighter.vx = Math.cos(ang) * HOOK_REEL_SPEED;
+        fighter.vy = Math.sin(ang) * HOOK_REEL_SPEED;
+      }
+    }
   } else if (fighter.hookHang) {
     // Stay pinned at the latch until combat clears hang on move / jet input.
     pinHookHang(fighter);
@@ -561,9 +626,9 @@ export function clearHookHang(fighter) {
   fighter.hookHang = null;
 }
 
-/** True while reeling in or hanging on a latch. */
+/** True while reeling in, being dragged, or hanging on a latch. */
 export function isHookAnchored(fighter) {
-  return !!(fighter?.hookReel || fighter?.hookHang);
+  return !!(fighter?.hookReel || fighter?.hookHang || fighter?.hookDrag);
 }
 
 function pinHookHang(fighter) {
@@ -936,6 +1001,7 @@ export function ensureToolSecondaryState(fighter) {
   fighter.heldToolPickup = normalizeHeldToolPickup(fighter.heldToolPickup);
   fighter.hookReel = fighter.hookReel || null;
   fighter.hookHang = fighter.hookHang || null;
+  fighter.hookDrag = fighter.hookDrag || null;
   if (!isToolSecondaryId(fighter.toolSecondary)) fighter.toolSecondary = null;
 }
 

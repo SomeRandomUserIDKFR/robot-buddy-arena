@@ -1041,6 +1041,7 @@ export function createRenderer(canvas) {
       drawHeldToolPickup(fighter);
       drawHookAnchorCable(fighter);
     }
+    drawHookDragCables(game);
     drawProps(game, 1, true);
     drawPings(game);
     context.restore();
@@ -2826,27 +2827,67 @@ export function createRenderer(canvas) {
     }
   }
 
-  /** Cable from fighter to latch while reeling or hanging. */
+  /** Cable from fighter to latch while reeling / hanging, or owner↔victim while dragging. */
   function drawHookAnchorCable(fighter) {
-    const latch = fighter?.hookReel || fighter?.hookHang;
-    if (!latch || fighter.dead) return;
-    const x1 = fighter.x + SIZE / 2;
-    const y1 = fighter.y + SIZE / 2;
-    const x2 = latch.x;
-    const y2 = latch.y;
+    if (!fighter || fighter.dead) return;
+    let x1 = fighter.x + SIZE / 2;
+    let y1 = fighter.y + SIZE / 2;
+    let x2 = null;
+    let y2 = null;
+    let hanging = false;
+    if (fighter.hookDrag?.owner && !fighter.hookDrag.owner.dead) {
+      // Victim side: cable is drawn from the owner pass; skip duplicate.
+      return;
+    }
+    if (fighter.hookReel || fighter.hookHang) {
+      const latch = fighter.hookReel || fighter.hookHang;
+      x2 = latch.x;
+      y2 = latch.y;
+      hanging = !!fighter.hookHang;
+    } else {
+      // Owner side: find anyone we're currently dragging.
+      return;
+    }
     context.save();
-    context.globalAlpha = fighter.hookHang ? 0.85 : 0.95;
+    context.globalAlpha = hanging ? 0.85 : 0.95;
     context.strokeStyle = TOOL_DEFS[HOOKSHOT_WINCH_ID]?.color || "#5a8aaa";
-    context.lineWidth = fighter.hookHang ? 2 : 2.5;
+    context.lineWidth = hanging ? 2 : 2.5;
     context.beginPath();
     context.moveTo(x1, y1);
     context.lineTo(x2, y2);
     context.stroke();
     context.fillStyle = context.strokeStyle;
     context.beginPath();
-    context.arc(x2, y2, fighter.hookHang ? 3.5 : 4, 0, Math.PI * 2);
+    context.arc(x2, y2, hanging ? 3.5 : 4, 0, Math.PI * 2);
     context.fill();
     context.restore();
+  }
+
+  function drawHookDragCables(game) {
+    for (const fighter of game.fighters || []) {
+      if (!fighter?.hookDrag?.owner || fighter.dead) continue;
+      const owner = fighter.hookDrag.owner;
+      if (owner.dead) continue;
+      const x1 = owner.x + SIZE / 2;
+      const y1 = owner.y + SIZE / 2;
+      const x2 = fighter.x + SIZE / 2;
+      const y2 = fighter.y + SIZE / 2;
+      context.save();
+      context.globalAlpha = fighter.hookDrag.friendly ? 0.7 : 0.95;
+      context.strokeStyle = fighter.hookDrag.friendly
+        ? "#8ec8a8"
+        : (TOOL_DEFS[HOOKSHOT_WINCH_ID]?.color || "#5a8aaa");
+      context.lineWidth = 2.5;
+      context.beginPath();
+      context.moveTo(x1, y1);
+      context.lineTo(x2, y2);
+      context.stroke();
+      context.fillStyle = context.strokeStyle;
+      context.beginPath();
+      context.arc(x2, y2, 4, 0, Math.PI * 2);
+      context.fill();
+      context.restore();
+    }
   }
 
   function drawHeldToolPickup(fighter) {
@@ -3169,19 +3210,27 @@ export function createRenderer(canvas) {
         let y1 = effect.y1;
         let x2 = effect.x2;
         let y2 = effect.y2;
-        // Live winch cable: stay attached while reeling or hanging on the latch.
+        // Live winch cable: stay attached while reeling, hanging, or dragging a fighter.
         const owner = effect.followOwner;
-        if (owner && !owner.dead && (owner.hookReel || owner.hookHang)) {
-          x1 = owner.x + SIZE / 2;
-          y1 = owner.y + SIZE / 2;
-          x2 = effect.latchX
-            ?? owner.hookReel?.x
-            ?? owner.hookHang?.x
-            ?? x2;
-          y2 = effect.latchY
-            ?? owner.hookReel?.y
-            ?? owner.hookHang?.y
-            ?? y2;
+        const dragged = effect.followTarget;
+        if (owner && !owner.dead) {
+          if (dragged && !dragged.dead && dragged.hookDrag) {
+            x1 = owner.x + SIZE / 2;
+            y1 = owner.y + SIZE / 2;
+            x2 = dragged.x + SIZE / 2;
+            y2 = dragged.y + SIZE / 2;
+          } else if (owner.hookReel || owner.hookHang) {
+            x1 = owner.x + SIZE / 2;
+            y1 = owner.y + SIZE / 2;
+            x2 = effect.latchX
+              ?? owner.hookReel?.x
+              ?? owner.hookHang?.x
+              ?? x2;
+            y2 = effect.latchY
+              ?? owner.hookReel?.y
+              ?? owner.hookHang?.y
+              ?? y2;
+          }
         }
         context.globalAlpha = clamp(0.35 + effect.life * 1.2, 0, 1);
         context.strokeStyle = effect.color || "#5a8aaa";
