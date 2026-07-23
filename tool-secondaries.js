@@ -96,10 +96,10 @@ export const TOOL_DEFS = Object.freeze({
     id: HOOKSHOT_WINCH_ID,
     name: "Hookshot Winch",
     label: "HOOK",
-    cd: 7,
+    cd: 5,
     damage: 12,
     color: "#5a8aaa",
-    blurb: "Latch to cover/terrain and reel to the hit, or yank a foe. Infinite while equipped (7s CD). Also drops from crates / breakables / maps as 1–10 use packs."
+    blurb: "Latch to cover/terrain and reel to the hit, or yank a foe. Infinite while equipped (5s CD). Also drops from crates / breakables / maps as 1–10 use packs."
   }
 });
 
