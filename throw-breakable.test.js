@@ -228,10 +228,18 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.ok(cx <= ledge.x + ledge.w - crate.w / 2 + 0.5);
 }
 
-// Power crates: only grabbable at ≤50% HP; throw awards loot to thrower.
+// Power crates: only grabbable at ≤50% HP; braced full-HP boxes are an exception.
 {
   const full = createPowerCrate({ x: 500, y: 400 }, "yard", "industrial", "pc-full");
   assert.equal(canGrabBreakable(full), false, "full HP metal box locked");
+  applyBraceCasing(full, RECONJURER_BRACE_HP);
+  assert.equal(canGrabBreakable(full), true, "wood-braced full HP metal box unlocked");
+  assert.equal(full.hp, POWER_CRATE_HP, "brace does not change metal core HP");
+  full.braced = false;
+  full.braceHp = 0;
+  full.braceMaxHp = 0;
+  full.braceMaterial = null;
+  assert.equal(canGrabBreakable(full), false, "unbraced full HP locked again");
   full.hp = POWER_CRATE_HP * 0.5;
   assert.equal(canGrabBreakable(full), true, "exactly 50% is grabbable");
   full.hp = POWER_CRATE_HP * 0.5 - 1;
@@ -765,6 +773,35 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.ok(tryGrabBreakable(fighter, game));
   assert.equal(fighter.heldToolPickup, FRAG_GRENADE_ID);
   assert.equal(fighter.heldProp, null);
+}
+
+// Full-HP wood-braced metal box can be grabbed and thrown.
+{
+  const fighter = applyLoadout(new Fighter({
+    x: 400, y: 300, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  selectWeaponSlot(fighter, "secondaryWeapon");
+  const metal = createPowerCrate({ x: 420, y: 320 }, "yard", "industrial", "pc-braced-full");
+  assert.equal(metal.hp, POWER_CRATE_HP);
+  applyBraceCasing(metal, RECONJURER_BRACE_HP);
+  const game = {
+    props: [],
+    powerCrates: [metal],
+    platforms: [{ x: 0, y: 400, w: 800, h: 40 }],
+    fighters: [fighter],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: [],
+    powerCrateState: { pending: [] }
+  };
+  assert.ok(tryGrabBreakable(fighter, game), "grab full-HP braced metal box");
+  assert.equal(fighter.heldProp, metal);
+  assert.ok(throwHeldBreakable(fighter, game));
+  assert.equal(metal.thrownInFlight, true);
+  assert.equal(game.thrownBreakables[0].damage, THROW_BREAKABLE_DAMAGE);
 }
 
 // Metal-cased throw: half casing self-damage, 1.25x hit damage, stays pickable.
