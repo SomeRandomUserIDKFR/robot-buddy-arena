@@ -5,10 +5,10 @@ import {
 } from "./equipment.js";
 import {
   applyPhantomDamage, createFighterIllusion, cycleIllusionistType, displayedHp,
-  fadeIllusionFighter, hasIllusionTruthSight, ILLUSION_BREAK_LIFE,
-  ILLUSION_FIGHTER_HITS, ILLUSION_PHANTOM_DAMAGE, isIllusionFighter, isIllusionist,
-  isRealCombatant, refreshIllusionCaches, registerIllusionFighterHit,
-  registerIllusionObjectHit, tryIllusionistPlant
+  hasIllusionTruthSight, ILLUSION_BREAK_LIFE, ILLUSION_FIGHTER_HITS,
+  ILLUSION_PHANTOM_DAMAGE, isIllusionFighter, isIllusionist, isRealCombatant,
+  refreshIllusionCaches, registerIllusionFighterHit, registerIllusionObjectHit,
+  tryIllusionistPlant
 } from "./illusionist.js";
 import { updateAIDecoy } from "./ai.js";
 
