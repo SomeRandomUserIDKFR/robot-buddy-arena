@@ -880,9 +880,13 @@ assert.equal(restoreMapProp(null), false);
   assert.equal(fighter.materialAbsorbMeta[sourceId].reformed, true);
   assert.ok(game.groundDebris.length === pieceCount, "fragments spawn from tip");
   assert.ok(game.groundDebris.every((p) => p.despawnMode === "reconquer-home"));
-  const tipX = fighter.x + 24 + Math.cos(fighter.aim) * 61;
+  // Fragments must eject from the Absorber tip, not the wreck pile.
+  const tipCx = fighter.x + 23;
+  const tipCy = fighter.y + 23;
+  const tipX = tipCx + Math.cos(fighter.aim) * 61;
+  const tipY = tipCy + Math.sin(fighter.aim) * 61;
   assert.ok(
-    game.groundDebris.every((p) => Math.hypot(p.x - tipX, p.y - (fighter.y + 24)) < 80),
+    game.groundDebris.every((p) => Math.hypot(p.x - tipX, p.y - tipY) < 80),
     "fragments start near absorber tip"
   );
   assert.equal(crate.destroyed, true, "crate stays down until jigsaw finishes");
