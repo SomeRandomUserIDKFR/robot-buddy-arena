@@ -15,8 +15,9 @@ import {
 } from "./map-gimmicks.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
 import {
-  BOLAS_SNARE_ID, FRAG_GRENADE_ID, handheldToolId, HOOKSHOT_WINCH_ID,
-  STICKY_CHARGE_ID, THROWING_SPEAR_ID, TOOL_DEFS
+  BOLAS_SNARE_ID, FRAG_GRENADE_ID, handheldToolId, handheldToolMaxUses,
+  handheldToolUses, HOOKSHOT_WINCH_ID, STICKY_CHARGE_ID, THROWING_SPEAR_ID,
+  TOOL_DEFS
 } from "./tool-secondaries.js";
 import { clamp, dist } from "./utils.js";
 import { fighterVisibleToViewer, visibleToSelf, visibleToTeam } from "./vision.js";
@@ -2574,44 +2575,58 @@ export function createRenderer(canvas) {
   }
 
   /**
-   * Disposable single-use tool silhouettes (hand + ground + in-flight).
-   * Reads as field gear: tape wraps, pull-pins, coiled line — not infinite kit.
+   * Field-tool silhouettes (hand + ground + in-flight).
+   * Higher use packs (3 / 5 / 10) read bulkier: extra wraps, magazines, bigger spools.
    */
   function paintToolModel(toolId, opts = {}) {
     const scale = opts.scale || 1;
     const disposable = opts.disposable !== false;
+    const maxUses = Math.max(1, opts.maxUses || opts.uses || 1);
+    const uses = Math.max(0, opts.uses ?? maxUses);
+    const tier = maxUses >= 10 ? 10 : maxUses >= 5 ? 5 : maxUses >= 3 ? 3 : 1;
+    const trim = tier >= 10 ? "#e8c860" : tier >= 5 ? "#c8d0e0" : tier >= 3 ? "#a8c878" : "#e8d090";
     context.save();
     context.scale(scale, scale);
     if (toolId === THROWING_SPEAR_ID) {
-      // Short taped javelin — stub shaft, cloth wrap, stamped tip.
-      context.fillStyle = "#6a5840";
-      context.fillRect(-20, -2.2, 34, 4.4);
+      // Short taped javelin — higher tiers get a longer shaft + quiver wrap.
+      const len = tier >= 10 ? 42 : tier >= 5 ? 38 : tier >= 3 ? 36 : 34;
+      context.fillStyle = tier >= 5 ? "#4a4030" : "#6a5840";
+      context.fillRect(-20, -2.2, len, 4.4);
       context.fillStyle = disposable ? "#c4a060" : "#8a7a58";
       context.fillRect(-8, -3.2, 12, 6.4);
-      // Tape stripes
       context.strokeStyle = "rgba(40,28,12,.55)";
       context.lineWidth = 1;
-      for (let i = 0; i < 3; i++) {
+      const stripes = tier >= 5 ? 5 : 3;
+      for (let i = 0; i < stripes; i++) {
         context.beginPath();
-        context.moveTo(-6 + i * 3.5, -3.2);
-        context.lineTo(-4 + i * 3.5, 3.2);
+        context.moveTo(-6 + i * 3.2, -3.2);
+        context.lineTo(-4 + i * 3.2, 3.2);
         context.stroke();
       }
-      context.fillStyle = "#b0b8c0";
+      context.fillStyle = tier >= 10 ? "#e8eef4" : "#b0b8c0";
       context.beginPath();
       context.moveTo(12, 0);
       context.lineTo(22, -3.5);
       context.lineTo(22, 3.5);
       context.closePath();
       context.fill();
-      if (disposable) {
-        context.fillStyle = "#e8d090";
-        context.fillRect(-18, -1, 5, 2);
+      if (disposable || tier > 1) {
+        context.fillStyle = trim;
+        context.fillRect(-18, -1, tier >= 5 ? 8 : 5, 2);
+      }
+      if (tier >= 3) {
+        // Quiver / bundle sleeve behind the grip.
+        context.fillStyle = tier >= 10 ? "#3a3020" : "#5a4830";
+        context.fillRect(-22, -5, 6, 10);
+        context.strokeStyle = trim;
+        context.lineWidth = 1.2;
+        context.strokeRect(-22, -5, 6, 10);
       }
     } else if (toolId === FRAG_GRENADE_ID) {
-      context.fillStyle = "#5a7a38";
+      const bodyR = tier >= 10 ? 9 : tier >= 5 ? 8 : 7;
+      context.fillStyle = tier >= 5 ? "#4a6a28" : "#5a7a38";
       context.beginPath();
-      context.ellipse(0, 1, 7, 8.5, 0, 0, Math.PI * 2);
+      context.ellipse(0, 1, bodyR, bodyR + 1.5, 0, 0, Math.PI * 2);
       context.fill();
       context.strokeStyle = "#2a3a18";
       context.lineWidth = 1.2;
@@ -2623,62 +2638,103 @@ export function createRenderer(canvas) {
       context.stroke();
       context.fillStyle = "#3a3020";
       context.fillRect(-2.5, -11, 5, 6);
-      // Pull pin ring
-      context.strokeStyle = "#d0d8e0";
+      context.strokeStyle = trim;
       context.lineWidth = 1.5;
       context.beginPath();
       context.arc(5, -10, 3.5, 0, Math.PI * 2);
       context.stroke();
+      if (tier >= 3) {
+        // Bandolier pouch behind the frag.
+        context.fillStyle = "#3a3020";
+        context.fillRect(-14, -4, 6, 10);
+        context.strokeStyle = trim;
+        context.lineWidth = 1;
+        context.strokeRect(-14, -4, 6, 10);
+        for (let i = 0; i < Math.min(3, Math.ceil(tier / 3)); i++) {
+          context.fillStyle = "#6a8a48";
+          context.beginPath();
+          context.arc(-11, -1 + i * 3, 1.6, 0, Math.PI * 2);
+          context.fill();
+        }
+      }
     } else if (toolId === STICKY_CHARGE_ID) {
+      const w = tier >= 10 ? 20 : tier >= 5 ? 18 : 16;
       context.fillStyle = "#c45a2a";
-      context.fillRect(-8, -6, 16, 12);
+      context.fillRect(-w / 2, -6, w, 12);
       context.fillStyle = "#f0c020";
-      context.fillRect(-8, -2, 16, 4);
+      context.fillRect(-w / 2, -2, w, 4);
       context.fillStyle = "#2a1810";
       context.font = "bold 7px ui-monospace,Consolas";
       context.textAlign = "center";
       context.textBaseline = "middle";
-      context.fillText("!", 0, 0);
-      // Sticky pads
+      context.fillText(tier >= 5 ? `${Math.min(uses, 9)}` : "!", 0, 0);
       context.fillStyle = "rgba(40,20,10,.55)";
-      context.fillRect(-9, -7, 3, 3);
-      context.fillRect(6, -7, 3, 3);
-      context.fillRect(-9, 4, 3, 3);
-      context.fillRect(6, 4, 3, 3);
+      context.fillRect(-w / 2 - 1, -7, 3, 3);
+      context.fillRect(w / 2 - 2, -7, 3, 3);
+      context.fillRect(-w / 2 - 1, 4, 3, 3);
+      context.fillRect(w / 2 - 2, 4, 3, 3);
+      if (tier >= 3) {
+        context.strokeStyle = trim;
+        context.lineWidth = 1.4;
+        context.strokeRect(-w / 2 - 1, -7, w + 2, 14);
+      }
     } else if (toolId === BOLAS_SNARE_ID) {
-      context.strokeStyle = "#c4a070";
-      context.lineWidth = 2;
+      context.strokeStyle = trim;
+      context.lineWidth = tier >= 5 ? 2.6 : 2;
       context.beginPath();
-      context.arc(0, 0, 7, 0.2, Math.PI * 1.6);
+      context.arc(0, 0, tier >= 10 ? 8.5 : 7, 0.2, Math.PI * 1.6);
       context.stroke();
       context.fillStyle = "#6a4a28";
       context.beginPath();
       context.arc(-8, 2, 4.5, 0, Math.PI * 2);
       context.arc(8, -1, 4.5, 0, Math.PI * 2);
       context.fill();
+      if (tier >= 5) {
+        context.beginPath();
+        context.arc(0, -8, 3.5, 0, Math.PI * 2);
+        context.fill();
+      }
       context.fillStyle = "#d8b888";
       context.fillRect(-3, -1, 6, 2);
+      if (tier >= 3) {
+        context.strokeStyle = trim;
+        context.lineWidth = 1;
+        context.strokeRect(-12, 6, 24, 3);
+      }
     } else if (toolId === HOOKSHOT_WINCH_ID) {
-      // Compact single-use winch: grip, spool, hook head.
-      context.fillStyle = "#3a4a58";
+      // Compact winch — multi-use packs get a bigger spool + spare hook.
+      const spoolR = tier >= 10 ? 8 : tier >= 5 ? 7 : 6;
+      context.fillStyle = tier >= 5 ? "#2a3848" : "#3a4a58";
       context.fillRect(-14, -4, 16, 8);
       context.fillStyle = "#5a8aaa";
       context.beginPath();
-      context.arc(-2, 0, 6, 0, Math.PI * 2);
+      context.arc(-2, 0, spoolR, 0, Math.PI * 2);
       context.fill();
-      context.strokeStyle = "#d0e0ea";
+      context.strokeStyle = trim;
       context.lineWidth = 1.4;
       context.beginPath();
-      context.arc(-2, 0, 4, 0, Math.PI * 2);
+      context.arc(-2, 0, spoolR - 2, 0, Math.PI * 2);
       context.stroke();
-      // Coiled line peek
+      if (tier >= 3) {
+        // Extra coiled magazine under the grip.
+        context.fillStyle = "#1a2830";
+        context.fillRect(-16, 4, 12, 5);
+        context.strokeStyle = trim;
+        context.lineWidth = 1;
+        context.strokeRect(-16, 4, 12, 5);
+        for (let i = 0; i < (tier >= 10 ? 3 : tier >= 5 ? 2 : 1); i++) {
+          context.strokeStyle = "#c8d8e0";
+          context.beginPath();
+          context.arc(-12 + i * 3.5, 6.5, 1.4, 0, Math.PI * 2);
+          context.stroke();
+        }
+      }
       context.strokeStyle = "#c8d8e0";
       context.lineWidth = 1;
       context.beginPath();
       context.moveTo(4, -2);
       context.quadraticCurveTo(10, -6, 14, -1);
       context.stroke();
-      // Hook tip
       context.strokeStyle = "#e8eef4";
       context.lineWidth = 2;
       context.beginPath();
@@ -2686,14 +2742,35 @@ export function createRenderer(canvas) {
       context.lineTo(18, 0);
       context.lineTo(16, 4);
       context.stroke();
-      if (disposable) {
-        context.fillStyle = "#e8c860";
+      if (tier >= 5) {
+        // Spare hook tip peeking out.
+        context.beginPath();
+        context.moveTo(10, 5);
+        context.lineTo(15, 7);
+        context.lineTo(13, 9);
+        context.stroke();
+      }
+      if (disposable || tier > 1) {
+        context.fillStyle = trim;
         context.fillRect(-12, 3, 8, 2);
       }
     } else {
       const def = TOOL_DEFS[toolId];
       context.fillStyle = def?.color || "#c8d0d8";
       context.fillRect(-8, -8, 16, 16);
+    }
+    // Uses pip for multi-charge packs (ground + hand).
+    if (tier > 1 && opts.showUses !== false) {
+      context.fillStyle = "rgba(10,14,18,.78)";
+      context.fillRect(10, -12, 12, 9);
+      context.strokeStyle = trim;
+      context.lineWidth = 1;
+      context.strokeRect(10, -12, 12, 9);
+      context.fillStyle = trim;
+      context.font = "bold 7px ui-monospace,Consolas";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(`×${Math.min(uses, 99)}`, 16, -7.5);
     }
     context.restore();
   }
@@ -2704,16 +2781,23 @@ export function createRenderer(canvas) {
       const bob = Math.sin(p.bob || 0) * 3;
       const cx = p.x + (p.w || 22) / 2;
       const cy = p.y + (p.h || 22) / 2 + bob;
+      const uses = p.uses ?? p.maxUses ?? 1;
+      const maxUses = p.maxUses ?? uses;
       context.save();
       context.globalAlpha = 0.92;
       // Soft ground halo so grab targets read on busy floors.
       context.fillStyle = "rgba(20,28,36,.45)";
       context.beginPath();
-      context.ellipse(cx, cy + 10, 14, 5, 0, 0, Math.PI * 2);
+      context.ellipse(cx, cy + 10, maxUses >= 5 ? 16 : 14, 5, 0, 0, Math.PI * 2);
       context.fill();
       context.translate(cx, cy);
       context.rotate(-0.35);
-      paintToolModel(p.toolId, { scale: 0.95, disposable: true });
+      paintToolModel(p.toolId, {
+        scale: maxUses >= 10 ? 1.05 : 0.95,
+        disposable: true,
+        uses,
+        maxUses
+      });
       context.restore();
     }
   }
@@ -2725,15 +2809,17 @@ export function createRenderer(canvas) {
       context.translate(proj.x, proj.y);
       if (proj.kind === "spear") {
         context.rotate(proj.angle || 0);
-        paintToolModel(THROWING_SPEAR_ID, { scale: 1, disposable: !!proj.fromPickup });
+        paintToolModel(THROWING_SPEAR_ID, {
+          scale: 1, disposable: !!proj.fromPickup, showUses: false
+        });
       } else if (proj.kind === "grenade") {
         context.rotate((proj.fuse || 0) * -6);
-        paintToolModel(FRAG_GRENADE_ID, { scale: 1, disposable: true });
+        paintToolModel(FRAG_GRENADE_ID, { scale: 1, disposable: true, showUses: false });
       } else if (proj.kind === "sticky") {
-        paintToolModel(STICKY_CHARGE_ID, { scale: 1, disposable: true });
+        paintToolModel(STICKY_CHARGE_ID, { scale: 1, disposable: true, showUses: false });
       } else if (proj.kind === "bolas") {
         context.rotate(proj.spin || 0);
-        paintToolModel(BOLAS_SNARE_ID, { scale: 1.05, disposable: true });
+        paintToolModel(BOLAS_SNARE_ID, { scale: 1.05, disposable: true, showUses: false });
       }
       context.restore();
     }
@@ -2742,7 +2828,7 @@ export function createRenderer(canvas) {
   function drawHeldToolPickup(fighter) {
     const toolId = handheldToolId(fighter);
     if (!toolId) return;
-    // Grabbed one-shots always draw; equipped tools draw while that secondary is active.
+    // Grabbed packs always draw; equipped tools draw while that secondary is active.
     const fromGrab = !!fighter.heldToolPickup;
     if (!fromGrab && !fighter.toolSecondary) return;
     const aim = Number.isFinite(fighter.aim) ? fighter.aim : 0;
@@ -2750,14 +2836,23 @@ export function createRenderer(canvas) {
     const x = fighter.x + SIZE / 2 + Math.cos(aim) * reach;
     const y = fighter.y + SIZE / 2 + Math.sin(aim) * reach;
     const flash = (fighter.toolFlash || 0) > 0;
+    const uses = fromGrab ? handheldToolUses(fighter) : 0;
+    const maxUses = fromGrab ? handheldToolMaxUses(fighter) : 1;
     context.save();
     context.translate(x, y);
     context.rotate(aim);
     context.globalAlpha = flash ? 1 : 0.96;
-    // Disposable tag wink when it's a grabbed one-shot.
-    paintToolModel(toolId, { scale: fromGrab ? 1.05 : 1, disposable: true });
+    paintToolModel(toolId, {
+      scale: fromGrab ? 1.05 : 1,
+      disposable: true,
+      uses: fromGrab ? uses : 1,
+      maxUses: fromGrab ? maxUses : 1,
+      showUses: fromGrab && maxUses > 1
+    });
     if (fromGrab) {
-      context.strokeStyle = "rgba(255,220,120,.55)";
+      context.strokeStyle = maxUses >= 5
+        ? "rgba(220,200,120,.7)"
+        : "rgba(255,220,120,.55)";
       context.lineWidth = 1;
       context.strokeRect(-22, -10, 44, 20);
     }

@@ -5,9 +5,11 @@ import {
 import { createMapProp, damageProp } from "./maps.js";
 import {
   attackToolSecondary, bindToolHpDamager, bindToolPropDamager, BOLAS_SNARE_ID,
-  createToolPickup, FRAG_GRENADE_ID, HOOKSHOT_WINCH_ID, maybeDropToolFromCrate,
-  seedMapToolPickups, STICKY_CHARGE_ID, THROWING_SPEAR_ID, tickToolPickups,
-  tickToolProjectiles, TOOL_CRATE_DROP_CHANCE, TOOL_DEFS, TOOL_SECONDARY_IDS,
+  createToolPickup, FRAG_GRENADE_ID, heldToolIdOf, heldToolUsesOf,
+  HOOKSHOT_WINCH_ID, maybeDropToolFromBreakable, maybeDropToolFromCrate,
+  rollToolUses, seedMapToolPickups, STICKY_CHARGE_ID, THROWING_SPEAR_ID,
+  tickToolPickups, tickToolProjectiles, TOOL_BREAKABLE_DROP_CHANCE,
+  TOOL_CRATE_DROP_CHANCE, TOOL_DEFS, TOOL_SECONDARY_IDS, TOOL_USE_TIERS,
   tryCollectToolPickup, tryGrabToolPickup
 } from "./tool-secondaries.js";
 
@@ -69,12 +71,48 @@ for (const id of TOOL_SECONDARY_IDS) {
   assert.equal(fighter.heldToolPickup, null);
 
   assert.ok(tryGrabToolPickup(fighter, game, 80));
-  assert.equal(fighter.heldToolPickup, FRAG_GRENADE_ID);
+  assert.equal(heldToolIdOf(fighter), FRAG_GRENADE_ID);
+  assert.equal(heldToolUsesOf(fighter), 1);
   assert.equal(game.toolPickups.length, 0);
   assert.ok(attackToolSecondary(fighter, game));
   assert.equal(fighter.heldToolPickup, null);
   assert.equal(game.toolProjectiles[0].kind, "grenade");
-  assert.equal(fighter.toolCd || 0, 0, "grabbed one-shots do not start equipped CD");
+  assert.equal(fighter.toolCd || 0, 0, "grabbed packs do not start equipped CD");
+}
+
+{
+  // Multi-use pack spends charges and keeps the tool until empty.
+  assert.deepEqual(TOOL_USE_TIERS, [1, 3, 5, 10]);
+  const rolls = new Set();
+  for (let i = 0; i < 200; i++) rolls.add(rollToolUses(() => i / 200));
+  assert.ok(rolls.has(1) && rolls.has(3) && rolls.has(5) && rolls.has(10));
+
+  const fighter = applyLoadout({}, { ...DEFAULT_LOADOUT });
+  fighter.x = 200;
+  fighter.y = 200;
+  fighter.aim = 0;
+  const pack = createToolPickup(HOOKSHOT_WINCH_ID, 210, 210, 3);
+  assert.equal(pack.uses, 3);
+  assert.equal(pack.maxUses, 3);
+  assert.equal(pack.label, "HOOK×3");
+  const game = {
+    fighters: [fighter],
+    props: [createMapProp("crate", 320, 240)],
+    platforms: [],
+    effects: [],
+    toolProjectiles: [],
+    toolPickups: [pack],
+    powerCrates: []
+  };
+  assert.ok(tryGrabToolPickup(fighter, game, 80));
+  assert.equal(heldToolUsesOf(fighter), 3);
+  assert.ok(attackToolSecondary(fighter, game));
+  assert.equal(heldToolIdOf(fighter), HOOKSHOT_WINCH_ID);
+  assert.equal(heldToolUsesOf(fighter), 2);
+  assert.ok(attackToolSecondary(fighter, game));
+  assert.equal(heldToolUsesOf(fighter), 1);
+  assert.ok(attackToolSecondary(fighter, game));
+  assert.equal(fighter.heldToolPickup, null, "empty pack clears the hand");
 }
 
 {
@@ -152,7 +190,7 @@ for (const id of TOOL_SECONDARY_IDS) {
 }
 
 {
-  // Crate destroy can drop a tool.
+  // Crate / breakable / metal box destroy can drop multi-use tool packs.
   const crate = createMapProp("crate", 400, 400);
   const game = { effects: [], toolPickups: [], groundDebris: [], props: [crate] };
   let drops = 0;
@@ -162,11 +200,33 @@ for (const id of TOOL_SECONDARY_IDS) {
     drops++;
   }
   assert.equal(game.toolPickups.length, drops);
+  assert.ok(game.toolPickups.every((p) => TOOL_USE_TIERS.includes(p.uses)));
   assert.ok(TOOL_CRATE_DROP_CHANCE > 0);
+  assert.ok(TOOL_BREAKABLE_DROP_CHANCE > 0);
   // Random gate: high roll skips.
   const before = game.toolPickups.length;
   maybeDropToolFromCrate(crate, game, 410, 390, () => 0.99);
   assert.equal(game.toolPickups.length, before);
+
+  // Non-crate breakables also drop.
+  const barrel = createMapProp("barrel", 200, 200);
+  const beforeBarrel = game.toolPickups.length;
+  maybeDropToolFromBreakable(barrel, game, 210, 190, () => 0);
+  assert.equal(game.toolPickups.length, beforeBarrel + 1);
+
+  // Metal power crates drop too.
+  const metal = {
+    powerCrate: true,
+    kind: "powerCrate",
+    breakable: true,
+    x: 100,
+    y: 100,
+    w: 40,
+    h: 40
+  };
+  const beforeMetal = game.toolPickups.length;
+  maybeDropToolFromBreakable(metal, game, 120, 120, () => 0);
+  assert.equal(game.toolPickups.length, beforeMetal + 1);
 }
 
 {

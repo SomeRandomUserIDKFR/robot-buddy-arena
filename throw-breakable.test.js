@@ -13,7 +13,8 @@ import {
   applyBraceCasing, RECONJURER_BRACE_HP
 } from "./reconjurer-builder.js";
 import {
-  createToolPickup, FRAG_GRENADE_ID, tickToolPickups, THROWING_SPEAR_ID
+  createToolPickup, FRAG_GRENADE_ID, heldToolIdOf, heldToolUsesOf,
+  tickToolPickups, THROWING_SPEAR_ID
 } from "./tool-secondaries.js";
 import {
   attackThrowBreakable, bindThrowBreakablePowerCrateDamager, canGrabBreakable,
@@ -727,7 +728,8 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.equal(fighter.heldToolPickup, null);
 
   assert.ok(tryGrabBreakable(fighter, game), "grabber can pick up ground tools");
-  assert.equal(fighter.heldToolPickup, THROWING_SPEAR_ID);
+  assert.equal(heldToolIdOf(fighter), THROWING_SPEAR_ID);
+  assert.equal(heldToolUsesOf(fighter), 1);
   assert.equal(game.toolPickups.length, 0);
   assert.equal(fighter.heldProp, null);
 
@@ -771,7 +773,7 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
     groundDebris: []
   };
   assert.ok(tryGrabBreakable(fighter, game));
-  assert.equal(fighter.heldToolPickup, FRAG_GRENADE_ID);
+  assert.equal(heldToolIdOf(fighter), FRAG_GRENADE_ID);
   assert.equal(fighter.heldProp, null);
 }
 
