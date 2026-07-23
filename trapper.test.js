@@ -276,7 +276,7 @@ assert.ok(LAND_MINE_W > 28);
 }
 
 {
-  // Spring pad is the exception — illusions can trigger / spend it.
+  // Spring pad launches decoys away without killing them (and spends).
   const trapper = applyLoadout(new Fighter({
     x: 100, y: 700, team: 0, aim: 0
   }), { ...DEFAULT_LOADOUT, extensionSecondary: TRAPPER_ID });
@@ -287,6 +287,8 @@ assert.ok(LAND_MINE_W > 28);
   const decoy = createFighterIllusion(illu, Fighter);
   decoy.x = 220;
   decoy.y = 700;
+  decoy.vx = 0;
+  decoy.vy = 0;
   const game = {
     traps: [], effects: [], fighters: [trapper, illu, decoy], illusions: []
   };
@@ -294,8 +296,36 @@ assert.ok(LAND_MINE_W > 28);
   trap.x = decoy.x + 4;
   trap.y = decoy.y + 36;
   tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
-  assert.equal(decoy.dead, true, "decoy popped by spring pad");
+  assert.equal(decoy.dead, false, "spring does not kill decoy");
+  assert.ok(decoy.vx > 100, "decoy launched away from trapper");
   assert.equal(trap.destroyed, true, "spring pad spent by illusion");
+}
+
+{
+  // Signal tripwire ignores illusions entirely.
+  const trapper = applyLoadout(new Fighter({
+    x: 100, y: 700, team: 0, aim: 0
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: TRAPPER_ID });
+  trapper.trapperType = "signalTripwire";
+  const illu = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 1, aim: 0, hp: 500, maxHp: 500
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: ILLUSIONIST_ID });
+  const decoy = createFighterIllusion(illu, Fighter);
+  decoy.x = 230;
+  decoy.y = 700;
+  const game = {
+    traps: [], effects: [], fighters: [trapper, illu, decoy], illusions: [],
+    pings: []
+  };
+  const trap = tryTrapperPlant(trapper, game);
+  trap.x = decoy.x;
+  trap.y = decoy.y + 20;
+  tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
+  assert.equal(decoy.dead, false, "signal ignores decoy");
+  assert.equal(trap.destroyed, false, "signal not spent by decoy");
+  assert.equal(trap.triggered, false);
+  assert.equal(game.pings.length, 0);
+  assert.ok(!(decoy.signalRevealT > 0));
 }
 
 {

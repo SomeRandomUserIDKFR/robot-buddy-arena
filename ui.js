@@ -1015,8 +1015,8 @@ function modifierMarkup(gear) {
         "<span class=\"stat-up\">Spring · launches away from you</span>",
         "<span class=\"stat-up\">Signal wire · snare + team reveal</span>",
         "<span class=\"stat-up\">Land mine · splash under red barrel</span>",
-        "<span class=\"stat-up\">Pops illusions on contact</span>",
-        "<span>Only spring pads can be spent by illusions</span>",
+        "<span class=\"stat-up\">Bear / fake / mine pop illusions (stay armed)</span>",
+        "<span>Spring launches decoys · signal ignores them</span>",
         "<span>Short arm time before triggers</span>",
         "<span class=\"stat-down\">Owner immune · max 3 active</span>"
       ].join("");

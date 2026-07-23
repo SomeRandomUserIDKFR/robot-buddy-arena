@@ -6,8 +6,9 @@
  * Spring pad: launches victim away from the trapper's position.
  * Signal tripwire: thin nearly-invisible line — snare + team reveal ping.
  * Land mine: larger cue than bear; splash slightly weaker than a red barrel.
- * Owner immune. Illusions pop instantly on contact / blast, but only spring
- * pads can be spent / triggered by them — other traps stay armed.
+ * Owner immune. Bear / fake plat / mine pop illusions on contact (without
+ * spending, except real triggers). Spring launches fighter decoys away
+ * (and spends). Signal tripwire ignores illusions entirely.
  */
 import { SIZE, WORLD } from "./config.js";
 import { applyHpDamage, GEAR_BY_ID } from "./equipment.js";
@@ -323,7 +324,8 @@ function applySpringPad(trap, victim, game) {
   if (!victim || victim.dead) return false;
   if (victim === trap.owner) return false;
   if (isIllusionFighter(victim)) {
-    fadeIllusionFighter(victim, game);
+    // Decoys get launched, not killed — spring still spends.
+    springLaunchAwayFromTrapper(trap, victim);
   } else {
     applyHpDamage(victim, SPRING_PAD_DAMAGE, game);
     springLaunchAwayFromTrapper(trap, victim);
@@ -344,11 +346,8 @@ function applySpringPad(trap, victim, game) {
 function applySignalTripwire(trap, victim, game) {
   if (!victim || victim.dead) return false;
   if (victim === trap.owner) return false;
-  if (isIllusionFighter(victim)) {
-    // Pop decoy without arming the signal / spending the wire.
-    fadeIllusionFighter(victim, game);
-    return true;
-  }
+  // Illusions neither trip nor die on signal wires.
+  if (isIllusionFighter(victim)) return false;
   if (SIGNAL_TRIPWIRE_DAMAGE > 0) {
     applyHpDamage(victim, SIGNAL_TRIPWIRE_DAMAGE, game);
   }
@@ -440,14 +439,19 @@ function applyLandMine(trap, triggerVictim, game) {
 }
 
 /**
- * Prop / platform illusions pop on contact with an armed enemy trap.
- * Only spring pads are spent / triggered by illusions; other traps stay armed.
+ * Prop / platform illusions: bear / fake / mine pop them (trap stays armed).
+ * Spring / signal ignore prop-platform illusions (spring only launches fighter decoys).
  */
 function applyTrapToIllusionObject(trap, ill, game) {
   if (!ill || ill.destroyed) return false;
   if (ill.owner === trap.owner) return false;
   if (ill.team === trap.team) return false;
   if (!overlapsIllusionObject(ill, trap)) return false;
+
+  // Signal wires and spring pads do not interact with prop/platform illusions.
+  if (trap.trapType === "signalTripwire" || trap.trapType === "springPad") {
+    return false;
+  }
 
   if (trap.trapType === "fakePlatform") {
     trap.victims ||= new Set();
@@ -465,19 +469,8 @@ function applyTrapToIllusionObject(trap, ill, game) {
     return true;
   }
 
-  if (trap.trapType === "springPad") {
-    if (trap.triggered) return false;
-    registerIllusionObjectHit(ill, game);
-    spendTrap(trap, game, { debris: true });
-    return true;
-  }
-
-  // Bear / signal / mine — pop illusion, leave trap armed.
-  if (
-    trap.trapType === "bear"
-    || trap.trapType === "signalTripwire"
-    || trap.trapType === "landMine"
-  ) {
+  // Bear / mine — pop illusion, leave trap armed.
+  if (trap.trapType === "bear" || trap.trapType === "landMine") {
     if (trap.triggered) return false;
     registerIllusionObjectHit(ill, game);
     return true;
