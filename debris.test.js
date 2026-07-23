@@ -13,7 +13,7 @@ import {
   MATERIAL_CONSUMER_BEAM_RPM, MATERIAL_CONSUMER_BOTS_PER_PIECE,
   MATERIAL_CONSUMER_CHUCK_DAMAGE, MATERIAL_CONSUMER_ID,
   materialEjectionTank, selectWeaponSlot, tickMaterialConsumerVacuum,
-  tickRetractableArmor, RETRACTABLE_MORPH_DURATION
+  tickRetractableArmor, tryMaterialConsumerReform, RETRACTABLE_MORPH_DURATION
 } from "./equipment.js";
 import { createMapRuntime, damageProp } from "./maps.js";
 import { createPowerCrate } from "./powerups.js";
@@ -817,6 +817,106 @@ assert.equal(restoreMapProp(null), false);
   assert.equal(fighter.nanobotFree, freeBefore - MATERIAL_CONSUMER_BOTS_PER_PIECE);
   assert.equal(game.bullets[1].scrapSource, "bank");
   assert.equal(game.bullets[1].damage, MATERIAL_CONSUMER_CHUCK_DAMAGE);
+}
+
+// Absorber reform: tip→slot assembly at cursor; chuck blocks that source.
+{
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate");
+  assert.ok(crate);
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: MATERIAL_CONSUMER_ID,
+    body: "nanotech-chestplate"
+  });
+  fighter.x = crate.x - 40;
+  fighter.y = crate.y;
+  fighter.aim = 0;
+  assert.ok(selectWeaponSlot(fighter, "secondaryWeapon"));
+  fighter.nanobotFree = fighter.nanobotMax - 200;
+
+  const game = {
+    elapsed: 0,
+    platforms: yard.platforms,
+    props: yard.props,
+    groundDebris: [],
+    effects: [],
+    reconquerQueue: [],
+    forgeCasts: [],
+    armorDummyBuilds: [],
+    materialConsumeArrivals: [],
+    powerCrates: [],
+    bullets: []
+  };
+  damageProp(crate, crate.hp, game, crate.x + 5, crate.y + 5);
+  assert.equal(crate.destroyed, true);
+  const pieceCount = game.groundDebris.length;
+  assert.ok(pieceCount > 0);
+
+  // Vacuum the whole crate into bots + scrap bank.
+  assert.equal(tickMaterialConsumerVacuum(fighter, game, 1 / 60), 0);
+  assert.ok(game.groundDebris.every((p) => p.despawnMode === "material-consume"));
+  const frames = Math.ceil(MATERIAL_CONSUME_DURATION * 60) + 40;
+  for (let i = 0; i < frames; i++) {
+    game.elapsed += 1 / 60;
+    tickGroundDebris(game, 1 / 60);
+    tickMaterialConsumerVacuum(fighter, game, 1 / 60);
+  }
+  assert.equal(game.groundDebris.length, 0);
+  assert.equal(fighter.materialScrapBank.length, pieceCount);
+  assert.ok(fighter.materialAbsorbMeta);
+  const sourceId = fighter.materialAbsorbOrder[0];
+  assert.ok(sourceId);
+  assert.equal(fighter.materialAbsorbMeta[sourceId].arrived, pieceCount);
+  assert.equal(fighter.materialAbsorbMeta[sourceId].chucked, false);
+
+  const freeBeforeReform = fighter.nanobotFree;
+  const botCost = pieceCount * MATERIAL_CONSUMER_BOTS_PER_PIECE;
+  const standX = 900;
+  const standY = 200;
+  assert.ok(tryMaterialConsumerReform(fighter, game, standX, standY));
+  assert.equal(fighter.materialScrapBank.length, 0, "reform spends remembered scraps");
+  assert.equal(fighter.nanobotFree, freeBeforeReform - botCost, "reform repays vacuum bots");
+  assert.equal(fighter.materialAbsorbMeta[sourceId].reformed, true);
+  assert.ok(game.groundDebris.length === pieceCount, "fragments spawn from tip");
+  assert.ok(game.groundDebris.every((p) => p.despawnMode === "reconquer-home"));
+  const tipX = fighter.x + 24 + Math.cos(fighter.aim) * 61;
+  assert.ok(
+    game.groundDebris.every((p) => Math.hypot(p.x - tipX, p.y - (fighter.y + 24)) < 80),
+    "fragments start near absorber tip"
+  );
+  assert.equal(crate.destroyed, true, "crate stays down until jigsaw finishes");
+
+  for (let i = 0; i < 180; i++) tickGroundDebris(game, 1 / 60);
+  assert.equal(crate.destroyed, false, "crate reforms after all shards seat");
+  assert.equal(game.groundDebris.length, 0);
+  // Placed on a valid floor near the cursor, not left at the old wreck.
+  assert.ok(Math.abs((crate.x + crate.w / 2) - standX) < 120);
+
+  // Chucking any scrap permanently blocks reform for that source.
+  const crate2 = yard.props.find((p) => p.kind === "crate" && p !== crate && !p.destroyed);
+  assert.ok(crate2);
+  fighter.x = crate2.x - 40;
+  fighter.y = crate2.y;
+  fighter.nanobotFree = fighter.nanobotMax - 200;
+  damageProp(crate2, crate2.hp, game, crate2.x + 5, crate2.y + 5);
+  assert.equal(tickMaterialConsumerVacuum(fighter, game, 1 / 60), 0);
+  for (let i = 0; i < frames; i++) {
+    game.elapsed += 1 / 60;
+    tickGroundDebris(game, 1 / 60);
+    tickMaterialConsumerVacuum(fighter, game, 1 / 60);
+  }
+  const sourceId2 = fighter.materialAbsorbOrder[fighter.materialAbsorbOrder.length - 1];
+  assert.ok(fighter.materialScrapBank.length > 0);
+  fighter.attackCd = 0;
+  assert.ok(chuckMaterialConsumerScrap(fighter, game));
+  assert.equal(fighter.materialAbsorbMeta[sourceId2].chucked, true);
+  assert.equal(
+    tryMaterialConsumerReform(fighter, game, crate2.x + 20, crate2.y),
+    false,
+    "chucked scrap blocks Absorber reform"
+  );
+  assert.equal(crate2.destroyed, true);
 }
 
 console.log("debris.test.js passed.");

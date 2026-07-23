@@ -1350,6 +1350,27 @@ export function claimDebrisForMaterialConsume(
   for (const sourceId of hitIds) {
     clearDebrisSourceQueues(game, sourceId);
     const group = piecesForSource(game, sourceId);
+    // Remember expected scrap count so Absorber reform knows when the set is whole.
+    if (owner && group.length) {
+      owner.materialAbsorbMeta ||= Object.create(null);
+      owner.materialAbsorbOrder ||= [];
+      if (!owner.materialAbsorbMeta[sourceId]) {
+        owner.materialAbsorbMeta[sourceId] = {
+          sourceId,
+          sourceType: group[0].sourceType || null,
+          sourceKind: group[0].sourceKind || null,
+          sourceProp: group[0].sourceProp || null,
+          expected: group.length,
+          arrived: 0,
+          chucked: false
+        };
+        owner.materialAbsorbOrder.push(sourceId);
+      } else {
+        owner.materialAbsorbMeta[sourceId].expected = group.length;
+        owner.materialAbsorbMeta[sourceId].sourceProp = group[0].sourceProp
+          || owner.materialAbsorbMeta[sourceId].sourceProp;
+      }
+    }
     let i = 0;
     for (const piece of group) {
       if (isVacuumLockedMode(piece.despawnMode) && piece.despawnMode !== "material-consume") {
@@ -1445,8 +1466,31 @@ function finishMaterialConsumePiece(game, piece) {
       ? piece.marks.map((m) => ({
         x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2, color: m.color || null
       }))
-      : null
+      : null,
+    // Needed so Absorber reform can rebuild the original breakable.
+    sourceId: piece.sourceId || null,
+    sourceType: piece.sourceType || null,
+    sourceKind: piece.sourceKind || null,
+    sourceProp: piece.sourceProp || null,
+    homeLx: Number.isFinite(piece.homeLx) ? piece.homeLx : 0,
+    homeLy: Number.isFinite(piece.homeLy) ? piece.homeLy : 0,
+    originX: piece.originX ?? null,
+    originY: piece.originY ?? null
   });
+}
+
+/** Move a prop (and canopy) so its center is at world (centerX, centerY). */
+export function relocateMapProp(prop, centerX, centerY) {
+  if (!prop) return false;
+  const oldX = prop.x;
+  const oldY = prop.y;
+  prop.x = centerX - (prop.w || 0) / 2;
+  prop.y = centerY - (prop.h || 0) / 2;
+  if (prop.canopy) {
+    prop.canopy.x += prop.x - oldX;
+    prop.canopy.y += prop.y - oldY;
+  }
+  return true;
 }
 
 /** Restore a destroyed map prop in place. */
@@ -1462,6 +1506,70 @@ export function restoreMapProp(prop) {
   prop.thrownInFlight = false;
   prop.heldBy = null;
   return true;
+}
+
+/**
+ * Spawn absorbed scraps at the Absorber tip and fly them into jigsaw slots
+ * (same reconquer-home / wait-for-all seating as natural reconquer).
+ */
+export function spawnAbsorberReformHome(game, {
+  tipX, tipY, scraps, homeX, homeY, restore
+}) {
+  if (!game || !Array.isArray(scraps) || !scraps.length) return 0;
+  let spawned = 0;
+  for (let i = 0; i < scraps.length; i++) {
+    const scrap = scraps[i];
+    if (!scrap) continue;
+    pushPiece(game, {
+      material: scrap.material || "scrap",
+      kind: scrap.kind || "tile",
+      x: tipX,
+      y: tipY,
+      vx: (Math.random() - 0.5) * 40,
+      vy: (Math.random() - 0.5) * 40,
+      rot: (Math.random() - 0.5) * Math.PI,
+      spin: (Math.random() - 0.5) * 10,
+      w: scrap.w || 8,
+      h: scrap.h || 8,
+      baseW: scrap.w || 8,
+      baseH: scrap.h || 8,
+      color: scrap.color || "#8a7a68",
+      edge: scrap.edge || null,
+      shape: scrap.shape || "poly",
+      detail: scrap.detail || null,
+      verts: Array.isArray(scrap.verts)
+        ? scrap.verts.map((p) => [p[0], p[1]])
+        : null,
+      marks: Array.isArray(scrap.marks)
+        ? scrap.marks.map((m) => ({
+          x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2, color: m.color || null
+        }))
+        : null,
+      homeLx: Number.isFinite(scrap.homeLx) ? scrap.homeLx : 0,
+      homeLy: Number.isFinite(scrap.homeLy) ? scrap.homeLy : 0,
+      grounded: false,
+      settle: 0,
+      immortal: false,
+      life: 99,
+      maxLife: 99,
+      alpha: 1,
+      scale: 1,
+      despawnMode: "reconquer-home",
+      despawnT: 0,
+      homeSeated: false,
+      sourceType: scrap.sourceType || null,
+      sourceKind: scrap.sourceKind || null,
+      sourceId: scrap.sourceId || `absorber-reform-${i}`,
+      sourceProp: scrap.sourceProp || null,
+      originX: tipX,
+      originY: tipY,
+      homeX,
+      homeY,
+      homeRestore: restore
+    });
+    spawned += 1;
+  }
+  return spawned;
 }
 
 /** Restore a destroyed metal power crate in place. */

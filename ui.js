@@ -951,7 +951,8 @@ function modifierMarkup(gear) {
         "<span class=\"stat-up\">Vacuums debris → free bots</span>",
         "<span class=\"stat-up\">Hold V · excess → ejection tank</span>",
         "<span class=\"stat-up\">Tank shoots first · then remembered scraps</span>",
-        "<span class=\"stat-down\">Vacuumed scraps cannot reconquer</span>"
+        "<span class=\"stat-up\">Tap B · reform at cursor from tip</span>",
+        "<span class=\"stat-down\">Chucked scrap blocks that source</span>"
       ].filter(Boolean).join("");
     }
     if (gear.reconjurerBuilder) {

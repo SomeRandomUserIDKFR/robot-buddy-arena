@@ -17,10 +17,12 @@ import { analyzeBuddyMessage } from "./language-analyzer.js";
 import {
   acceptSuggestion, applyLoadout, awardConquest, cycleAdaptiveMode, cycleModularMode,
   cycleWeaponSlot, equipOwned, GEAR_BY_ID, hasNanotechChestplate, isAdaptiveNanotechWeapon,
-  isModularWeapon, NANOTECH_F_HOLD_THRESHOLD, pulseNanotechArmor,
+  isMaterialConsumer, isModularWeapon, MATERIAL_CONSUMER_REFORM_KEY,
+  NANOTECH_F_HOLD_THRESHOLD, pulseNanotechArmor,
   purchaseGear, reconcileLoadoutsToOwned, selectWeaponSlot, setBuddyMode,
-  setNanotechChanneling, tickMaterialConsumerVacuum, tryNanotechWeaponAction,
-  toggleRetractableArmor, toggleShieldRaise, trainerLoadout, weaponKind
+  setNanotechChanneling, tickMaterialConsumerVacuum, tryMaterialConsumerReform,
+  tryNanotechWeaponAction, toggleRetractableArmor, toggleShieldRaise, trainerLoadout,
+  weaponKind
 } from "./equipment.js";
 import { tickGroundDebris } from "./debris.js";
 import { tickThrowBreakable } from "./throw-breakable.js";
@@ -456,6 +458,18 @@ function handleKeyDown(event) {
     else if (isReconjurerBuilder(player)) cycleReconjurerType(player, game);
   }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
+  if (event.code === MATERIAL_CONSUMER_REFORM_KEY && !event.repeat) {
+    const player = game.fighters[0];
+    if (isMaterialConsumer(player)) {
+      const point = screenToWorld(mouse.x, mouse.y);
+      tryMaterialConsumerReform(
+        player,
+        game,
+        clamp(point.x, 0, WORLD.w),
+        clamp(point.y, 0, WORLD.h)
+      );
+    }
+  }
   if (event.code === "KeyG") {
     const point = screenToWorld(mouse.x, mouse.y);
     game.pings.push({
@@ -474,8 +488,8 @@ function handleKeyDown(event) {
     showPause(game.paused);
   }
   if ([
-    "Space", "KeyW", "KeyA", "KeyD", "KeyC", "KeyQ", "KeyE", "KeyF", "KeyR", "KeyT",
-    "Digit1", "Digit2", "Digit3"
+    "Space", "KeyW", "KeyA", "KeyD", "KeyB", "KeyC", "KeyQ", "KeyE", "KeyF", "KeyR",
+    "KeyT", "Digit1", "Digit2", "Digit3"
   ].includes(event.code)) {
     event.preventDefault();
   }

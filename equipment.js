@@ -1,5 +1,7 @@
 import {
-  claimDebrisForMaterialConsume, retargetMaterialConsumeTip, spawnBrokenArmorDebris
+  claimDebrisForMaterialConsume, relocateMapProp, resolveStandTarget,
+  restoreMapProp, restorePowerCrate, retargetMaterialConsumeTip,
+  spawnAbsorberReformHome, spawnBrokenArmorDebris
 } from "./debris.js";
 import {
   dropHeldBreakable, THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID
@@ -101,6 +103,8 @@ export const MATERIAL_CONSUMER_CHUCK_SPEED = 1100;
 export const MATERIAL_CONSUMER_BEAM_RPM = 480;
 /** Cap on excess scraps stored while holding V (~10 pipes / ~160 tiles). */
 export const MATERIAL_CONSUMER_EJECTION_TANK_CAP = 160;
+/** Hotkey (tap) to reform the last whole absorbed breakable at the cursor. */
+export const MATERIAL_CONSUMER_REFORM_KEY = "KeyB";
 export const MATERIAL_CONSUMER_ID = "material-consumer-nanotech";
 export { THROW_BREAKABLE_ID } from "./throw-breakable.js";
 export { SHIELD_STEAL_ID } from "./shield-steal.js";
@@ -318,7 +322,7 @@ export const GEAR = [
     MATERIAL_CONSUMER_ID,
     "secondaryWeapon",
     "Material Consumer",
-    "Nanotech tool-sword. Vacuums debris into free bots (no reconquer; remembers scraps). Hold RMB for a debris beam (ejection tank first, then remembered scraps). Hold V to vacuum excess into an ejection tank when the pool is full. Adds 120 pool bots.",
+    "Nanotech tool-sword. Vacuums debris into free bots (no reconquer; remembers scraps). Hold RMB for a debris beam (ejection tank first, then remembered scraps). Hold V to vacuum excess into an ejection tank when the pool is full. Tap B to reform the last whole absorbed breakable at the cursor (scraps fly from the tip; chucked scraps block that source). Adds 120 pool bots.",
     {
       damage: (48 * NANOTECH_DAMAGE_MULT) / 40,
       fireRate: 150 / 150,
@@ -1355,7 +1359,9 @@ export function spendTankOrNanobots(fighter, botCost = MATERIAL_CONSUMER_BOTS_PE
   if (!fighter) return null;
   const tank = materialEjectionTank(fighter);
   if (tank.length) {
-    return { source: "tank", scrap: tank.shift(), botsSpent: 0 };
+    const scrap = tank.shift();
+    markMaterialSourceSpent(fighter, scrap);
+    return { source: "tank", scrap, botsSpent: 0 };
   }
   const cost = Math.max(0, botCost | 0);
   if (cost > 0 && (fighter.nanobotFree || 0) < cost) return null;
@@ -1366,7 +1372,7 @@ export function spendTankOrNanobots(fighter, botCost = MATERIAL_CONSUMER_BOTS_PE
   return { source: "bots", scrap: null, botsSpent: cost };
 }
 
-/** Copy scrap silhouette fields so bank/tank/beam keep jagged source shapes. */
+/** Copy scrap silhouette + absorb-origin fields for bank/tank/reform. */
 function cloneScrapShape(scrap) {
   if (!scrap || typeof scrap !== "object") return scrap;
   return {
@@ -1378,8 +1384,39 @@ function cloneScrapShape(scrap) {
       ? scrap.marks.map((m) => ({
         x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2, color: m.color || null
       }))
-      : null
+      : null,
+    sourceId: scrap.sourceId || null,
+    sourceType: scrap.sourceType || null,
+    sourceKind: scrap.sourceKind || null,
+    sourceProp: scrap.sourceProp || null,
+    homeLx: Number.isFinite(scrap.homeLx) ? scrap.homeLx : 0,
+    homeLy: Number.isFinite(scrap.homeLy) ? scrap.homeLy : 0,
+    originX: scrap.originX ?? null,
+    originY: scrap.originY ?? null
   };
+}
+
+function ensureAbsorbMeta(fighter) {
+  if (!fighter.materialAbsorbMeta) fighter.materialAbsorbMeta = Object.create(null);
+  if (!fighter.materialAbsorbOrder) fighter.materialAbsorbOrder = [];
+  return fighter.materialAbsorbMeta;
+}
+
+/** Any spent/chucked scrap from a source permanently blocks Absorber reform. */
+export function markMaterialSourceSpent(fighter, scrap) {
+  if (!fighter || !scrap?.sourceId) return;
+  const meta = ensureAbsorbMeta(fighter)[scrap.sourceId];
+  if (meta) meta.chucked = true;
+}
+
+function noteMaterialArrival(fighter, arrival) {
+  if (!fighter || !arrival?.sourceId) return;
+  const meta = ensureAbsorbMeta(fighter)[arrival.sourceId];
+  if (!meta) return;
+  meta.arrived = (meta.arrived || 0) + 1;
+  if (arrival.sourceProp) meta.sourceProp = arrival.sourceProp;
+  if (arrival.sourceType) meta.sourceType = arrival.sourceType;
+  if (arrival.sourceKind) meta.sourceKind = arrival.sourceKind;
 }
 
 /**
@@ -1389,7 +1426,9 @@ function cloneScrapShape(scrap) {
 function takeNextDebrisAmmo(fighter) {
   const tank = materialEjectionTank(fighter);
   if (tank.length) {
-    return { scrap: tank.shift(), source: "tank" };
+    const scrap = tank.shift();
+    markMaterialSourceSpent(fighter, scrap);
+    return { scrap, source: "tank" };
   }
   const bank = materialScrapBank(fighter);
   if (!bank.length) return null;
@@ -1397,6 +1436,7 @@ function takeNextDebrisAmmo(fighter) {
   const cost = Math.max(0, scrap.bots || 0);
   if (cost > 0 && (fighter.nanobotFree || 0) < cost) return null;
   bank.shift();
+  markMaterialSourceSpent(fighter, scrap);
   if (cost > 0) {
     fighter.nanobotFree -= cost;
     clampNanotechPool(fighter);
@@ -1471,6 +1511,158 @@ export function chuckMaterialConsumerScrap(fighter, game) {
       life: 0.06,
       angle: aim,
       report: false
+    });
+  }
+  return true;
+}
+
+function scrapsForSource(fighter, sourceId) {
+  const bank = materialScrapBank(fighter);
+  const tank = materialEjectionTank(fighter);
+  return [
+    ...bank.filter((s) => s?.sourceId === sourceId),
+    ...tank.filter((s) => s?.sourceId === sourceId)
+  ];
+}
+
+function stripScrapsForSource(fighter, sourceId) {
+  const bank = materialScrapBank(fighter);
+  const tank = materialEjectionTank(fighter);
+  const keptBank = [];
+  const keptTank = [];
+  const taken = [];
+  for (const scrap of bank) {
+    if (scrap?.sourceId === sourceId) taken.push(scrap);
+    else keptBank.push(scrap);
+  }
+  for (const scrap of tank) {
+    if (scrap?.sourceId === sourceId) taken.push(scrap);
+    else keptTank.push(scrap);
+  }
+  fighter.materialScrapBank = keptBank;
+  fighter.materialEjectionTank = keptTank;
+  return taken;
+}
+
+function findDestroyedPowerCrateNear(game, originX, originY) {
+  let best = null;
+  let bestD = Infinity;
+  for (const crate of game?.powerCrates || []) {
+    if (!crate?.destroyed) continue;
+    const d = Math.hypot(
+      (crate.x + (crate.w || 0) * 0.5) - originX,
+      (crate.y + (crate.h || 0) * 0.5) - originY
+    );
+    if (d < bestD) {
+      bestD = d;
+      best = crate;
+    }
+  }
+  return best;
+}
+
+/**
+ * Tap B: reform the latest whole absorbed breakable at the closest valid floor
+ * to the mouse. Fragments spawn at the Absorber tip and assemble like reconquer.
+ * Fails if any scrap from that source was chucked/spent, the set is incomplete,
+ * or free bots cannot repay the vacuumed grant.
+ * @returns {boolean}
+ */
+export function tryMaterialConsumerReform(fighter, game, worldX, worldY) {
+  if (!fighter || fighter.dead || !isMaterialConsumer(fighter) || !game) return false;
+  const order = fighter.materialAbsorbOrder || [];
+  const metaMap = ensureAbsorbMeta(fighter);
+  if (!order.length) return false;
+
+  let pick = null;
+  for (let i = order.length - 1; i >= 0; i--) {
+    const sourceId = order[i];
+    const meta = metaMap[sourceId];
+    if (!meta || meta.chucked || meta.reformed) continue;
+    const expected = meta.expected | 0;
+    if (expected <= 0 || (meta.arrived || 0) < expected) continue;
+
+    const scraps = scrapsForSource(fighter, sourceId);
+    if (scraps.length < expected) continue;
+
+    const botCost = scraps.reduce((sum, s) => sum + Math.max(0, s.bots || 0), 0);
+    if ((fighter.nanobotFree || 0) < botCost) continue;
+
+    const sourceType = meta.sourceType || scraps[0]?.sourceType || null;
+    if (sourceType === "prop") {
+      const prop = meta.sourceProp || scraps[0]?.sourceProp || null;
+      if (!prop?.destroyed) continue;
+      pick = {
+        sourceId, meta, scraps: scraps.slice(0, expected), botCost, sourceType, prop
+      };
+      break;
+    }
+    if (sourceType === "powerCrate") {
+      const ox = Number.isFinite(scraps[0]?.originX) ? scraps[0].originX : worldX;
+      const oy = Number.isFinite(scraps[0]?.originY) ? scraps[0].originY : worldY;
+      const crate = findDestroyedPowerCrateNear(game, ox, oy);
+      if (!crate) continue;
+      pick = {
+        sourceId, meta, scraps: scraps.slice(0, expected), botCost, sourceType, crate
+      };
+      break;
+    }
+  }
+  if (!pick) return false;
+
+  const target = pick.prop || pick.crate;
+  const w = target.w || 40;
+  const h = target.h || 40;
+  const stand = resolveStandTarget(
+    game, [], Number(worldX) || 0, Number(worldY) || 0, w, h,
+    { excludeProp: target }
+  );
+  const homeX = stand.targetX;
+  const homeY = stand.targetY;
+
+  // Pay with the vacuumed bots + remove remembered scraps for this source.
+  stripScrapsForSource(fighter, pick.sourceId);
+  if (pick.botCost > 0) {
+    fighter.nanobotFree = Math.max(0, (fighter.nanobotFree || 0) - pick.botCost);
+    clampNanotechPool(fighter);
+  }
+  pick.meta.reformed = true;
+
+  const restore = pick.sourceType === "powerCrate"
+    ? () => {
+      pick.crate.x = homeX - (pick.crate.w || w) * 0.5;
+      pick.crate.y = homeY - (pick.crate.h || h) * 0.5;
+      restorePowerCrate(pick.crate);
+      if (game.powerCrateState?.pending && pick.crate.spawnKey) {
+        game.powerCrateState.pending = game.powerCrateState.pending.filter(
+          (p) => p.spawnKey !== pick.crate.spawnKey
+        );
+      }
+    }
+    : () => {
+      relocateMapProp(pick.prop, homeX, homeY);
+      restoreMapProp(pick.prop);
+    };
+
+  const tip = materialConsumerTip(fighter);
+  const spawned = spawnAbsorberReformHome(game, {
+    tipX: tip.x,
+    tipY: tip.y,
+    scraps: pick.scraps,
+    homeX,
+    homeY,
+    restore
+  });
+  if (!spawned) return false;
+
+  fighter.materialConsumeFlash = Math.max(fighter.materialConsumeFlash || 0, 0.22);
+  if (game.effects) {
+    game.effects.push({
+      type: "nanoIngest",
+      x: tip.x,
+      y: tip.y,
+      life: 0.28,
+      color: "#6cffb0"
     });
   }
   return true;
@@ -1656,7 +1848,7 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
       }
       if (arrival.ejection) {
         if (tank.length < MATERIAL_CONSUMER_EJECTION_TANK_CAP) {
-          tank.push(cloneScrapShape({
+          const scrap = cloneScrapShape({
             bots: 0,
             ejection: true,
             color: arrival.color || "#8a7a68",
@@ -1668,8 +1860,18 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
             shape: arrival.shape || null,
             detail: arrival.detail || null,
             verts: arrival.verts || null,
-            marks: arrival.marks || null
-          }));
+            marks: arrival.marks || null,
+            sourceId: arrival.sourceId || null,
+            sourceType: arrival.sourceType || null,
+            sourceKind: arrival.sourceKind || null,
+            sourceProp: arrival.sourceProp || null,
+            homeLx: arrival.homeLx,
+            homeLy: arrival.homeLy,
+            originX: arrival.originX,
+            originY: arrival.originY
+          });
+          tank.push(scrap);
+          noteMaterialArrival(fighter, scrap);
           if (game.effects) {
             game.effects.push({
               type: "nanoIngest",
@@ -1687,7 +1889,7 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
       gained += got;
       // Remember only scraps that actually paid bots — chucking spends that amount.
       if (got > 0) {
-        bank.push(cloneScrapShape({
+        const scrap = cloneScrapShape({
           bots: got,
           color: arrival.color || "#8a7a68",
           kind: arrival.kind || null,
@@ -1698,8 +1900,18 @@ export function tickMaterialConsumerVacuum(fighter, game, dt) {
           shape: arrival.shape || null,
           detail: arrival.detail || null,
           verts: arrival.verts || null,
-          marks: arrival.marks || null
-        }));
+          marks: arrival.marks || null,
+          sourceId: arrival.sourceId || null,
+          sourceType: arrival.sourceType || null,
+          sourceKind: arrival.sourceKind || null,
+          sourceProp: arrival.sourceProp || null,
+          homeLx: arrival.homeLx,
+          homeLy: arrival.homeLy,
+          originX: arrival.originX,
+          originY: arrival.originY
+        });
+        bank.push(scrap);
+        noteMaterialArrival(fighter, scrap);
       }
       if (got > 0 && game.effects) {
         game.effects.push({
@@ -2471,6 +2683,8 @@ export function applyLoadout(fighter, loadout) {
   fighter.heldProp = null;
   fighter.materialScrapBank = [];
   fighter.materialEjectionTank = [];
+  fighter.materialAbsorbMeta = Object.create(null);
+  fighter.materialAbsorbOrder = [];
   fighter.materialEjectHeld = false;
   fighter.materialBeamHeld = false;
   fighter.materialBeamFlash = 0;
