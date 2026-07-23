@@ -335,32 +335,49 @@ function aabbOfVerts(verts) {
 }
 
 /**
- * Clip a world-local mark line into a shard's local space if it crosses the AABB.
- * @returns {{x1:number,y1:number,x2:number,y2:number,color?:string}|null}
+ * Liang–Barsky clip of a prop-local mark line to a shard AABB, returned in
+ * shard-local coords. Rejects misses and hairline leftovers.
  */
 function clipMarkToShard(x1, y1, x2, y2, homeLx, homeLy, hw, hh, color) {
-  // Cohen–Sutherland-ish: accept if either endpoint is near the shard or the
-  // segment crosses the AABB expanded slightly.
-  const pad = 1.5;
+  const pad = 0.75;
   const minX = homeLx - hw - pad;
   const maxX = homeLx + hw + pad;
   const minY = homeLy - hh - pad;
   const maxY = homeLy + hh + pad;
-  const inside = (x, y) => x >= minX && x <= maxX && y >= minY && y <= maxY;
-  if (!inside(x1, y1) && !inside(x2, y2)) {
-    // Quick reject if both ends are on the same outside half-plane.
-    if (
-      (x1 < minX && x2 < minX) || (x1 > maxX && x2 > maxX)
-      || (y1 < minY && y2 < minY) || (y1 > maxY && y2 > maxY)
-    ) {
-      return null;
+  let t0 = 0;
+  let t1 = 1;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const clip = (p, q) => {
+    if (Math.abs(p) < 1e-9) return q >= 0;
+    const r = q / p;
+    if (p < 0) {
+      if (r > t1) return false;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return false;
+      if (r < t1) t1 = r;
     }
+    return true;
+  };
+  if (
+    !clip(-dx, x1 - minX) || !clip(dx, maxX - x1)
+    || !clip(-dy, y1 - minY) || !clip(dy, maxY - y1)
+  ) {
+    return null;
   }
+  const ax = x1 + t0 * dx;
+  const ay = y1 + t0 * dy;
+  const bx = x1 + t1 * dx;
+  const by = y1 + t1 * dy;
+  const len = Math.hypot(bx - ax, by - ay);
+  // Ignore stubs — they read as stray hairs once pieces spin.
+  if (len < 2.5) return null;
   return {
-    x1: x1 - homeLx,
-    y1: y1 - homeLy,
-    x2: x2 - homeLx,
-    y2: y2 - homeLy,
+    x1: ax - homeLx,
+    y1: ay - homeLy,
+    x2: bx - homeLx,
+    y2: by - homeLy,
     color: color || null
   };
 }
@@ -470,13 +487,32 @@ function jaggedEllipseShards(cx, cy, rw, rh, cols, rows, paint, colorAt) {
   });
 }
 
+function mixDebrisHex(a, b, t) {
+  const parse = (hex) => {
+    const h = (hex || "#888888").replace("#", "");
+    if (h.length !== 6) return [136, 136, 136];
+    return [
+      parseInt(h.slice(0, 2), 16),
+      parseInt(h.slice(2, 4), 16),
+      parseInt(h.slice(4, 6), 16)
+    ];
+  };
+  const ca = parse(a);
+  const cb = parse(b);
+  const u = Math.max(0, Math.min(1, t));
+  const ch = (i) => Math.round(ca[i] + (cb[i] - ca[i]) * u);
+  return `#${[ch(0), ch(1), ch(2)].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+}
+
 function crateColorAt(lx, ly, propW, propH, paint) {
-  // Source-region: darker near the drawn border inset, base wood elsewhere.
+  // Source-region shade toward the border — stay readable as a wood chunk.
   const hw = propW / 2;
   const hh = propH / 2;
   const edgeBand = Math.min(hw, hh) * 0.32;
-  const nearEdge = Math.min(hw - Math.abs(lx), hh - Math.abs(ly)) < edgeBand;
-  return nearEdge ? paint.edge : paint.fill;
+  const near = Math.min(hw - Math.abs(lx), hh - Math.abs(ly));
+  if (near >= edgeBand) return paint.fill;
+  const t = 1 - near / edgeBand;
+  return mixDebrisHex(paint.fill, paint.edge, 0.35 * t);
 }
 
 function pipeColorAt(lx, ly, propW, propH, paint) {
@@ -487,11 +523,12 @@ function pipeColorAt(lx, ly, propW, propH, paint) {
 }
 
 function barrelColorAt(lx, ly, propW, propH, paint) {
-  // Hoop bands at 30% / 70% of height (prop-local, y from top).
+  // Hoop bands at 30% / 70% of height — shaded body, not a hairline.
   const top = -propH / 2;
   const t = (ly - top) / propH;
-  const onHoop = Math.abs(t - 0.3) < 0.06 || Math.abs(t - 0.7) < 0.06;
-  return onHoop ? (paint.hoop || paint.edge) : paint.fill;
+  const onHoop = Math.abs(t - 0.3) < 0.08 || Math.abs(t - 0.7) < 0.08;
+  if (!onHoop) return paint.fill;
+  return mixDebrisHex(paint.fill, paint.hoop || paint.edge, 0.55);
 }
 
 function pillarColorAt(lx, ly, propW, propH, paint) {

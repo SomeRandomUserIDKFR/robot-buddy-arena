@@ -46,10 +46,24 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   assert.equal(tiles.length, 16, "4x4 crate jigsaw");
   assert.ok(tiles.every((t) => Array.isArray(t.verts) && t.verts.length >= 3), "jagged verts");
   assert.ok(tiles.every((t) => t.material === "wood"), "map crates are wood, not metal");
-  // Source-region paint: edge shards darker, interior wood — not one mosaic color.
+  // Source-region paint: edge shards shaded, interior wood — not one mosaic color.
   assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.crate.fill));
-  assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.crate.edge));
+  assert.ok(
+    new Set(tiles.map((t) => t.color)).size >= 2,
+    "crate shards use more than one source-region shade"
+  );
   assert.ok(tiles.some((t) => Array.isArray(t.marks) && t.marks.length), "crate X/border marks");
+  // Marks must be clipped to the shard — prop-length streaks look like stray lines.
+  for (const tile of tiles) {
+    for (const mark of tile.marks || []) {
+      const len = Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1);
+      assert.ok(len >= 2.5, "mark long enough to see");
+      assert.ok(
+        len <= Math.max(tile.w, tile.h) * 1.35 + 0.5,
+        `mark clipped to shard (len=${len.toFixed(1)} vs ${tile.w.toFixed(1)}x${tile.h.toFixed(1)})`
+      );
+    }
+  }
   const area = tiles.reduce((sum, t) => sum + (t.area || 0), 0);
   assert.ok(Math.abs(area - crate.w * crate.h) < 2, "shards cover ~100% of crate area");
   // Shared jags: neighboring shards have matching world-space edge midpoints.
@@ -79,8 +93,11 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
     || { kind: "barrel", w: 34, h: 48, x: 0, y: 0 };
   const tiles = buildPropJigsaw(barrel, "barrel");
   assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.barrel.fill));
-  assert.ok(tiles.some((t) => t.color === (PROP_DEBRIS_COLORS.barrel.hoop
-    || PROP_DEBRIS_COLORS.barrel.edge)));
+  assert.ok(
+    new Set(tiles.map((t) => t.color)).size >= 2,
+    "barrel hoop band shades differ from body"
+  );
+  assert.ok(tiles.every((t) => Array.isArray(t.verts) && t.verts.length >= 3));
 }
 
 // Fade despawn removes non-armor debris after lifetime + animation.

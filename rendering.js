@@ -1892,7 +1892,7 @@ export function createRenderer(canvas) {
     context.globalAlpha = settle * fogAlpha * pieceAlpha;
     context.fillStyle = color;
 
-    // Jagged prop shards — unique polygons + source-region paint/marks.
+    // Jagged prop shards — solid filled polygons first; short clipped marks only.
     if (piece.material !== "armor" && (piece.kind === "tile" || piece.homeLx != null)) {
       if (Array.isArray(piece.verts) && piece.verts.length >= 3) {
         context.beginPath();
@@ -1902,34 +1902,48 @@ export function createRenderer(canvas) {
         }
         context.closePath();
         context.fill();
+        // Soft rim so the chunk reads as a solid, not a wireframe.
         context.strokeStyle = edge;
-        context.lineWidth = 1;
+        context.lineWidth = 1.25;
         context.stroke();
+        context.fillStyle = highlight;
+        context.globalAlpha = settle * fogAlpha * pieceAlpha * 0.22;
+        context.beginPath();
+        context.moveTo(piece.verts[0][0] * 0.55, piece.verts[0][1] * 0.55);
+        for (let i = 1; i < Math.min(4, piece.verts.length); i++) {
+          context.lineTo(piece.verts[i][0] * 0.55, piece.verts[i][1] * 0.55);
+        }
+        context.closePath();
+        context.fill();
+        context.globalAlpha = settle * fogAlpha * pieceAlpha;
       } else if (piece.shape === "ellipse") {
         context.beginPath();
         context.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2);
         context.fill();
         context.strokeStyle = edge;
-        context.lineWidth = 1;
+        context.lineWidth = 1.25;
         context.stroke();
       } else {
         context.fillRect(-hw, -hh, piece.w, piece.h);
         context.strokeStyle = edge;
-        context.lineWidth = 1;
+        context.lineWidth = 1.25;
         context.strokeRect(-hw + 0.5, -hh + 0.5, piece.w - 1, piece.h - 1);
       }
       if (Array.isArray(piece.marks)) {
-        context.lineWidth = 1.2;
+        context.lineWidth = 1.4;
+        context.lineCap = "butt";
         for (const mark of piece.marks) {
+          const len = Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1);
+          // Guard: never draw prop-length streaks on a small shard.
+          if (!(len >= 2.5) || len > Math.max(piece.w, piece.h) * 1.35) continue;
           context.strokeStyle = mark.color || edge;
+          context.globalAlpha = settle * fogAlpha * pieceAlpha * 0.85;
           context.beginPath();
           context.moveTo(mark.x1, mark.y1);
           context.lineTo(mark.x2, mark.y2);
           context.stroke();
         }
-      } else if (piece.detail === "powerCrate") {
-        context.strokeStyle = highlight;
-        context.strokeRect(-hw + 2, -hh + 2, piece.w - 4, piece.h - 4);
+        context.globalAlpha = settle * fogAlpha * pieceAlpha;
       }
       context.restore();
       return;
