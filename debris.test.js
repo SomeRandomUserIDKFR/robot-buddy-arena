@@ -4,8 +4,8 @@ import {
   consumeDebrisSource, damageArmorDummy, forgeCastColor, FORGE_PHASE_DURATIONS,
   MATERIAL_CONSUME_DURATION, NON_ARMOR_DEBRIS_LIFE, pickNearbyRestoreProp,
   PROP_DEBRIS_COLORS, pullSpawnTowardOrigin, RECONQUER_BONUS_INTERVAL, RECONQUER_NEAR_RANGE,
-  restoreMapProp, spawnBrokenArmorDebris, spawnPropDebris, tickGroundDebris,
-  tryReconquerAtSpawn, vacuumNearbyDebris
+  RECONQUER_SEAT_HOLD, restoreMapProp, spawnBrokenArmorDebris, spawnPropDebris,
+  tickGroundDebris, tryReconquerAtSpawn, vacuumNearbyDebris
 } from "./debris.js";
 import { Fighter } from "./combat.js";
 import {
@@ -228,9 +228,51 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   }
   assert.ok(sawPartialSeat, "reconquer should seat shards progressively");
 
-  for (let i = 0; i < 120; i++) tickGroundDebris(game, 1 / 60);
-  assert.equal(crate.destroyed, false, "crate rebuilt after full assembly");
+  for (let i = 0; i < 200; i++) tickGroundDebris(game, 1 / 60);
+  assert.equal(crate.destroyed, false, "crate rebuilt after full assembly + seat hold");
   assert.ok(crate.hp > 0);
+  assert.equal(game.groundDebris.length, 0);
+}
+
+// Seat-hold: full jigsaw lingers ~0.2s before the solid prop appears.
+{
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate");
+  const game = {
+    elapsed: 0,
+    settings: { visual: { debrisDespawnStyle: "reconquer" } },
+    platforms: yard.platforms,
+    props: yard.props,
+    groundDebris: [],
+    effects: [],
+    reconquerQueue: [],
+    powerCrates: []
+  };
+  damageProp(crate, crate.hp, game, crate.x + 5, crate.y + 5);
+  for (const piece of game.groundDebris) piece.life = 0.01;
+  tickGroundDebris(game, 0.02);
+  tryReconquerAtSpawn(game, { x: 800, y: 1200, w: 40, h: 40 }, { preferPowerCrate: false });
+
+  // Fast-forward until seated.
+  for (let i = 0; i < 200 && !game.groundDebris.every((p) => p.despawnMode === "reconquer-seated"); i++) {
+    tickGroundDebris(game, 1 / 60);
+  }
+  assert.ok(
+    game.groundDebris.length
+    && game.groundDebris.every((p) => p.despawnMode === "reconquer-seated"),
+    "all shards seated"
+  );
+  assert.equal(crate.destroyed, true);
+
+  // Just under the hold — still debris, no solid prop.
+  const holdFrames = Math.max(1, Math.floor(RECONQUER_SEAT_HOLD * 60) - 1);
+  for (let i = 0; i < holdFrames; i++) tickGroundDebris(game, 1 / 60);
+  assert.equal(crate.destroyed, true, "still holding completed jigsaw");
+  assert.ok(game.groundDebris.length > 0);
+
+  // Cross the hold — recreate the whole shape.
+  for (let i = 0; i < 8; i++) tickGroundDebris(game, 1 / 60);
+  assert.equal(crate.destroyed, false, "recreate after seat hold");
   assert.equal(game.groundDebris.length, 0);
 }
 

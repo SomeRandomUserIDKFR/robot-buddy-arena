@@ -12,6 +12,8 @@ import { clamp } from "./utils.js";
 export const NON_ARMOR_DEBRIS_LIFE = 14;
 export const DEBRIS_DESPAWN_DURATION = 1.05;
 export const RECONQUER_DURATION = 1.45;
+/** Hold the completed jigsaw before swapping in the solid prop (avoids a hard snap). */
+export const RECONQUER_SEAT_HOLD = 0.2;
 export const ARMOR_DUMMY_MELT_DURATION = 0.95;
 export const ARMOR_DUMMY_COOL_DURATION = 1.1;
 export const ARMOR_DUMMY_METAL = "#7a848e";
@@ -2126,20 +2128,36 @@ function parseHex(hex) {
 }
 
 function finishReconquerHome(game, piece) {
-  // Only reform once the full jigsaw is seated.
+  // Only reform once the full jigsaw is seated and the seat-hold has elapsed.
   if (!allSourcePiecesSeated(game, piece.sourceId)) return;
-  if (typeof piece.homeRestore === "function") {
-    piece.homeRestore();
-    // Clear restore on siblings so it only runs once.
-    for (const other of piecesForSource(game, piece.sourceId)) {
-      other.homeRestore = null;
-      other.despawnMode = "gone";
-    }
+  const group = piecesForSource(game, piece.sourceId);
+  const restore = group.find((p) => typeof p.homeRestore === "function")?.homeRestore
+    || (typeof piece.homeRestore === "function" ? piece.homeRestore : null);
+  if (typeof restore === "function") restore();
+  // Mark every sibling gone so mid-tick keep[] cannot revive them.
+  for (const other of group) {
+    other.homeRestore = null;
+    other.despawnMode = "gone";
   }
   game.reconquerQueue = (game.reconquerQueue || []).filter(
     (entry) => entry.sourceId !== piece.sourceId
   );
   removeSourcePieces(game, piece.sourceId);
+}
+
+/**
+ * Advance the shared post-seat hold once per source per tick.
+ * `advanced` is a Set of sourceIds already bumped this frame.
+ */
+function advanceReconquerSeatHold(game, sourceId, dt, advanced) {
+  const group = piecesForSource(game, sourceId);
+  if (!group.length || !allSourcePiecesSeated(game, sourceId)) return false;
+  if (!advanced.has(sourceId)) {
+    advanced.add(sourceId);
+    const next = (group[0].homeHoldT || 0) + dt;
+    for (const other of group) other.homeHoldT = next;
+  }
+  return (group[0].homeHoldT || 0) >= RECONQUER_SEAT_HOLD;
 }
 
 /** Integrate ground debris physics + despawn styles. */
@@ -2155,9 +2173,14 @@ export function tickGroundDebris(game, dt) {
   const surfaces = debrisLandables(game);
   const style = despawnStyle(game);
   const keep = [];
+  // Seat-hold timers must advance once per source, not once per shard.
+  const seatHoldAdvanced = new Set();
+  // Sources recreated mid-loop — drop siblings already pushed into keep.
+  const reformedSources = new Set();
 
   for (const piece of pieces) {
     if (piece.despawnMode === "gone") continue;
+    if (piece.sourceId && reformedSources.has(piece.sourceId)) continue;
 
     if (!piece.immortal && !piece.despawnMode) {
       // Reconquer rate 0.1×–10× ages non-armor scraps into the queue faster.
@@ -2266,16 +2289,13 @@ export function tickGroundDebris(game, dt) {
         piece.spin = 0;
         piece.homeSeated = true;
         piece.despawnMode = "reconquer-seated";
-        // Reform only after every shard for this source is seated.
-        if (allSourcePiecesSeated(game, piece.sourceId)) {
-          finishReconquerHome(game, piece);
-          continue;
-        }
+        // Recreate only after every shard is seated + RECONQUER_SEAT_HOLD.
       }
       keep.push(piece);
       continue;
     } else if (piece.despawnMode === "reconquer-seated") {
-      // Hold in the jigsaw slot until the last sibling lands, then reform.
+      // Hold in the jigsaw slot until the last sibling lands, then linger
+      // briefly so the completed shape is visible before the solid prop snaps in.
       const tx = (piece.homeX || 0) + (piece.homeLx || 0);
       const ty = (piece.homeY || 0) + (piece.homeLy || 0);
       piece.x = tx;
@@ -2285,8 +2305,12 @@ export function tickGroundDebris(game, dt) {
       piece.scale = 1;
       piece.alpha = 1;
       piece.homeSeated = true;
-      if (allSourcePiecesSeated(game, piece.sourceId)) {
+      if (
+        allSourcePiecesSeated(game, piece.sourceId)
+        && advanceReconquerSeatHold(game, piece.sourceId, dt, seatHoldAdvanced)
+      ) {
         finishReconquerHome(game, piece);
+        reformedSources.add(piece.sourceId);
         continue;
       }
       keep.push(piece);
@@ -2372,8 +2396,11 @@ export function tickGroundDebris(game, dt) {
     keep.push(piece);
   }
 
-  // Drop scraps marked gone mid-tick (e.g. full jigsaw just reformed).
-  game.groundDebris = keep.filter((piece) => piece.despawnMode !== "gone");
+  // Drop scraps marked gone / reformed mid-tick (full jigsaw just recreated).
+  game.groundDebris = keep.filter((piece) => (
+    piece.despawnMode !== "gone"
+    && !(piece.sourceId && reformedSources.has(piece.sourceId))
+  ));
   tickForgeCasts(game, dt);
   tickArmorDummyBuilds(game, dt);
   tickReconquerBonus(game, dt);
