@@ -7,7 +7,8 @@ import { Fighter, stepFighter } from "./combat.js";
 import {
   attackToolSecondary, bindToolHpDamager, bindToolPropDamager, BOLAS_SNARE_ID,
   createToolPickup, FRAG_GRENADE_ID, heldToolIdOf, heldToolUsesOf,
-  HOOK_REEL_ARRIVE, HOOK_REEL_SPEED, HOOKSHOT_WINCH_ID, maybeDropToolFromBreakable,
+  HOOK_RANGE, HOOK_REEL_ARRIVE, HOOK_REEL_SPEED, HOOKSHOT_WINCH_ID,
+  maybeDropToolFromBreakable,
   maybeDropToolFromCrate, rollToolUses, seedMapToolPickups, STICKY_CHARGE_ID,
   THROWING_SPEAR_ID, tickToolPickups, tickToolProjectiles,
   TOOL_BREAKABLE_DROP_CHANCE, TOOL_CRATE_DROP_CHANCE, TOOL_DEFS,
@@ -142,7 +143,8 @@ for (const id of TOOL_SECONDARY_IDS) {
 
 {
   // Hookshot reels the user to the latch point (not cancelled by walk friction).
-  assert.ok(HOOK_REEL_SPEED > 800);
+  assert.ok(HOOK_REEL_SPEED >= 600 && HOOK_REEL_SPEED <= 900, "pull is a deliberate winch");
+  assert.ok(HOOK_RANGE >= 600, "hook reach is long");
   const fighter = applyLoadout(new Fighter({
     x: 80, y: 220, team: 0, aim: 0, human: true, hp: 500, maxHp: 500
   }), {
@@ -150,7 +152,7 @@ for (const id of TOOL_SECONDARY_IDS) {
     secondaryWeapon: HOOKSHOT_WINCH_ID
   });
   selectWeaponSlot(fighter, "secondaryWeapon");
-  const wall = createMapProp("crate", 360, 250);
+  const wall = createMapProp("crate", 520, 250);
   const game = {
     fighters: [fighter],
     props: [wall],
@@ -163,18 +165,19 @@ for (const id of TOOL_SECONDARY_IDS) {
   };
   assert.ok(attackToolSecondary(fighter, game));
   assert.ok(fighter.hookReel, "hook should reel toward cover");
+  assert.ok(fighter.hookReel.t >= 0.45, "far latch gets a longer pull window");
   assert.ok(game.effects.some((e) => e.type === "hookLine"));
   const latchX = fighter.hookReel.x;
   const latchY = fighter.hookReel.y;
   const start = fighter.center();
   const startDist = Math.hypot(latchX - start.x, latchY - start.y);
-  assert.ok(startDist > 120, "test latch should be meaningfully far");
+  assert.ok(startDist > 200, "test latch should be meaningfully far");
 
   const idle = () => ({
     mx: 0, jump: false, jet: false, jetHeld: false,
     attack: false, chuck: false, ejectVacuum: false, dodge: false
   });
-  for (let i = 0; i < 90 && fighter.hookReel; i++) {
+  for (let i = 0; i < 180 && fighter.hookReel; i++) {
     stepFighter(fighter, 1 / 60, game, { weapons: {} }, {}, idle);
   }
   const end = fighter.center();
@@ -184,7 +187,7 @@ for (const id of TOOL_SECONDARY_IDS) {
     endDist <= HOOK_REEL_ARRIVE + 8,
     `should arrive near latch (endDist=${endDist.toFixed(1)})`
   );
-  assert.ok(fighter.x > 200, "should have traveled toward the wall");
+  assert.ok(fighter.x > 300, "should have traveled toward the wall");
 }
 
 {

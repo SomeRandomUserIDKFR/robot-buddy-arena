@@ -117,11 +117,14 @@ export const GRENADE_RADIUS = 115;
 export const STICKY_FUSE = 1.35;
 export const STICKY_RADIUS = 95;
 export const BOLAS_LOCK = 2.4;
-export const HOOK_RANGE = 420;
+/** Max latch distance from the muzzle. */
+export const HOOK_RANGE = 680;
 /** @deprecated Prefer distance / HOOK_REEL_SPEED; kept for FAQ/tests. */
-export const HOOK_REEL_TIME = 0.55;
-/** World units/sec while hooked to cover / terrain. */
-export const HOOK_REEL_SPEED = 1150;
+export const HOOK_REEL_TIME = 1.4;
+/** World units/sec while hooked to cover / terrain (slower = longer pull). */
+export const HOOK_REEL_SPEED = 720;
+/** Hard cap on reel duration so very long shots still finish. */
+export const HOOK_REEL_MAX_TIME = 2.2;
 /** Stop reeling once the fighter center is this close to the latch point. */
 export const HOOK_REEL_ARRIVE = 36;
 
@@ -402,17 +405,28 @@ function fireHook(fighter, game, fromPickup) {
   game.effects ||= [];
   const tx = hit?.x ?? x + Math.cos(aim) * HOOK_RANGE;
   const ty = hit?.y ?? y + Math.sin(aim) * HOOK_RANGE;
-  game.effects.push({
-    type: "hookLine",
-    x1: x,
-    y1: y,
-    x2: tx,
-    y2: ty,
-    life: 0.28,
-    color: TOOL_DEFS[HOOKSHOT_WINCH_ID].color
-  });
-  if (!hit) return null;
+  if (!hit) {
+    game.effects.push({
+      type: "hookLine",
+      x1: x,
+      y1: y,
+      x2: tx,
+      y2: ty,
+      life: 0.2,
+      color: TOOL_DEFS[HOOKSHOT_WINCH_ID].color
+    });
+    return null;
+  }
   if (hit.kind === "fighter" && hit.foe) {
+    game.effects.push({
+      type: "hookLine",
+      x1: x,
+      y1: y,
+      x2: tx,
+      y2: ty,
+      life: 0.35,
+      color: TOOL_DEFS[HOOKSHOT_WINCH_ID].color
+    });
     hurt(hit.foe, TOOL_DEFS[HOOKSHOT_WINCH_ID].damage, game);
     hit.foe.hitFlash = Math.max(hit.foe.hitFlash || 0, 0.16);
     const pull = 340;
@@ -426,14 +440,27 @@ function fireHook(fighter, game, fromPickup) {
     const cx = fighter.x + SIZE / 2;
     const cy = fighter.y + SIZE / 2;
     const dist = Math.hypot(hit.x - cx, hit.y - cy);
+    // Slower pull + generous slack so long shots feel like a real winch.
+    const reelT = Math.max(0.28, Math.min(HOOK_REEL_MAX_TIME, dist / HOOK_REEL_SPEED + 0.18));
     fighter.hookReel = {
       x: hit.x,
       y: hit.y,
-      // Time budget = travel time + small slack so far latches still arrive.
-      t: Math.max(0.18, Math.min(1.1, dist / HOOK_REEL_SPEED + 0.08)),
+      t: reelT,
       fromPickup: !!fromPickup
     };
     fighter.grounded = false;
+    game.effects.push({
+      type: "hookLine",
+      x1: x,
+      y1: y,
+      x2: tx,
+      y2: ty,
+      life: reelT + 0.12,
+      color: TOOL_DEFS[HOOKSHOT_WINCH_ID].color,
+      followOwner: fighter,
+      latchX: hit.x,
+      latchY: hit.y
+    });
   }
   return hit;
 }

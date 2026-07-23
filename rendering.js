@@ -3141,16 +3141,28 @@ export function createRenderer(canvas) {
         context.fill();
       }
       if (effect.type === "hookLine") {
-        context.globalAlpha = clamp(effect.life * 5, 0, 1);
+        let x1 = effect.x1;
+        let y1 = effect.y1;
+        let x2 = effect.x2;
+        let y2 = effect.y2;
+        // Live winch cable: stay attached to the reeling fighter.
+        const owner = effect.followOwner;
+        if (owner && !owner.dead && owner.hookReel) {
+          x1 = owner.x + SIZE / 2;
+          y1 = owner.y + SIZE / 2;
+          x2 = effect.latchX ?? owner.hookReel.x;
+          y2 = effect.latchY ?? owner.hookReel.y;
+        }
+        context.globalAlpha = clamp(0.35 + effect.life * 1.2, 0, 1);
         context.strokeStyle = effect.color || "#5a8aaa";
         context.lineWidth = 2.5;
         context.beginPath();
-        context.moveTo(effect.x1, effect.y1);
-        context.lineTo(effect.x2, effect.y2);
+        context.moveTo(x1, y1);
+        context.lineTo(x2, y2);
         context.stroke();
         context.fillStyle = effect.color || "#5a8aaa";
         context.beginPath();
-        context.arc(effect.x2, effect.y2, 4, 0, Math.PI * 2);
+        context.arc(x2, y2, 4, 0, Math.PI * 2);
         context.fill();
       }
       if (effect.type === "lootPopup") {
