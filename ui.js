@@ -1150,6 +1150,7 @@ function modifierMarkup(gear) {
         "<span>Secondary · click grab / click throw</span>",
         `<span>${stats.baseDamage} throw damage</span>`,
         "<span class=\"stat-up\">Grab any breakable cover</span>",
+        "<span class=\"stat-up\">Grab ground tools · throw to fire</span>",
         "<span class=\"stat-up\">Power crates grabbable at ≤50% HP</span>",
         "<span>Held props stay damageable</span>",
         "<span class=\"stat-down\">Shatters at impact · reconquer there</span>"

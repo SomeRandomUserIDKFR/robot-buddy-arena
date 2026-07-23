@@ -10,6 +10,9 @@ import {
   createPowerCrate, damagePowerCrate, POWER_CRATE_HP
 } from "./powerups.js";
 import {
+  createToolPickup, FRAG_GRENADE_ID, tickToolPickups, THROWING_SPEAR_ID
+} from "./tool-secondaries.js";
+import {
   attackThrowBreakable, bindThrowBreakablePowerCrateDamager, canGrabBreakable,
   canGrabIllusionProp, damageBreakableByIllusion, dropHeldBreakable,
   isIllusionGhostedProp, isIllusionHeldProp, isPlantedIllusionProp, isThrowBreakable,
@@ -682,6 +685,81 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.equal(crate.illusionFakeHp, null);
   assert.equal(game.groundDebris.length, 0);
   assert.equal(crate.solid || crate.blocksProjectiles, true);
+}
+
+// Throw Breakable can grab ground tool pickups and throw/fire them.
+{
+  const fighter = applyLoadout(new Fighter({
+    x: 400, y: 700, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  selectWeaponSlot(fighter, "secondaryWeapon");
+  const spear = createToolPickup(THROWING_SPEAR_ID, 420, 710);
+  const game = {
+    props: [],
+    platforms: [],
+    fighters: [fighter],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: [],
+    toolPickups: [spear],
+    toolProjectiles: [],
+    powerCrates: []
+  };
+  // Active grabber does not auto-vacuum tools on walk-over.
+  tickToolPickups(game, 0.016);
+  assert.equal(game.toolPickups.length, 1);
+  assert.equal(fighter.heldToolPickup, null);
+
+  assert.ok(tryGrabBreakable(fighter, game), "grabber can pick up ground tools");
+  assert.equal(fighter.heldToolPickup, THROWING_SPEAR_ID);
+  assert.equal(game.toolPickups.length, 0);
+  assert.equal(fighter.heldProp, null);
+
+  assert.ok(attackThrowBreakable(fighter, game), "throw fires the held tool");
+  assert.equal(fighter.heldToolPickup, null);
+  assert.equal(game.toolProjectiles.length, 1);
+  assert.equal(game.toolProjectiles[0].kind, "spear");
+}
+
+// Prefer nearer tool pickup over a farther crate.
+{
+  const fighter = applyLoadout(new Fighter({
+    x: 200, y: 200, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  selectWeaponSlot(fighter, "secondaryWeapon");
+  const crate = {
+    kind: "crate",
+    breakable: true,
+    destroyed: false,
+    solid: true,
+    x: 280,
+    y: 200,
+    w: 44,
+    h: 44,
+    hp: 55,
+    maxHp: 55
+  };
+  const frag = createToolPickup(FRAG_GRENADE_ID, 210, 210);
+  const game = {
+    props: [crate],
+    platforms: [],
+    fighters: [fighter],
+    effects: [],
+    toolPickups: [frag],
+    toolProjectiles: [],
+    powerCrates: [],
+    thrownBreakables: [],
+    groundDebris: []
+  };
+  assert.ok(tryGrabBreakable(fighter, game));
+  assert.equal(fighter.heldToolPickup, FRAG_GRENADE_ID);
+  assert.equal(fighter.heldProp, null);
 }
 
 console.log("throw-breakable.test.js passed.");

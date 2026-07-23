@@ -10,6 +10,9 @@ import {
   clearIllusionGhostDebris, resolveStandTarget, spawnIllusionGhostDebris
 } from "./debris.js";
 import { damageProp, platformsOf, solidProps } from "./maps.js";
+import {
+  attackToolSecondary, findToolPickupNear, tryGrabToolPickup
+} from "./tool-secondaries.js";
 import { clamp } from "./utils.js";
 
 export const THROW_BREAKABLE_ID = "throw-breakable";
@@ -502,6 +505,7 @@ export function dropHeldBreakable(fighter, game = null) {
 export function tryGrabBreakable(fighter, game) {
   if (!fighter || fighter.dead || !game) return false;
   if (fighter.heldProp && !fighter.heldProp.destroyed) return false;
+  if (fighter.heldToolPickup) return false;
   fighter.heldProp = null;
 
   const cx = fighter.x + SIZE / 2;
@@ -524,6 +528,14 @@ export function tryGrabBreakable(fighter, game) {
     if (d <= bestD) {
       best = prop;
       bestD = d;
+    }
+  }
+  // Ground tool pickups (spear / frag / sticky / bolas / hook) are also grabbable.
+  const tool = findToolPickupNear(fighter, game, THROW_BREAKABLE_GRAB_RANGE);
+  if (tool) {
+    const toolD = Math.hypot(tool.x + 11 - cx, tool.y + 11 - cy);
+    if (!best || toolD <= bestD) {
+      return !!tryGrabToolPickup(fighter, game, THROW_BREAKABLE_GRAB_RANGE);
     }
   }
   if (!best) return false;
@@ -869,11 +881,15 @@ export function stepThrownBreakables(game, dt, onFighterHit = null) {
   game.thrownBreakables = keep;
 }
 
-/** Attack handler: grab if empty, throw if holding. */
+/** Attack handler: grab if empty, throw if holding (props or ground tools). */
 export function attackThrowBreakable(fighter, game) {
   if (!isThrowBreakable(fighter) || !fighter || fighter.dead) return false;
   const rpm = Math.max(30, fighter.weaponRpm || 90);
   fighter.attackCd = 60 / rpm;
+  // Held ground tool → throw/fire it (same as using a one-shot pickup).
+  if (fighter.heldToolPickup) {
+    return attackToolSecondary(fighter, game);
+  }
   if (fighter.heldProp && !fighter.heldProp.destroyed) {
     throwHeldBreakable(fighter, game);
   } else {
