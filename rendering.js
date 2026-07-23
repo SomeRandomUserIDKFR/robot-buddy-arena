@@ -14,6 +14,10 @@ import {
   drawGimmickEffect, drawMapGimmicks, gimmickSightMult
 } from "./map-gimmicks.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
+import {
+  BOLAS_SNARE_ID, FRAG_GRENADE_ID, handheldToolId, HOOKSHOT_WINCH_ID,
+  STICKY_CHARGE_ID, THROWING_SPEAR_ID, TOOL_DEFS
+} from "./tool-secondaries.js";
 import { clamp, dist } from "./utils.js";
 import { fighterVisibleToViewer, visibleToSelf, visibleToTeam } from "./vision.js";
 
@@ -1982,7 +1986,10 @@ export function createRenderer(canvas) {
     const visual = weaponVisual(fighter.weaponId || fighter.weapon, fighter);
     const bodyAlpha = fighter.dead ? .45 : 1;
     const shieldUp = fighter.shieldRaised && !fighter.shieldBroken;
-    drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp);
+    // Disposable tool models are drawn in the post-pass (hand + grab one-shots).
+    if (!handheldToolId(fighter)) {
+      drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp);
+    }
     context.globalAlpha = bodyAlpha;
     if ((fighter.shieldMaxDurability || 0) > 0 && (fighter.shieldRaised || fighter.shieldBroken)) {
       const half = fighter.shieldBlockHalfAngle || 1.2;
@@ -2566,25 +2573,147 @@ export function createRenderer(canvas) {
     context.restore();
   }
 
+  /**
+   * Disposable single-use tool silhouettes (hand + ground + in-flight).
+   * Reads as field gear: tape wraps, pull-pins, coiled line — not infinite kit.
+   */
+  function paintToolModel(toolId, opts = {}) {
+    const scale = opts.scale || 1;
+    const disposable = opts.disposable !== false;
+    context.save();
+    context.scale(scale, scale);
+    if (toolId === THROWING_SPEAR_ID) {
+      // Short taped javelin — stub shaft, cloth wrap, stamped tip.
+      context.fillStyle = "#6a5840";
+      context.fillRect(-20, -2.2, 34, 4.4);
+      context.fillStyle = disposable ? "#c4a060" : "#8a7a58";
+      context.fillRect(-8, -3.2, 12, 6.4);
+      // Tape stripes
+      context.strokeStyle = "rgba(40,28,12,.55)";
+      context.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        context.beginPath();
+        context.moveTo(-6 + i * 3.5, -3.2);
+        context.lineTo(-4 + i * 3.5, 3.2);
+        context.stroke();
+      }
+      context.fillStyle = "#b0b8c0";
+      context.beginPath();
+      context.moveTo(12, 0);
+      context.lineTo(22, -3.5);
+      context.lineTo(22, 3.5);
+      context.closePath();
+      context.fill();
+      if (disposable) {
+        context.fillStyle = "#e8d090";
+        context.fillRect(-18, -1, 5, 2);
+      }
+    } else if (toolId === FRAG_GRENADE_ID) {
+      context.fillStyle = "#5a7a38";
+      context.beginPath();
+      context.ellipse(0, 1, 7, 8.5, 0, 0, Math.PI * 2);
+      context.fill();
+      context.strokeStyle = "#2a3a18";
+      context.lineWidth = 1.2;
+      context.beginPath();
+      context.moveTo(-5, 1);
+      context.lineTo(5, 1);
+      context.moveTo(0, -5);
+      context.lineTo(0, 8);
+      context.stroke();
+      context.fillStyle = "#3a3020";
+      context.fillRect(-2.5, -11, 5, 6);
+      // Pull pin ring
+      context.strokeStyle = "#d0d8e0";
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.arc(5, -10, 3.5, 0, Math.PI * 2);
+      context.stroke();
+    } else if (toolId === STICKY_CHARGE_ID) {
+      context.fillStyle = "#c45a2a";
+      context.fillRect(-8, -6, 16, 12);
+      context.fillStyle = "#f0c020";
+      context.fillRect(-8, -2, 16, 4);
+      context.fillStyle = "#2a1810";
+      context.font = "bold 7px ui-monospace,Consolas";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText("!", 0, 0);
+      // Sticky pads
+      context.fillStyle = "rgba(40,20,10,.55)";
+      context.fillRect(-9, -7, 3, 3);
+      context.fillRect(6, -7, 3, 3);
+      context.fillRect(-9, 4, 3, 3);
+      context.fillRect(6, 4, 3, 3);
+    } else if (toolId === BOLAS_SNARE_ID) {
+      context.strokeStyle = "#c4a070";
+      context.lineWidth = 2;
+      context.beginPath();
+      context.arc(0, 0, 7, 0.2, Math.PI * 1.6);
+      context.stroke();
+      context.fillStyle = "#6a4a28";
+      context.beginPath();
+      context.arc(-8, 2, 4.5, 0, Math.PI * 2);
+      context.arc(8, -1, 4.5, 0, Math.PI * 2);
+      context.fill();
+      context.fillStyle = "#d8b888";
+      context.fillRect(-3, -1, 6, 2);
+    } else if (toolId === HOOKSHOT_WINCH_ID) {
+      // Compact single-use winch: grip, spool, hook head.
+      context.fillStyle = "#3a4a58";
+      context.fillRect(-14, -4, 16, 8);
+      context.fillStyle = "#5a8aaa";
+      context.beginPath();
+      context.arc(-2, 0, 6, 0, Math.PI * 2);
+      context.fill();
+      context.strokeStyle = "#d0e0ea";
+      context.lineWidth = 1.4;
+      context.beginPath();
+      context.arc(-2, 0, 4, 0, Math.PI * 2);
+      context.stroke();
+      // Coiled line peek
+      context.strokeStyle = "#c8d8e0";
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(4, -2);
+      context.quadraticCurveTo(10, -6, 14, -1);
+      context.stroke();
+      // Hook tip
+      context.strokeStyle = "#e8eef4";
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(12, 0);
+      context.lineTo(18, 0);
+      context.lineTo(16, 4);
+      context.stroke();
+      if (disposable) {
+        context.fillStyle = "#e8c860";
+        context.fillRect(-12, 3, 8, 2);
+      }
+    } else {
+      const def = TOOL_DEFS[toolId];
+      context.fillStyle = def?.color || "#c8d0d8";
+      context.fillRect(-8, -8, 16, 16);
+    }
+    context.restore();
+  }
+
   function drawToolPickups(game) {
     for (const p of game.toolPickups || []) {
       if (!p) continue;
       const bob = Math.sin(p.bob || 0) * 3;
+      const cx = p.x + (p.w || 22) / 2;
+      const cy = p.y + (p.h || 22) / 2 + bob;
       context.save();
-      context.globalAlpha = 0.95;
-      context.fillStyle = p.color || "#c8d0d8";
-      context.fillRect(p.x, p.y + bob, p.w || 22, p.h || 22);
-      context.strokeStyle = "rgba(255,255,255,.55)";
-      context.strokeRect(p.x + 1, p.y + bob + 1, (p.w || 22) - 2, (p.h || 22) - 2);
-      context.fillStyle = "#0a1014";
-      context.font = "bold 9px ui-monospace,Consolas";
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      context.fillText(
-        (p.label || "?").slice(0, 5),
-        p.x + (p.w || 22) / 2,
-        p.y + bob + (p.h || 22) / 2
-      );
+      context.globalAlpha = 0.92;
+      // Soft ground halo so grab targets read on busy floors.
+      context.fillStyle = "rgba(20,28,36,.45)";
+      context.beginPath();
+      context.ellipse(cx, cy + 10, 14, 5, 0, 0, Math.PI * 2);
+      context.fill();
+      context.translate(cx, cy);
+      context.rotate(-0.35);
+      paintToolModel(p.toolId, { scale: 0.95, disposable: true });
       context.restore();
     }
   }
@@ -2593,60 +2722,45 @@ export function createRenderer(canvas) {
     for (const proj of game.toolProjectiles || []) {
       if (!proj) continue;
       context.save();
+      context.translate(proj.x, proj.y);
       if (proj.kind === "spear") {
-        context.translate(proj.x, proj.y);
         context.rotate(proj.angle || 0);
-        context.fillStyle = "#d8e0e8";
-        context.fillRect(-18, -2, 28, 4);
-        context.fillStyle = "#8aa0b0";
-        context.beginPath();
-        context.moveTo(10, 0);
-        context.lineTo(18, -4);
-        context.lineTo(18, 4);
-        context.closePath();
-        context.fill();
+        paintToolModel(THROWING_SPEAR_ID, { scale: 1, disposable: !!proj.fromPickup });
       } else if (proj.kind === "grenade") {
-        context.fillStyle = "#6a8a48";
-        context.beginPath();
-        context.arc(proj.x, proj.y, 7, 0, Math.PI * 2);
-        context.fill();
-        context.fillStyle = "#2a3a20";
-        context.fillRect(proj.x - 2, proj.y - 10, 4, 5);
+        context.rotate((proj.fuse || 0) * -6);
+        paintToolModel(FRAG_GRENADE_ID, { scale: 1, disposable: true });
       } else if (proj.kind === "sticky") {
-        context.fillStyle = "#c45a2a";
-        context.fillRect(proj.x - 6, proj.y - 6, 12, 12);
-        context.fillStyle = "#2a1810";
-        context.fillRect(proj.x - 2, proj.y - 2, 4, 4);
+        paintToolModel(STICKY_CHARGE_ID, { scale: 1, disposable: true });
       } else if (proj.kind === "bolas") {
-        context.translate(proj.x, proj.y);
         context.rotate(proj.spin || 0);
-        context.strokeStyle = "#c4a070";
-        context.lineWidth = 2;
-        context.beginPath();
-        context.moveTo(-10, 0);
-        context.lineTo(10, 0);
-        context.stroke();
-        context.fillStyle = "#8a6a40";
-        context.beginPath();
-        context.arc(-10, 0, 5, 0, Math.PI * 2);
-        context.arc(10, 0, 5, 0, Math.PI * 2);
-        context.fill();
+        paintToolModel(BOLAS_SNARE_ID, { scale: 1.05, disposable: true });
       }
       context.restore();
     }
   }
 
   function drawHeldToolPickup(fighter) {
-    if (!fighter?.heldToolPickup) return;
+    const toolId = handheldToolId(fighter);
+    if (!toolId) return;
+    // Grabbed one-shots always draw; equipped tools draw while that secondary is active.
+    const fromGrab = !!fighter.heldToolPickup;
+    if (!fromGrab && !fighter.toolSecondary) return;
     const aim = Number.isFinite(fighter.aim) ? fighter.aim : 0;
-    const x = fighter.x + SIZE / 2 + Math.cos(aim) * 26;
-    const y = fighter.y + SIZE / 2 + Math.sin(aim) * 26;
+    const reach = fromGrab ? 28 : 24;
+    const x = fighter.x + SIZE / 2 + Math.cos(aim) * reach;
+    const y = fighter.y + SIZE / 2 + Math.sin(aim) * reach;
+    const flash = (fighter.toolFlash || 0) > 0;
     context.save();
-    context.fillStyle = "#e8f0ff";
-    context.globalAlpha = 0.9;
-    context.fillRect(x - 7, y - 7, 14, 14);
-    context.strokeStyle = "#4af";
-    context.strokeRect(x - 7, y - 7, 14, 14);
+    context.translate(x, y);
+    context.rotate(aim);
+    context.globalAlpha = flash ? 1 : 0.96;
+    // Disposable tag wink when it's a grabbed one-shot.
+    paintToolModel(toolId, { scale: fromGrab ? 1.05 : 1, disposable: true });
+    if (fromGrab) {
+      context.strokeStyle = "rgba(255,220,120,.55)";
+      context.lineWidth = 1;
+      context.strokeRect(-22, -10, 44, 20);
+    }
     context.restore();
   }
 

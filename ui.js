@@ -1150,7 +1150,8 @@ function modifierMarkup(gear) {
         "<span>Secondary · click grab / click throw</span>",
         `<span>${stats.baseDamage} throw damage</span>`,
         "<span class=\"stat-up\">Grab any breakable cover</span>",
-        "<span class=\"stat-up\">Grab ground tools · throw to fire</span>",
+        "<span class=\"stat-up\">Grab ground tools only · throw to fire</span>",
+        "<span>Walk-over will not pick tools up</span>",
         "<span class=\"stat-up\">Power crates grabbable at ≤50% HP</span>",
         "<span>Held props stay damageable</span>",
         "<span class=\"stat-down\">Shatters at impact · reconquer there</span>"
@@ -1173,8 +1174,7 @@ function modifierMarkup(gear) {
         `<span>Secondary · ${def.label} tool</span>`,
         `<span class="stat-up">Infinite uses · ${def.cd}s cooldown</span>`,
         "<span class=\"stat-up\">Also found in wood crates / on maps</span>",
-        "<span>Walk over a pickup to hold a one-shot</span>",
-        "<span>Same-tool pickup refreshes your CD</span>",
+        "<span>Ground pickups need Throw Breakable to grab</span>",
         `<span>${def.damage} hit / blast power</span>`
       ].join("");
     }

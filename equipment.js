@@ -381,7 +381,7 @@ export const GEAR = [
     THROW_BREAKABLE_ID,
     "secondaryWeapon",
     "Throw Breakable",
-    "Grab any breakable cover (click), hold it in hand (enemies can still damage it), then click again to throw. Also grab ground tool pickups (spear / frag / sticky / bolas / hook) and throw to use them. Metal power crates are grabbable only at ≤50% HP. OK impact damage; shatters into debris at the hit — reconquer rebuilds there.",
+    "Grab any breakable cover (click), hold it in hand (enemies can still damage it), then click again to throw. Ground tool pickups (spear / frag / sticky / bolas / hook) must be grabbed with this secondary — walk-over won't take them — then throw to fire. Metal power crates are grabbable only at ≤50% HP. OK impact damage; shatters into debris at the hit — reconquer rebuilds there.",
     {
       damage: THROW_BREAKABLE_DAMAGE / 40,
       fireRate: 90 / 150,

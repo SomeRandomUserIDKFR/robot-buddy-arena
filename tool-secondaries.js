@@ -664,19 +664,13 @@ export function findToolPickupNear(fighter, game, maxRange = TOOL_PICKUP_RADIUS)
 }
 
 /**
- * Take a ground tool into hand as a one-shot (or refresh equipped tool CD).
- * Used by walk-over collect and Throw Breakable grab.
+ * Put a ground tool into hand as a one-shot.
+ * World tools are grab-only (Throw Breakable) — never walk-over collect.
  */
-export function takeToolPickup(fighter, game, pickup, opts = {}) {
+export function takeToolPickup(fighter, game, pickup) {
   if (!fighter || !game || !pickup) return null;
-  const asHold = opts.forceHold === true;
-  if (!asHold && fighter.toolSecondary === pickup.toolId) {
-    fighter.toolCd = 0;
-    fighter.toolFlash = 0.18;
-  } else {
-    fighter.heldToolPickup = pickup.toolId;
-    fighter.toolFlash = 0.18;
-  }
+  fighter.heldToolPickup = pickup.toolId;
+  fighter.toolFlash = 0.18;
   game.toolPickups = (game.toolPickups || []).filter((p) => p !== pickup);
   if (game.effects) {
     game.effects.push({
@@ -689,16 +683,16 @@ export function takeToolPickup(fighter, game, pickup, opts = {}) {
   return pickup;
 }
 
+/**
+ * @deprecated Walk-over collect removed — tools require Throw Breakable grab.
+ * Kept for tests that call take via grab path.
+ */
 export function tryCollectToolPickup(fighter, game) {
-  if (!fighter || fighter.dead || !game) return null;
-  if (fighter.heldToolPickup || fighter.heldProp) return null;
-  const best = findToolPickupNear(fighter, game, TOOL_PICKUP_RADIUS);
-  if (!best) return null;
-  return takeToolPickup(fighter, game, best);
+  return null;
 }
 
 /**
- * Throw Breakable grab: pick up a ground tool into hand (always one-shot hold).
+ * Throw Breakable grab: pick up a ground tool into hand (one-shot hold).
  * @returns {object|null} the pickup taken
  */
 export function tryGrabToolPickup(fighter, game, maxRange = TOOL_PICKUP_RADIUS) {
@@ -706,9 +700,10 @@ export function tryGrabToolPickup(fighter, game, maxRange = TOOL_PICKUP_RADIUS) 
   if (fighter.heldToolPickup || fighter.heldProp) return null;
   const best = findToolPickupNear(fighter, game, maxRange);
   if (!best) return null;
-  return takeToolPickup(fighter, game, best, { forceHold: true });
+  return takeToolPickup(fighter, game, best);
 }
 
+/** Lifetime / bob only — no auto pickup. */
 export function tickToolPickups(game, dt) {
   if (!game) return;
   const step = dt || 0;
@@ -718,11 +713,16 @@ export function tickToolPickups(game, dt) {
     p.bob = (p.bob || 0) + step * 4;
     return p.life > 0;
   });
-  for (const fighter of livingFighters(game)) {
-    // Throw Breakable must click-grab tools; don't auto-vacuum them.
-    if (fighter.throwBreakable) continue;
-    tryCollectToolPickup(fighter, game);
+}
+
+/** Tool id shown in-hand: grabbed one-shot, else equipped tool secondary. */
+export function handheldToolId(fighter) {
+  if (!fighter || fighter.dead) return null;
+  if (fighter.heldToolPickup) return normalizeToolId(fighter.heldToolPickup);
+  if (fighter.toolSecondary && isToolSecondaryId(fighter.toolSecondary)) {
+    return fighter.toolSecondary;
   }
+  return null;
 }
 
 export function ensureToolSecondaryState(fighter) {

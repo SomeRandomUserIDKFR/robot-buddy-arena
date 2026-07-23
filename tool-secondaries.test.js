@@ -8,7 +8,7 @@ import {
   createToolPickup, FRAG_GRENADE_ID, HOOKSHOT_WINCH_ID, maybeDropToolFromCrate,
   seedMapToolPickups, STICKY_CHARGE_ID, THROWING_SPEAR_ID, tickToolPickups,
   tickToolProjectiles, TOOL_CRATE_DROP_CHANCE, TOOL_DEFS, TOOL_SECONDARY_IDS,
-  tryCollectToolPickup
+  tryCollectToolPickup, tryGrabToolPickup
 } from "./tool-secondaries.js";
 
 bindToolHpDamager(applyHpDamage);
@@ -48,7 +48,7 @@ for (const id of TOOL_SECONDARY_IDS) {
 }
 
 {
-  // World pickup → one-shot, even on primary.
+  // Ground tools are grab-only — walk-over / tryCollect never takes them.
   const fighter = applyLoadout({}, { ...DEFAULT_LOADOUT });
   fighter.x = 200;
   fighter.y = 200;
@@ -63,17 +63,22 @@ for (const id of TOOL_SECONDARY_IDS) {
     toolPickups: [pickup],
     powerCrates: []
   };
-  assert.ok(tryCollectToolPickup(fighter, game));
+  assert.equal(tryCollectToolPickup(fighter, game), null);
+  tickToolPickups(game, 0.05);
+  assert.equal(game.toolPickups.length, 1);
+  assert.equal(fighter.heldToolPickup, null);
+
+  assert.ok(tryGrabToolPickup(fighter, game, 80));
   assert.equal(fighter.heldToolPickup, FRAG_GRENADE_ID);
   assert.equal(game.toolPickups.length, 0);
   assert.ok(attackToolSecondary(fighter, game));
   assert.equal(fighter.heldToolPickup, null);
   assert.equal(game.toolProjectiles[0].kind, "grenade");
-  assert.equal(fighter.toolCd || 0, 0, "pickup shots do not start equipped CD");
+  assert.equal(fighter.toolCd || 0, 0, "grabbed one-shots do not start equipped CD");
 }
 
 {
-  // Same-tool pickup refreshes equipped cooldown.
+  // Equipped tool CD is unaffected by nearby ground pickups (grab-only world).
   const fighter = applyLoadout({}, {
     ...DEFAULT_LOADOUT,
     secondaryWeapon: BOLAS_SNARE_ID
@@ -91,9 +96,9 @@ for (const id of TOOL_SECONDARY_IDS) {
     toolProjectiles: [],
     powerCrates: []
   };
-  tryCollectToolPickup(fighter, game);
-  assert.equal(fighter.toolCd, 0);
-  assert.equal(fighter.heldToolPickup, null);
+  tickToolPickups(game, 0.05);
+  assert.equal(fighter.toolCd, 4);
+  assert.equal(game.toolPickups.length, 1);
 }
 
 {
