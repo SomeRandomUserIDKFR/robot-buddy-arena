@@ -656,31 +656,43 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
     * moveSpeedBuffMult(fighter)
     * iceSlowMult(fighter)
     * (isTrapLocked(fighter) ? 0.35 : 1);
-  if (Math.abs(fighter.vx) < speedCap * 1.25) {
-    fighter.vx += intent.mx * fighter.acceleration * dt;
+  // Hookshot reel owns velocity — walk friction / speed caps were cancelling the pull.
+  const reeling = !!fighter.hookReel;
+  if (!reeling) {
+    if (Math.abs(fighter.vx) < speedCap * 1.25) {
+      fighter.vx += intent.mx * fighter.acceleration * dt;
+    }
+    if (!intent.mx) fighter.vx *= Math.pow(.001, dt);
+    fighter.vx = clamp(fighter.vx, -speedCap, speedCap);
   }
-  if (!intent.mx) fighter.vx *= Math.pow(.001, dt);
-  fighter.vx = clamp(fighter.vx, -speedCap, speedCap);
   if (intent.mx) fighter.facing = Math.sign(intent.mx);
-  if (intent.jump && fighter.grounded) {
+  if (!reeling && intent.jump && fighter.grounded) {
     fighter.vy = -JUMP;
     fighter.grounded = false;
   }
   // jetHeld is the raw thrust input (for humans it includes W/Space even on
   // the ground) so a held jump key can never count as a "release".
   const jetHeld = intent.jetHeld !== undefined ? !!intent.jetHeld : !!intent.jet;
-  fighter.thrusting = stepJetFuel(fighter, jetHeld, intent.jet && !fighter.grounded, dt);
-  if (fighter.thrusting) {
-    // Only clamp speed gained from thrust; never slow a faster jump launch.
-    if (fighter.vy > -JET_MAX_RISE) {
-      const riseLimit = JET_MAX_RISE * Math.sqrt(fighter.jetThrust / JET_THRUST);
-      fighter.vy = Math.max(fighter.vy - fighter.jetThrust * dt, -riseLimit);
+  if (!reeling) {
+    fighter.thrusting = stepJetFuel(fighter, jetHeld, intent.jet && !fighter.grounded, dt);
+    if (fighter.thrusting) {
+      // Only clamp speed gained from thrust; never slow a faster jump launch.
+      if (fighter.vy > -JET_MAX_RISE) {
+        const riseLimit = JET_MAX_RISE * Math.sqrt(fighter.jetThrust / JET_THRUST);
+        fighter.vy = Math.max(fighter.vy - fighter.jetThrust * dt, -riseLimit);
+      }
     }
+  } else {
+    fighter.thrusting = false;
+    // Still burn/recharge accounting without applying thrust force mid-reel.
+    stepJetFuel(fighter, false, false, dt);
   }
   // Soft thruster loop for the local player only.
   if (fighter.human) setJetpackThrusting(!!fighter.thrusting);
-  fighter.vy += GRAVITY * dt;
-  fighter.vy = Math.min(fighter.vy, 900);
+  if (!reeling) {
+    fighter.vy += GRAVITY * dt;
+    fighter.vy = Math.min(fighter.vy, 900);
+  }
 
   const oldY = fighter.y;
   fighter._trapPrevY = oldY;
@@ -693,17 +705,20 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
     fighter.y = ceiling;
     if (fighter.vy < 0) fighter.vy = 0;
   }
-  for (const platform of landableSurfaces(game)) {
-    const wasAbove = oldY + SIZE <= platform.y + 5;
-    const crosses = fighter.y + SIZE >= platform.y
-      && fighter.y + SIZE <= platform.y + Math.max(35, fighter.vy * dt + 10);
-    if (
-      wasAbove && crosses && fighter.x + SIZE > platform.x
-      && fighter.x < platform.x + platform.w && fighter.vy >= 0
-    ) {
-      fighter.y = platform.y - SIZE;
-      fighter.vy = 0;
-      fighter.grounded = true;
+  // Don't snag on floors mid-grapple — land normally once the reel ends.
+  if (!reeling) {
+    for (const platform of landableSurfaces(game)) {
+      const wasAbove = oldY + SIZE <= platform.y + 5;
+      const crosses = fighter.y + SIZE >= platform.y
+        && fighter.y + SIZE <= platform.y + Math.max(35, fighter.vy * dt + 10);
+      if (
+        wasAbove && crosses && fighter.x + SIZE > platform.x
+        && fighter.x < platform.x + platform.w && fighter.vy >= 0
+      ) {
+        fighter.y = platform.y - SIZE;
+        fighter.vy = 0;
+        fighter.grounded = true;
+      }
     }
   }
   if (fighter.y > WORLD.h + 100) hit(fighter, fighter, 999, -Math.PI / 2, game);
