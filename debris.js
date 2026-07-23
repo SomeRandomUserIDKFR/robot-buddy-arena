@@ -1734,6 +1734,8 @@ export function restoreMapProp(prop) {
   prop.braceHp = 0;
   prop.braceMaxHp = 0;
   prop.braceMaterial = null;
+  // Explosive barrels may detonate again after rebuild / reconjure.
+  prop._blastDone = false;
   return true;
 }
 

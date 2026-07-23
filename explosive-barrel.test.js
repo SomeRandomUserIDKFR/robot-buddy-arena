@@ -3,6 +3,7 @@ import { Fighter } from "./combat.js";
 import {
   RED_BARREL_BLAST_DAMAGE, RED_BARREL_BLAST_RADIUS, RED_BARREL_KIND
 } from "./explosive-barrel.js";
+import { restoreMapProp } from "./debris.js";
 import {
   createMapProp, createMapRuntime, damageProp, MAP_PROP_KINDS
 } from "./maps.js";
@@ -150,6 +151,39 @@ assert.equal(RED_BARREL_BLAST_RADIUS, 150);
     Math.abs(lost - RED_BARREL_BLAST_DAMAGE) < 0.5,
     `center should take full ${RED_BARREL_BLAST_DAMAGE}, got ${lost}`
   );
+}
+
+{
+  // After rebuild / reconjure, the same barrel can explode again.
+  const barrel = createMapProp("redBarrel", 700, 900);
+  const fighter = new Fighter({
+    x: 720, y: 860, team: 1, aim: 0, hp: 500, maxHp: 500
+  });
+  fighter.shieldMaxDurability = 0;
+  const game = {
+    effects: [],
+    props: [barrel],
+    fighters: [fighter],
+    groundDebris: [],
+    platforms: []
+  };
+  damageProp(barrel, barrel.hp, game);
+  assert.ok(barrel._blastDone);
+  const explosionsAfterFirst = game.effects.filter((e) => e.type === "explosion").length;
+  assert.ok(explosionsAfterFirst >= 1);
+
+  restoreMapProp(barrel);
+  assert.equal(barrel._blastDone, false);
+  assert.equal(barrel.destroyed, false);
+  fighter.hp = 500;
+  damageProp(barrel, barrel.hp, game);
+  assert.equal(barrel.destroyed, true);
+  assert.ok(barrel._blastDone);
+  assert.ok(
+    game.effects.filter((e) => e.type === "explosion").length > explosionsAfterFirst,
+    "restored red barrel should detonate again"
+  );
+  assert.ok(fighter.hp < 500, "second blast should still hurt");
 }
 
 console.log("explosive-barrel.test.js passed.");
