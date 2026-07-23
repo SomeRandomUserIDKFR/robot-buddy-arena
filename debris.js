@@ -275,6 +275,14 @@ export const PROP_DEBRIS_COLORS = Object.freeze({
   redBarrel: {
     fill: "#c62828", fill2: "#f0c020", hoop: "#4a1010", edge: "#4a1010", material: "metal"
   },
+  oilBarrel: {
+    fill: "#2a4030", fill2: "#6a5a20", hoop: "#1a2818", edge: "#1a2818", material: "metal"
+  },
+  sandbag: { fill: "#9a8460", edge: "#5a4830", material: "sand" },
+  tireStack: { fill: "#1a2028", fill2: "#2a3038", edge: "#0a1014", material: "rubber" },
+  rock: { fill: "#6a6460", fill2: "#4a4440", edge: "#2a2624", material: "stone" },
+  pallet: { fill: "#8a6a3a", edge: "#4a3818", material: "wood" },
+  lightPost: { fill: "#4a545e", fill2: "#d8c060", edge: "#2a3038", material: "metal" },
   powerCrate: { fill: "#6a7078", rim: "#2a3038", edge: "#1a2028", material: "metal" }
 });
 
@@ -874,6 +882,45 @@ export function buildPropJigsaw(prop, kind = prop.kind) {
         return barrelColorAt(lx, ly, prop.w, prop.h, paint);
       },
       marks
+    );
+  }
+  if (kind === "oilBarrel") {
+    const paint = { ...PROP_DEBRIS_COLORS.oilBarrel, detail: "barrel" };
+    const hw = prop.w / 2;
+    const hh = prop.h / 2;
+    const marks = [
+      {
+        x1: -hw, y1: -hh + prop.h * 0.35,
+        x2: hw, y2: -hh + prop.h * 0.35,
+        color: paint.fill2
+      },
+      {
+        x1: -hw, y1: -hh + prop.h * 0.53,
+        x2: hw, y2: -hh + prop.h * 0.53,
+        color: paint.fill2
+      }
+    ];
+    return jaggedRectShards(
+      -hw, -hh, prop.w, prop.h, 3, 4, paint,
+      (lx, ly) => {
+        const top = -prop.h / 2;
+        const t = (ly - top) / prop.h;
+        if (t > 0.35 && t < 0.53) return paint.fill2;
+        return barrelColorAt(lx, ly, prop.w, prop.h, paint);
+      },
+      marks
+    );
+  }
+  if (kind === "sandbag" || kind === "tireStack" || kind === "rock"
+    || kind === "pallet" || kind === "lightPost") {
+    const paint = {
+      ...(PROP_DEBRIS_COLORS[kind] || { fill: "#668", edge: "#334", material: "metal" }),
+      detail: kind
+    };
+    return jaggedRectShards(
+      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 3, 4, paint,
+      () => paint.fill2 || paint.fill,
+      null
     );
   }
   if (kind === "powerCrate") {
@@ -1736,6 +1783,8 @@ export function restoreMapProp(prop) {
   prop.braceMaterial = null;
   // Explosive barrels may detonate again after rebuild / reconjure.
   prop._blastDone = false;
+  prop.oilIgnited = false;
+  prop.spellBurning = false;
   return true;
 }
 

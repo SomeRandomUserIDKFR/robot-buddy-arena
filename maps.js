@@ -5,7 +5,8 @@
  */
 import { spawnPropDebris } from "./debris.js";
 import {
-  detonateExplosiveBarrel, isExplosiveBarrel, RED_BARREL_KIND
+  detonateExplosiveBarrel, isOilBarrel, noteOilIgnition, OIL_BARREL_KIND,
+  RED_BARREL_KIND, shouldDetonateOnDestroy
 } from "./explosive-barrel.js";
 import { playBreakableDestroySfx, playBreakableHitSfx } from "./sfx.js";
 
@@ -71,6 +72,31 @@ const PROP_PRESETS = {
     solid: true, blocksProjectiles: true, blocksSight: false, breakable: true,
     explosive: true
   },
+  oilBarrel: {
+    kind: OIL_BARREL_KIND, w: 34, h: 48, hp: 45,
+    solid: true, blocksProjectiles: true, blocksSight: false, breakable: true,
+    oilBarrel: true
+  },
+  sandbag: {
+    kind: "sandbag", w: 72, h: 28, hp: 50,
+    solid: true, blocksProjectiles: true, blocksSight: true, breakable: true
+  },
+  tireStack: {
+    kind: "tireStack", w: 40, h: 56, hp: 60,
+    solid: true, blocksProjectiles: true, blocksSight: false, breakable: true
+  },
+  rock: {
+    kind: "rock", w: 48, h: 36, hp: 70,
+    solid: true, blocksProjectiles: true, blocksSight: true, breakable: true
+  },
+  pallet: {
+    kind: "pallet", w: 70, h: 18, hp: 35,
+    solid: true, blocksProjectiles: true, blocksSight: false, breakable: true
+  },
+  lightPost: {
+    kind: "lightPost", w: 16, h: 120, hp: 45,
+    solid: true, blocksProjectiles: true, blocksSight: true, breakable: true
+  },
   crateStack: {
     kind: "crate", w: 44, h: 88, hp: 90,
     solid: true, blocksProjectiles: true, blocksSight: true, breakable: true
@@ -124,6 +150,8 @@ function prop(kind, x, yBottom) {
     baseBlocksSight: blocksSight,
     breakable: preset.breakable !== false,
     explosive: !!preset.explosive,
+    oilBarrel: !!preset.oilBarrel,
+    oilIgnited: false,
     canopy,
     hitFlash: 0,
     destroyed: false,
@@ -185,7 +213,14 @@ export const MAPS = Object.freeze([
     blurb: "Open combat platforms — watch for crosswind gusts.",
     unlocked: true,
     platforms: BATTLEFIELD_PLATFORMS,
-    props: [],
+    props: [
+      prop("sandbag", 220, 1190),
+      prop("tireStack", 900, 1030),
+      prop("rock", 1500, 1240),
+      prop("pallet", 2100, 980),
+      prop("sandbag", 2700, 1190),
+      prop("rock", 600, 760)
+    ],
     spawnPoints: DEFAULT_SPAWNS,
     ceiling: MAP_CEILING,
     groundStyle: "plated",
@@ -231,7 +266,11 @@ export const MAPS = Object.freeze([
       prop("crate", 540, 1180),
       prop("crate", 2140, 1100),
       prop("barrel", 1120, 860),
-      prop("redBarrel", 2460, 940)
+      prop("redBarrel", 2460, 940),
+      prop("lightPost", 800, 1020),
+      prop("sandbag", 1400, 700),
+      prop("oilBarrel", 2200, 1100),
+      prop("tireStack", 2760, 780)
     ],
     spawnPoints: {
       training: {
@@ -294,7 +333,10 @@ export const MAPS = Object.freeze([
       prop("bush", 380, 980),
       prop("cactus", 1020, 860),
       prop("bush", 2180, 880),
-      prop("cactus", 2780, 700)
+      prop("cactus", 2780, 700),
+      prop("rock", 500, 1280),
+      prop("sandbag", 1600, 1320),
+      prop("rock", 2400, 1160)
     ],
     spawnPoints: DEFAULT_SPAWNS,
     ceiling: MAP_CEILING,
@@ -391,7 +433,12 @@ export const MAPS = Object.freeze([
       prop("barrel", 1080, 680),
       prop("redBarrel", 2860, 520),
       prop("crateStack", 1700, 580),
-      prop("pipe", 2280, 720)
+      prop("pipe", 2280, 720),
+      prop("tireStack", 260, 1200),
+      prop("oilBarrel", 1560, 1220),
+      prop("sandbag", 1400, 1220),
+      prop("pallet", 2000, 1000),
+      prop("lightPost", 2520, 1180)
     ],
     spawnPoints: DEFAULT_SPAWNS,
     ceiling: MAP_CEILING,
@@ -437,7 +484,10 @@ export const MAPS = Object.freeze([
       prop("pillar", 1180, 780),
       prop("pillar", 2080, 680),
       prop("crate", 520, 1080),
-      prop("barrel", 1320, 980)
+      prop("barrel", 1320, 980),
+      prop("rock", 860, 1280),
+      prop("rock", 2220, 900),
+      prop("sandbag", 2640, 1120)
     ],
     spawnPoints: DEFAULT_SPAWNS,
     ceiling: MAP_CEILING,
@@ -489,7 +539,11 @@ export const MAPS = Object.freeze([
       prop("crate", 160, 1120),
       prop("pipe", 600, 1000),
       prop("crate", 1700, 960),
-      prop("barrel", 2260, 1100)
+      prop("barrel", 2260, 1100),
+      prop("pallet", 200, 1380),
+      prop("tireStack", 1500, 1380),
+      prop("oilBarrel", 2700, 1380),
+      prop("sandbag", 1800, 960)
     ],
     spawnPoints: {
       training: {
@@ -739,11 +793,16 @@ export function absorbBraceShell(prop, amount, game, impactX, impactY) {
  * Apply damage to a breakable prop. Returns true if the prop absorbed the hit
  * (projectile should stop). Emits crack/debris effects on the game.
  * Braced props spend casing HP before the wood core.
+ * @param {{ fromExplosion?: boolean, fromFire?: boolean, fromImpact?: boolean }} [opts]
  */
-export function damageProp(prop, amount, game, impactX, impactY) {
+export function damageProp(prop, amount, game, impactX, impactY, opts = null) {
   if (!prop || prop.destroyed || !prop.breakable) return false;
   const ix = impactX ?? prop.x + prop.w / 2;
   const iy = impactY ?? prop.y + prop.h / 2;
+  if (opts?.fromExplosion) noteOilIgnition(prop, "explosion");
+  if (opts?.fromFire) noteOilIgnition(prop, "fire");
+  if (opts?.fromImpact) noteOilIgnition(prop, "impact");
+  if (prop.spellBurning && isOilBarrel(prop)) noteOilIgnition(prop, "fire");
   const left = absorbBraceShell(prop, Math.max(0, amount), game, ix, iy);
   if (left <= 0) {
     playBreakableHitSfx();
@@ -780,9 +839,9 @@ export function damageProp(prop, amount, game, impactX, impactY) {
       });
     }
     spawnPropDebris(game, prop, ix, iy);
-    const explosive = isExplosiveBarrel(prop);
-    playBreakableDestroySfx({ explosive });
-    if (explosive) {
+    const boom = shouldDetonateOnDestroy(prop);
+    playBreakableDestroySfx({ explosive: boom });
+    if (boom) {
       detonateExplosiveBarrel(prop, game, ix, iy, damageProp);
     }
   } else {

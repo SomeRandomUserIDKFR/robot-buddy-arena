@@ -21,14 +21,28 @@ export const ILLUSION_METAL_PROP = "metal";
 
 /** Theme pools mirror Reconjurer so bait looks native to the map. */
 const ILLUSION_THEME_KINDS = Object.freeze({
-  desert: ["cactus", "bush", "crate", "barrel"],
-  forest: ["tree", "bush", "crate", "barrel"],
-  industrial: ["crate", "pipe", "barrel", "redBarrel", "pillar"],
-  yard: ["crate", "pipe", "barrel", "redBarrel", "crateStack"],
-  ruins: ["pillar", "crate", "barrel", "bush"],
-  docks: ["crate", "barrel", "redBarrel", "pipe"],
-  city: ["crate", "barrel", "redBarrel", "pipe", "pillar"],
-  battlefield: ["crate", "barrel", "pipe", "bush"]
+  desert: ["cactus", "bush", "crate", "barrel", "rock", "sandbag"],
+  forest: ["tree", "bush", "crate", "barrel", "rock", "pallet"],
+  industrial: [
+    "crate", "pipe", "barrel", "redBarrel", "oilBarrel", "pillar",
+    "tireStack", "sandbag", "pallet", "lightPost"
+  ],
+  yard: [
+    "crate", "pipe", "barrel", "redBarrel", "oilBarrel", "crateStack",
+    "tireStack", "sandbag", "pallet", "lightPost"
+  ],
+  ruins: ["pillar", "crate", "barrel", "bush", "rock", "sandbag"],
+  docks: [
+    "crate", "barrel", "redBarrel", "oilBarrel", "pipe",
+    "pallet", "tireStack", "sandbag"
+  ],
+  city: [
+    "crate", "barrel", "redBarrel", "oilBarrel", "pipe", "pillar",
+    "lightPost", "sandbag", "tireStack"
+  ],
+  battlefield: [
+    "crate", "barrel", "pipe", "bush", "sandbag", "tireStack", "rock", "pallet"
+  ]
 });
 
 /** Plant cooldown (s). */

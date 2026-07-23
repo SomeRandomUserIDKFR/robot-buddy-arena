@@ -646,7 +646,8 @@ export function shatterBreakableAt(prop, game, impactX, impactY, attacker = null
   }
   prop.hp = 0;
   // Hit FX stay at the true impact; jigsaw/reconquer use the snapped prop slot.
-  return damageProp(prop, 1, game, impactX, impactY);
+  // Violent throw shatter can ignite oil drums.
+  return damageProp(prop, 1, game, impactX, impactY, { fromImpact: true });
 }
 
 export function throwHeldBreakable(fighter, game) {

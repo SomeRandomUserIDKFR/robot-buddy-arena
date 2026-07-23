@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { Fighter } from "./combat.js";
 import {
-  RED_BARREL_BLAST_DAMAGE, RED_BARREL_BLAST_RADIUS, RED_BARREL_KIND
+  OIL_BARREL_KIND, RED_BARREL_BLAST_DAMAGE, RED_BARREL_BLAST_RADIUS,
+  RED_BARREL_KIND, shouldDetonateOnDestroy
 } from "./explosive-barrel.js";
 import { restoreMapProp } from "./debris.js";
 import {
@@ -10,7 +11,14 @@ import {
 import { SIZE } from "./config.js";
 
 assert.ok(MAP_PROP_KINDS.includes("redBarrel"));
+assert.ok(MAP_PROP_KINDS.includes("oilBarrel"));
+assert.ok(MAP_PROP_KINDS.includes("sandbag"));
+assert.ok(MAP_PROP_KINDS.includes("tireStack"));
+assert.ok(MAP_PROP_KINDS.includes("rock"));
+assert.ok(MAP_PROP_KINDS.includes("pallet"));
+assert.ok(MAP_PROP_KINDS.includes("lightPost"));
 assert.equal(RED_BARREL_KIND, "redBarrel");
+assert.equal(OIL_BARREL_KIND, "oilBarrel");
 assert.equal(RED_BARREL_BLAST_DAMAGE, 48);
 assert.equal(RED_BARREL_BLAST_RADIUS, 150);
 
@@ -151,6 +159,88 @@ assert.equal(RED_BARREL_BLAST_RADIUS, 150);
     Math.abs(lost - RED_BARREL_BLAST_DAMAGE) < 0.5,
     `center should take full ${RED_BARREL_BLAST_DAMAGE}, got ${lost}`
   );
+}
+
+{
+  // Oil barrels do not explode from ordinary destruction.
+  const oil = createMapProp("oilBarrel", 500, 900);
+  const fighter = new Fighter({
+    x: 520, y: 860, team: 1, aim: 0, hp: 500, maxHp: 500
+  });
+  fighter.shieldMaxDurability = 0;
+  const before = fighter.hp;
+  const game = {
+    effects: [],
+    props: [oil],
+    fighters: [fighter],
+    groundDebris: [],
+    platforms: []
+  };
+  assert.equal(oil.oilBarrel, true);
+  assert.equal(shouldDetonateOnDestroy(oil), false);
+  damageProp(oil, oil.hp, game);
+  assert.equal(oil.destroyed, true);
+  assert.equal(fighter.hp, before, "cold oil drum should not blast");
+  assert.ok(!game.effects.some((e) => e.type === "explosion"));
+}
+
+{
+  // Oil barrels ignite from explosion splash, then boom if finished off.
+  const red = createMapProp("redBarrel", 600, 900);
+  const oil = createMapProp("oilBarrel", 630, 900);
+  const game = {
+    effects: [],
+    props: [red, oil],
+    fighters: [],
+    groundDebris: [],
+    platforms: []
+  };
+  damageProp(red, red.hp, game);
+  assert.equal(oil.oilIgnited, true, "red blast should ignite nearby oil");
+  if (!oil.destroyed) {
+    damageProp(oil, oil.hp, game);
+  }
+  assert.equal(oil.destroyed, true);
+  assert.ok(oil._blastDone);
+  assert.ok(game.effects.filter((e) => e.type === "explosion").length >= 2);
+}
+
+{
+  // Oil barrels explode when burning / marked ignited, then restored can re-arm.
+  const oil = createMapProp("oilBarrel", 800, 900);
+  oil.spellBurning = true;
+  const game = {
+    effects: [],
+    props: [oil],
+    fighters: [],
+    groundDebris: [],
+    platforms: []
+  };
+  assert.equal(shouldDetonateOnDestroy(oil), true);
+  damageProp(oil, oil.hp, game);
+  assert.ok(oil._blastDone);
+  assert.ok(game.effects.some((e) => e.type === "explosion"));
+  restoreMapProp(oil);
+  assert.equal(oil.oilIgnited, false);
+  assert.equal(oil._blastDone, false);
+  damageProp(oil, oil.hp, game);
+  assert.ok(
+    game.effects.filter((e) => e.type === "explosion").length === 1,
+    "cold rebuilt oil should not boom again without ignition"
+  );
+}
+
+{
+  // New cover kinds place on maps and leave themed debris.
+  const yard = createMapRuntime("yard");
+  assert.ok(yard.props.some((p) => p.kind === "tireStack"));
+  assert.ok(yard.props.some((p) => p.kind === "oilBarrel"));
+  assert.ok(yard.props.some((p) => p.kind === "sandbag"));
+  const field = createMapRuntime("battlefield");
+  assert.ok(field.props.some((p) => p.kind === "rock"));
+  assert.ok(field.props.some((p) => p.kind === "pallet"));
+  const city = createMapRuntime("city");
+  assert.ok(city.props.some((p) => p.kind === "lightPost"));
 }
 
 {

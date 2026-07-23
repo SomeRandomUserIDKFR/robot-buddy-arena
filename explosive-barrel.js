@@ -1,10 +1,12 @@
 /**
  * Explosive red barrels — mid-tier blast when a breakable prop is destroyed.
+ * Oil barrels only boom when ignited (fire, explosion splash, or throw shatter).
  * Chain reactions are allowed (each barrel detonates once).
  */
 import { SIZE } from "./config.js";
 
 export const RED_BARREL_KIND = "redBarrel";
+export const OIL_BARREL_KIND = "oilBarrel";
 
 /** Mid-tier blast: matches throw-breakable impact damage. */
 export const RED_BARREL_BLAST_DAMAGE = 48;
@@ -30,6 +32,28 @@ export function bindExplosiveBarrelPowerCrateDamager(fn) {
 export function isExplosiveBarrel(prop) {
   if (!prop) return false;
   return prop.kind === RED_BARREL_KIND || prop.explosive === true;
+}
+
+export function isOilBarrel(prop) {
+  if (!prop) return false;
+  return prop.kind === OIL_BARREL_KIND || prop.oilBarrel === true;
+}
+
+/** Oil drums ignite from fire, explosion splash, or violent throw impact. */
+export function noteOilIgnition(prop, reason) {
+  if (!isOilBarrel(prop)) return false;
+  if (reason !== "fire" && reason !== "explosion" && reason !== "impact") {
+    return false;
+  }
+  prop.oilIgnited = true;
+  return true;
+}
+
+/** Whether destroying this prop should trigger a blast. */
+export function shouldDetonateOnDestroy(prop) {
+  if (isExplosiveBarrel(prop)) return true;
+  if (!isOilBarrel(prop)) return false;
+  return !!(prop.oilIgnited || prop.spellBurning);
 }
 
 function blastFalloff(dist, radius) {
@@ -98,7 +122,7 @@ export function detonateExplosiveBarrel(prop, game, ix, iy, damagePropFn) {
       const d = Math.hypot(ox - cx, oy - cy);
       const mult = blastFalloff(d, radius);
       if (!(mult > 0)) continue;
-      damagePropFn(other, baseDamage * mult, game, ox, oy);
+      damagePropFn(other, baseDamage * mult, game, ox, oy, { fromExplosion: true });
     }
   }
 

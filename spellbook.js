@@ -8,6 +8,7 @@ import { SIZE } from "./config.js";
 import { PROP_DEBRIS_COLORS } from "./debris.js";
 import { applyHpDamage, GEAR_BY_ID } from "./equipment.js";
 import { fadeIllusionFighter, isIllusionFighter } from "./illusionist.js";
+import { noteOilIgnition } from "./explosive-barrel.js";
 import { damageProp } from "./maps.js";
 import { damagePowerCrate } from "./powerups.js";
 import { clamp } from "./utils.js";
@@ -44,7 +45,8 @@ export const LIGHTNING_REACH = 520;
 
 /** Breakable kinds lightning may chain through. */
 export const LIGHTNING_CHAIN_KINDS = Object.freeze([
-  "crate", "crateStack", "barrel", "redBarrel", "pipe", "pillar", "powerCrate"
+  "crate", "crateStack", "barrel", "redBarrel", "oilBarrel", "pipe", "pillar",
+  "rock", "pallet", "lightPost", "powerCrate"
 ]);
 
 const SPELL_LABELS = Object.freeze({
@@ -146,12 +148,12 @@ function propCenter(p) {
   };
 }
 
-function damageBreakable(prop, amount, game, ix, iy, attacker) {
+function damageBreakable(prop, amount, game, ix, iy, attacker, opts = null) {
   if (!prop) return;
   if (prop.powerCrate || prop.kind === "powerCrate") {
     damagePowerCrate(prop, amount, attacker, game, ix, iy);
   } else {
-    damageProp(prop, amount, game, ix, iy);
+    damageProp(prop, amount, game, ix, iy, opts);
   }
 }
 
@@ -169,6 +171,7 @@ function igniteBreakable(prop, game, owner) {
     done: false
   });
   prop.spellBurning = true;
+  noteOilIgnition(prop, "fire");
   prop.hitFlash = Math.max(prop.hitFlash || 0, 0.16);
 }
 
@@ -462,7 +465,9 @@ export function tickSpellbookWorld(game, dt) {
     if (fire.tickCd <= 0) {
       fire.tickCd = 0.55;
       const c = propCenter(prop);
-      damageBreakable(prop, FIRE_TICK_DAMAGE, game, c.x, c.y, fire.owner);
+      damageBreakable(prop, FIRE_TICK_DAMAGE, game, c.x, c.y, fire.owner, {
+        fromFire: true
+      });
     }
 
     if (fire.spreadCd <= 0 && fire.life > 0.8) {

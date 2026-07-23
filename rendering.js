@@ -1285,6 +1285,68 @@ export function createRenderer(canvas) {
       context.strokeRect(x + 1, y + 1, w - 2, h - 2);
       return;
     }
+
+    if (kind === "oilBarrel") {
+      context.fillStyle = "#2a4030";
+      context.fillRect(x, y, w, h);
+      context.fillStyle = "#6a5a20";
+      context.fillRect(x, y + h * 0.35, w, h * 0.18);
+      context.strokeStyle = "#1a2818";
+      context.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      return;
+    }
+    if (kind === "sandbag") {
+      context.fillStyle = "#9a8460";
+      context.beginPath();
+      context.moveTo(x + 4, y + 4);
+      context.lineTo(x + w - 4, y + 4);
+      context.lineTo(x + w, y + h);
+      context.lineTo(x, y + h);
+      context.closePath();
+      context.fill();
+      return;
+    }
+    if (kind === "tireStack") {
+      const layers = 3;
+      const layerH = h / layers;
+      for (let i = 0; i < layers; i++) {
+        const ly = y + i * layerH;
+        context.fillStyle = i % 2 ? "#2a3038" : "#1a2028";
+        context.beginPath();
+        context.ellipse(x + w / 2, ly + layerH * 0.5, w * 0.48, layerH * 0.42, 0, 0, Math.PI * 2);
+        context.fill();
+      }
+      return;
+    }
+    if (kind === "rock") {
+      context.fillStyle = "#6a6460";
+      context.beginPath();
+      context.moveTo(x + 6, y + h);
+      context.lineTo(x + 4, y + h * 0.45);
+      context.lineTo(x + w * 0.35, y + 2);
+      context.lineTo(x + w * 0.75, y + 8);
+      context.lineTo(x + w - 2, y + h * 0.4);
+      context.lineTo(x + w - 4, y + h);
+      context.closePath();
+      context.fill();
+      return;
+    }
+    if (kind === "pallet") {
+      context.fillStyle = "#8a6a3a";
+      context.fillRect(x, y, w, h);
+      context.fillStyle = "#4a3818";
+      for (let i = 0; i < 3; i++) {
+        context.fillRect(x + 2, y + 2 + i * (h / 3), w - 4, Math.max(2, h * 0.22));
+      }
+      return;
+    }
+    if (kind === "lightPost") {
+      context.fillStyle = "#4a545e";
+      context.fillRect(x + w * 0.25, y + 14, w * 0.5, h - 14);
+      context.fillStyle = "#d8c060";
+      context.fillRect(x - 4, y, w + 8, 12);
+      return;
+    }
     // crate / crateStack
     context.fillStyle = "#8a6a3a";
     context.fillRect(x, y, w, h);
@@ -1568,6 +1630,96 @@ export function createRenderer(canvas) {
       context.lineTo(prop.x + 4, prop.y + prop.h * .8);
       context.strokeStyle = "#2a0808";
       context.stroke();
+
+    } else if (prop.kind === "oilBarrel") {
+      context.fillStyle = flash ? "#d0e8c8" : "#2a4030";
+      context.fillRect(prop.x, prop.y, prop.w, prop.h);
+      context.fillStyle = flash ? "#ffe08a" : "#6a5a20";
+      context.fillRect(prop.x, prop.y + prop.h * 0.35, prop.w, prop.h * 0.18);
+      context.strokeStyle = "#1a2818";
+      context.lineWidth = 1.5;
+      context.strokeRect(prop.x + 1, prop.y + 1, prop.w - 2, prop.h - 2);
+      // Oil drop mark
+      context.fillStyle = flash ? "#90c878" : "#1a3020";
+      context.beginPath();
+      context.ellipse(prop.x + prop.w / 2, prop.y + prop.h * 0.68, 5, 7, 0, 0, Math.PI * 2);
+      context.fill();
+      if (prop.oilIgnited || prop.spellBurning) {
+        context.strokeStyle = "rgba(255,140,40,.85)";
+        context.lineWidth = 2;
+        context.strokeRect(prop.x - 1, prop.y - 1, prop.w + 2, prop.h + 2);
+      }
+    } else if (prop.kind === "sandbag") {
+      context.fillStyle = flash ? "#f0e0b8" : "#9a8460";
+      context.beginPath();
+      context.moveTo(prop.x + 4, prop.y + 4);
+      context.lineTo(prop.x + prop.w - 4, prop.y + 4);
+      context.lineTo(prop.x + prop.w, prop.y + prop.h);
+      context.lineTo(prop.x, prop.y + prop.h);
+      context.closePath();
+      context.fill();
+      context.strokeStyle = "#5a4830";
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.moveTo(prop.x + prop.w * 0.33, prop.y + 6);
+      context.lineTo(prop.x + prop.w * 0.3, prop.y + prop.h - 2);
+      context.moveTo(prop.x + prop.w * 0.66, prop.y + 6);
+      context.lineTo(prop.x + prop.w * 0.7, prop.y + prop.h - 2);
+      context.stroke();
+    } else if (prop.kind === "tireStack") {
+      const layers = 3;
+      const layerH = prop.h / layers;
+      for (let i = 0; i < layers; i++) {
+        const ly = prop.y + i * layerH;
+        context.fillStyle = flash ? "#606870" : (i % 2 ? "#2a3038" : "#1a2028");
+        context.beginPath();
+        context.ellipse(prop.x + prop.w / 2, ly + layerH * 0.5, prop.w * 0.48, layerH * 0.42, 0, 0, Math.PI * 2);
+        context.fill();
+        context.strokeStyle = "#0a1014";
+        context.stroke();
+      }
+    } else if (prop.kind === "rock") {
+      context.fillStyle = flash ? "#d8d0c8" : "#6a6460";
+      context.beginPath();
+      context.moveTo(prop.x + 6, prop.y + prop.h);
+      context.lineTo(prop.x + 4, prop.y + prop.h * 0.45);
+      context.lineTo(prop.x + prop.w * 0.35, prop.y + 2);
+      context.lineTo(prop.x + prop.w * 0.75, prop.y + 8);
+      context.lineTo(prop.x + prop.w - 2, prop.y + prop.h * 0.4);
+      context.lineTo(prop.x + prop.w - 4, prop.y + prop.h);
+      context.closePath();
+      context.fill();
+      context.fillStyle = flash ? "rgba(255,255,255,.25)" : "rgba(40,36,32,.35)";
+      context.beginPath();
+      context.moveTo(prop.x + prop.w * 0.35, prop.y + 8);
+      context.lineTo(prop.x + prop.w * 0.55, prop.y + prop.h * 0.55);
+      context.lineTo(prop.x + prop.w * 0.2, prop.y + prop.h * 0.55);
+      context.closePath();
+      context.fill();
+    } else if (prop.kind === "pallet") {
+      context.fillStyle = flash ? "#e8d0a0" : "#8a6a3a";
+      context.fillRect(prop.x, prop.y, prop.w, prop.h);
+      context.fillStyle = "#4a3818";
+      const slat = Math.max(3, prop.h * 0.28);
+      for (let i = 0; i < 3; i++) {
+        const sy = prop.y + 2 + i * (prop.h / 3);
+        context.fillRect(prop.x + 2, sy, prop.w - 4, slat);
+      }
+      context.fillRect(prop.x + 6, prop.y, 4, prop.h);
+      context.fillRect(prop.x + prop.w - 10, prop.y, 4, prop.h);
+    } else if (prop.kind === "lightPost") {
+      context.fillStyle = flash ? "#c8d0d8" : "#4a545e";
+      context.fillRect(prop.x + prop.w * 0.25, prop.y + 18, prop.w * 0.5, prop.h - 18);
+      context.fillStyle = flash ? "#fff6c8" : "#d8c060";
+      context.fillRect(prop.x - 6, prop.y, prop.w + 12, 16);
+      context.fillStyle = "rgba(255,220,120,.35)";
+      context.beginPath();
+      context.moveTo(prop.x - 4, prop.y + 16);
+      context.lineTo(prop.x + prop.w + 4, prop.y + 16);
+      context.lineTo(prop.x + prop.w * 0.5, prop.y + 48);
+      context.closePath();
+      context.fill();
+
     } else {
       context.fillStyle = flash ? "#fff" : "#668";
       context.fillRect(prop.x, prop.y, prop.w, prop.h);

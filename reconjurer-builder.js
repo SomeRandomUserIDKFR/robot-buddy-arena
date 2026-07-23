@@ -45,14 +45,28 @@ export const RECONJURER_BRACE_HP = 48;
 export const RECONJURER_METAL_TYPE = "metal";
 
 const THEME_KINDS = Object.freeze({
-  desert: ["cactus", "bush", "crate", "barrel"],
-  forest: ["tree", "bush", "crate", "barrel"],
-  industrial: ["crate", "pipe", "barrel", "redBarrel", "pillar"],
-  yard: ["crate", "pipe", "barrel", "redBarrel", "crateStack"],
-  ruins: ["pillar", "crate", "barrel", "bush"],
-  docks: ["crate", "barrel", "redBarrel", "pipe"],
-  city: ["crate", "barrel", "redBarrel", "pipe", "pillar"],
-  battlefield: ["crate", "barrel", "pipe", "bush"]
+  desert: ["cactus", "bush", "crate", "barrel", "rock", "sandbag"],
+  forest: ["tree", "bush", "crate", "barrel", "rock", "pallet"],
+  industrial: [
+    "crate", "pipe", "barrel", "redBarrel", "oilBarrel", "pillar",
+    "tireStack", "sandbag", "pallet", "lightPost"
+  ],
+  yard: [
+    "crate", "pipe", "barrel", "redBarrel", "oilBarrel", "crateStack",
+    "tireStack", "sandbag", "pallet", "lightPost"
+  ],
+  ruins: ["pillar", "crate", "barrel", "bush", "rock", "sandbag"],
+  docks: [
+    "crate", "barrel", "redBarrel", "oilBarrel", "pipe",
+    "pallet", "tireStack", "sandbag"
+  ],
+  city: [
+    "crate", "barrel", "redBarrel", "oilBarrel", "pipe", "pillar",
+    "lightPost", "sandbag", "tireStack"
+  ],
+  battlefield: [
+    "crate", "barrel", "pipe", "bush", "sandbag", "tireStack", "rock", "pallet"
+  ]
 });
 
 export function isReconjurerBuilder(fighterOrId) {
@@ -86,6 +100,10 @@ export function normalizeReconjurerType(type, game = null) {
 export function reconjurerTypeLabel(type) {
   if (type === RECONJURER_METAL_TYPE) return "METAL";
   if (type === "crateStack") return "STACK";
+  if (type === "tireStack") return "TIRES";
+  if (type === "oilBarrel") return "OIL";
+  if (type === "sandbag") return "BAGS";
+  if (type === "lightPost") return "LAMP";
   return String(type || "crate").toUpperCase();
 }
 
@@ -467,6 +485,68 @@ function paintPropLook(ctx, kind, x, y, w, h) {
     ctx.fillRect(x, y + h * 0.38, w, h * 0.24);
     ctx.strokeStyle = "#4a1010";
     ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    return;
+  }
+
+  if (kind === "oilBarrel") {
+    ctx.fillStyle = "#2a4030";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = "#6a5a20";
+    ctx.fillRect(x, y + h * 0.35, w, h * 0.18);
+    ctx.strokeStyle = "#1a2818";
+    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    return;
+  }
+  if (kind === "sandbag") {
+    ctx.fillStyle = "#9a8460";
+    ctx.beginPath();
+    ctx.moveTo(x + 4, y + 4);
+    ctx.lineTo(x + w - 4, y + 4);
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x, y + h);
+    ctx.closePath();
+    ctx.fill();
+    return;
+  }
+  if (kind === "tireStack") {
+    const layers = 3;
+    const layerH = h / layers;
+    for (let i = 0; i < layers; i++) {
+      const ly = y + i * layerH;
+      ctx.fillStyle = i % 2 ? "#2a3038" : "#1a2028";
+      ctx.beginPath();
+      ctx.ellipse(x + w / 2, ly + layerH * 0.5, w * 0.48, layerH * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    return;
+  }
+  if (kind === "rock") {
+    ctx.fillStyle = "#6a6460";
+    ctx.beginPath();
+    ctx.moveTo(x + 6, y + h);
+    ctx.lineTo(x + 4, y + h * 0.45);
+    ctx.lineTo(x + w * 0.35, y + 2);
+    ctx.lineTo(x + w * 0.75, y + 8);
+    ctx.lineTo(x + w - 2, y + h * 0.4);
+    ctx.lineTo(x + w - 4, y + h);
+    ctx.closePath();
+    ctx.fill();
+    return;
+  }
+  if (kind === "pallet") {
+    ctx.fillStyle = "#8a6a3a";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = "#4a3818";
+    for (let i = 0; i < 3; i++) {
+      ctx.fillRect(x + 2, y + 2 + i * (h / 3), w - 4, Math.max(2, h * 0.22));
+    }
+    return;
+  }
+  if (kind === "lightPost") {
+    ctx.fillStyle = "#4a545e";
+    ctx.fillRect(x + w * 0.25, y + 14, w * 0.5, h - 14);
+    ctx.fillStyle = "#d8c060";
+    ctx.fillRect(x - 4, y, w + 8, 12);
     return;
   }
   // crate / crateStack — wood box with X
