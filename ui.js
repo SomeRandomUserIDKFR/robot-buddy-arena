@@ -369,17 +369,16 @@ export function updateHud(game) {
         ui.reconjurerPreviewLabel.textContent = reconjurerTypeLabel(type);
       }
       if (ui.reconjurerPreviewHint) {
-        const braceTarget = cd <= 0 && !metalLocked
-          ? findBraceTarget(game, player)
-          : null;
-        ui.reconjurerPreviewHint.textContent = metalLocked
-          ? `metal cd ${Math.ceil(player.reconjurerMetalCd)}s`
-          : cd > 0
-            ? `ready in ${Math.ceil(cd)}s`
-            : braceTarget
-              ? (braceTarget.powerCrate || braceTarget.kind === "powerCrate"
-                ? "3 brace · wood casing"
-                : "3 brace · metal casing")
+        // Brace ignores metal CD — show it whenever ready and a target is near.
+        const braceTarget = cd <= 0 ? findBraceTarget(game, player) : null;
+        ui.reconjurerPreviewHint.textContent = cd > 0
+          ? `ready in ${Math.ceil(cd)}s`
+          : braceTarget
+            ? (braceTarget.powerCrate || braceTarget.kind === "powerCrate"
+              ? "3 brace · wood casing"
+              : "3 brace · metal casing")
+            : metalLocked
+              ? `metal cd ${Math.ceil(player.reconjurerMetalCd)}s`
               : "3 place · debris rebuild · brace cover";
       }
       if (ui.reconjurerPreviewCanvas) {
