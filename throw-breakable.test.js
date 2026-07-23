@@ -11,10 +11,11 @@ import {
 } from "./powerups.js";
 import {
   attackThrowBreakable, bindThrowBreakablePowerCrateDamager, canGrabBreakable,
-  canGrabIllusionProp, dropHeldBreakable, isIllusionGhostedProp, isIllusionHeldProp,
-  isPlantedIllusionProp, isThrowBreakable, releaseIllusionThrowBreakable,
-  shatterBreakableAt, stepThrownBreakables, THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID,
-  throwHeldBreakable, tickThrowBreakable, tryGrabBreakable
+  canGrabIllusionProp, damageBreakableByIllusion, dropHeldBreakable,
+  isIllusionGhostedProp, isIllusionHeldProp, isPlantedIllusionProp, isThrowBreakable,
+  releaseIllusionThrowBreakable, shatterBreakableAt, stepThrownBreakables,
+  THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID, throwHeldBreakable, tickThrowBreakable,
+  tryGrabBreakable
 } from "./throw-breakable.js";
 
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
@@ -630,6 +631,57 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.equal(victim.phantomDamage || 0, 0);
   assert.equal(game.groundDebris.length, 0, "planted bait does not leave ghost debris");
   assert.ok(game.effects.some((e) => e.type === "illusionBreak"));
+}
+
+
+// Illusion shots/melee fake-chip breakables; ghost-break until destroyer fades.
+{
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate" && !p.destroyed);
+  assert.ok(crate);
+  const startHp = crate.hp;
+  const startX = crate.x;
+  const startY = crate.y;
+  const owner = applyLoadout(new Fighter({
+    x: crate.x - 80, y: crate.y, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: ILLUSIONIST_ID,
+    weapon: "pulse-rifle"
+  });
+  const decoy = createFighterIllusion(owner, Fighter);
+  decoy.x = crate.x - 60;
+  decoy.y = crate.y;
+  const game = {
+    props: yard.props,
+    platforms: yard.platforms,
+    fighters: [owner, decoy],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: []
+  };
+
+  assert.ok(damageBreakableByIllusion(crate, 10, decoy, game, crate.x, crate.y));
+  assert.equal(crate.hp, startHp, "real HP untouched while chipping");
+  assert.ok(crate.illusionFakeHp < startHp);
+  assert.equal(isIllusionGhostedProp(crate), false);
+
+  // Finish the fake break.
+  assert.ok(damageBreakableByIllusion(crate, 9999, decoy, game, crate.x, crate.y));
+  assert.equal(crate.hp, startHp, "still untouched after fake destroy");
+  assert.equal(crate.destroyed, false);
+  assert.ok(isIllusionGhostedProp(crate));
+  assert.ok(game.groundDebris.some((d) => d.illusionGhostDebris && d.illusionThrower === decoy));
+  assert.equal(crate.x, startX);
+  assert.equal(crate.y, startY);
+
+  decoy.dead = true;
+  releaseIllusionThrowBreakable(decoy, game);
+  assert.equal(isIllusionGhostedProp(crate), false);
+  assert.equal(crate.hp, startHp);
+  assert.equal(crate.illusionFakeHp, null);
+  assert.equal(game.groundDebris.length, 0);
+  assert.equal(crate.solid || crate.blocksProjectiles, true);
 }
 
 console.log("throw-breakable.test.js passed.");

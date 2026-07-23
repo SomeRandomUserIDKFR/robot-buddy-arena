@@ -19,8 +19,8 @@ import {
   powerCrateBlockers, tryCounterSlash
 } from "./powerups.js";
 import {
-  attackThrowBreakable, bindThrowBreakablePowerCrateDamager, isThrowBreakable,
-  stepThrownBreakables
+  attackThrowBreakable, bindThrowBreakablePowerCrateDamager,
+  damageBreakableByIllusion, isThrowBreakable, stepThrownBreakables
 } from "./throw-breakable.js";
 import {
   bindExplosiveBarrelHitter, bindExplosiveBarrelPowerCrateDamager
@@ -337,6 +337,14 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct = 1) {
       shotAngle,
       game
     );
+  } else if (
+    isIllusionFighter(fighter)
+    && (hitPoint.box?.kind === "prop" || hitPoint.box?.kind === "powerCrate")
+  ) {
+    // Decoy beams fake-chip / fake-break cover; real prop stays untouched.
+    damageBreakableByIllusion(
+      hitPoint.box.prop, dmg, fighter, game, hitPoint.x, hitPoint.y
+    );
   } else if (!isIllusionFighter(fighter) && hitPoint.box?.kind === "powerCrate") {
     damagePowerCrate(
       hitPoint.box.prop,
@@ -497,21 +505,23 @@ export function attack(fighter, game, random = Math.random) {
         registerIllusionObjectHit(ill, game);
       }
     }
-    if (!isIllusionFighter(fighter)) {
-      for (const prop of allProjectileBlockers(game)) {
-        if (!prop.breakable) continue;
-        const px = prop.x + prop.w / 2;
-        const py = prop.y + prop.h / 2;
-        if (Math.hypot(px - cx, py - cy) > fighter.weaponReach) continue;
-        const angle = Math.atan2(py - cy, px - cx);
-        if (Math.abs(angleDiff(angle, fighter.aim)) < .85) {
-          if (prop.powerCrate) {
-            damagePowerCrate(prop, swingDmg, fighter, game, px, py);
-          } else if (prop.armorDummy) {
-            damageArmorDummy(prop, swingDmg, game, px, py);
-          } else {
-            damageProp(prop, swingDmg, game, px, py);
+    for (const prop of allProjectileBlockers(game)) {
+      if (!prop.breakable && !prop.powerCrate) continue;
+      const px = prop.x + prop.w / 2;
+      const py = prop.y + prop.h / 2;
+      if (Math.hypot(px - cx, py - cy) > fighter.weaponReach) continue;
+      const angle = Math.atan2(py - cy, px - cx);
+      if (Math.abs(angleDiff(angle, fighter.aim)) < .85) {
+        if (isIllusionFighter(fighter)) {
+          if (!prop.armorDummy) {
+            damageBreakableByIllusion(prop, swingDmg, fighter, game, px, py);
           }
+        } else if (prop.powerCrate) {
+          damagePowerCrate(prop, swingDmg, fighter, game, px, py);
+        } else if (prop.armorDummy) {
+          damageArmorDummy(prop, swingDmg, game, px, py);
+        } else {
+          damageProp(prop, swingDmg, game, px, py);
         }
       }
     }
@@ -762,13 +772,25 @@ export function stepBullets(game, dt) {
     }
     if (stopped || bullet.life <= 0) continue;
 
-    // Illusion bullets don't damage props/platforms — they just vanish on touch.
+    // Illusion bullets fake-chip breakables (ghost break), vanish on platforms.
     if (ownerIllusion) {
       for (const prop of blockers) {
         if (segmentHitsBox(
           bullet.px, bullet.py, bullet.x, bullet.y,
           prop.x, prop.y, prop.w, prop.h
         )) {
+          const dropoff = bullet.dropoff;
+          const multiplier = dropoff
+            ? lerp(1, dropoff.minMultiplier, clamp(
+              (bullet.traveled - dropoff.start) / Math.max(1, dropoff.end - dropoff.start),
+              0,
+              1
+            ))
+            : 1;
+          const dmg = (bullet.damage ?? 12 * bullet.owner.weaponDamage) * multiplier;
+          if (!prop.armorDummy) {
+            damageBreakableByIllusion(prop, dmg, bullet.owner, game, bullet.x, bullet.y);
+          }
           bullet.life = -1;
           break;
         }

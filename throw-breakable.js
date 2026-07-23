@@ -158,8 +158,71 @@ export function unghostIllusionProp(prop) {
   prop._illusionGhostHolder = null;
   prop.heldBy = null;
   prop.thrownInFlight = false;
+  // Clear fake damage so the restored prop reads untouched again.
+  prop.illusionFakeHp = null;
+  prop.illusionFakeMaxHp = null;
   syncCanopy(prop);
   return prop;
+}
+
+/**
+ * Illusion attack on a real breakable / power crate: chips a fake HP pool,
+ * then "breaks" with ghost debris while the real prop stays untouched/ghosted
+ * until the destroyer decoy fades.
+ * @returns {boolean} true if the hit was absorbed (projectile should stop)
+ */
+export function damageBreakableByIllusion(prop, amount, attacker, game, impactX, impactY) {
+  if (!prop || !attacker || prop.destroyed || prop.illusionGhosted) return false;
+  if (prop.armorDummy || prop.forgeHidden) return false;
+  if (prop.illusionHeldProp || prop.illusionObject) return false;
+  const breakable = !!prop.breakable
+    || !!prop.powerCrate
+    || prop.kind === "powerCrate";
+  if (!breakable) return false;
+  const dmg = Math.max(0, Number(amount) || 0);
+  if (!(dmg > 0)) return false;
+
+  if (prop.illusionFakeHp == null) {
+    const real = prop.hp ?? prop.maxHp ?? 1;
+    prop.illusionFakeHp = real;
+    prop.illusionFakeMaxHp = prop.maxHp ?? real;
+  }
+  prop.illusionFakeHp = Math.max(0, prop.illusionFakeHp - dmg);
+  prop.hitFlash = Math.max(prop.hitFlash || 0, 0.14);
+  const ix = impactX ?? prop.x + (prop.w || 0) / 2;
+  const iy = impactY ?? prop.y + (prop.h || 0) / 2;
+  if (game?.effects) {
+    game.effects.push({
+      type: "propHit",
+      x: ix,
+      y: iy,
+      life: 0.12
+    });
+  }
+
+  if (prop.illusionFakeHp > 0) return true;
+
+  // Fake destroy: ghost rubble + hide real cover until this decoy fades.
+  ghostPropForIllusion(prop, attacker);
+  trackIllusionGhostBreak(attacker, prop);
+  spawnIllusionGhostDebris(game, prop, ix, iy, attacker);
+  if (game?.effects) {
+    game.effects.push({
+      type: "crateBreak",
+      x: ix,
+      y: iy,
+      life: 0.28,
+      color: prop.powerCrate || prop.kind === "powerCrate" ? "#9aa8b8" : "#d8e0ea"
+    });
+    game.effects.push({
+      type: "debris",
+      x: ix,
+      y: iy,
+      life: 0.45,
+      kind: prop.kind || "crate"
+    });
+  }
+  return true;
 }
 
 /** Visual-only clone the illusion holds / throws. */
