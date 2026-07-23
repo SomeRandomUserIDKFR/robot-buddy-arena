@@ -10,6 +10,10 @@ import {
   SHIELD_STEAL_DRAIN_PER_SEC, SHIELD_STEAL_ID, SHIELD_STEAL_RANGE,
   SHIELD_STEAL_TRANSFER
 } from "./shield-steal.js";
+import {
+  BOLAS_SNARE_ID, FRAG_GRENADE_ID, HOOKSHOT_WINCH_ID, STICKY_CHARGE_ID,
+  THROWING_SPEAR_ID, TOOL_DEFS, toolSecondaryFromGear
+} from "./tool-secondaries.js";
 import { angleDiff } from "./utils.js";
 import { SIZE } from "./config.js";
 import {
@@ -419,6 +423,33 @@ export const GEAR = [
       }
     }
   ),
+  ...[THROWING_SPEAR_ID, FRAG_GRENADE_ID, STICKY_CHARGE_ID, BOLAS_SNARE_ID, HOOKSHOT_WINCH_ID]
+    .map((toolId) => {
+      const def = TOOL_DEFS[toolId];
+      return item(
+        toolId,
+        "secondaryWeapon",
+        def.name,
+        def.blurb,
+        {
+          damage: def.damage / 40,
+          fireRate: (60 / def.cd) / 150,
+          range: 1
+        },
+        {
+          baseKind: "saber",
+          dps: def.damage / def.cd,
+          price: toolId === FRAG_GRENADE_ID || toolId === STICKY_CHARGE_ID ? 180 : 165,
+          toolSecondary: toolId,
+          weaponStats: {
+            kind: "melee", projectileSpeed: 0, dropoff: null, cameraLead: 0,
+            sightExtension: 0, aimSettle: 0, unsettledSpread: 0,
+            movementMultiplier: 1.03, iframeMultiplier: 1,
+            baseDamage: def.damage, rpm: 60 / def.cd, range: 140
+          }
+        }
+      );
+    }),
 
   // Extension slot: bound to 3 for the match (does not replace 1/2 secondary).
   item(
@@ -1734,6 +1765,7 @@ export function applyActiveWeaponGear(fighter, gearId) {
   fighter.materialConsumer = !!gear.materialConsumer;
   fighter.throwBreakable = !!gear.throwBreakable;
   fighter.shieldSteal = !!gear.shieldSteal;
+  fighter.toolSecondary = toolSecondaryFromGear(gear);
   fighter.spellbook = !!gear.spellbook;
   if (gear.spellbook) {
     fighter.spellType = fighter.spellType || "ice";
@@ -2502,7 +2534,9 @@ export function suggestBuddyLoadout(profile) {
   const equipment = profile.equipment;
   const style = evidenceStyle(profile, equipment.player);
   const secondaryPrefs = [
-    NO_SECONDARY_ID, THROW_BREAKABLE_ID, SHIELD_STEAL_ID, MATERIAL_CONSUMER_ID
+    NO_SECONDARY_ID, THROW_BREAKABLE_ID, SHIELD_STEAL_ID, MATERIAL_CONSUMER_ID,
+    THROWING_SPEAR_ID, FRAG_GRENADE_ID, STICKY_CHARGE_ID, BOLAS_SNARE_ID,
+    HOOKSHOT_WINCH_ID
   ];
   const extensionPrefs = [
     NO_EXTENSION_ID, TRAPPER_ID, LIGHT_CONDENSATION_ID, RECONJURER_BUILDER_ID,
@@ -2539,7 +2573,8 @@ export function suggestBuddyLoadout(profile) {
           "gattler", "burst-carbine", "pulse-rifle", "laser"
         ],
         secondaryWeapon: [
-          THROW_BREAKABLE_ID, SHIELD_STEAL_ID, MATERIAL_CONSUMER_ID, NO_SECONDARY_ID
+          THROW_BREAKABLE_ID, SHIELD_STEAL_ID, MATERIAL_CONSUMER_ID,
+          THROWING_SPEAR_ID, BOLAS_SNARE_ID, NO_SECONDARY_ID
         ],
         extensionSecondary: [
           ILLUSIONIST_ID, COMBAT_CLONE_ID, TRAPPER_ID, RECONJURER_BUILDER_ID,
@@ -2725,6 +2760,11 @@ export function applyLoadout(fighter, loadout) {
   fighter.shieldStealFlash = 0;
   fighter.shieldStealTarget = null;
   fighter.shieldStealBeamLen = 0;
+  fighter.toolSecondary = null;
+  fighter.toolCd = 0;
+  fighter.toolFlash = 0;
+  fighter.heldToolPickup = null;
+  fighter.hookReel = null;
   fighter.heldProp = null;
   fighter.materialScrapBank = [];
   fighter.materialEjectionTank = [];

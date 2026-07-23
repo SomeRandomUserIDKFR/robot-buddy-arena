@@ -1013,6 +1013,8 @@ export function createRenderer(canvas) {
     }
     drawEffects(game);
     drawBullets(game, player);
+    drawToolProjectiles(game);
+    drawToolPickups(game);
     drawThrownBreakables(game, 1);
     for (const fighter of game.fighters) {
       // Allies always; enemies (including training buddy spar) need team sight.
@@ -1028,6 +1030,10 @@ export function createRenderer(canvas) {
       if (held.powerCrate || held.kind === "powerCrate") drawMetalPowerCrate(held);
       else drawPropBody(held, 1);
       if (held.canopy) drawCanopy(held, 0.85);
+    }
+    for (const fighter of game.fighters) {
+      if (!fighterVisibleToViewer(game, player, fighter)) continue;
+      drawHeldToolPickup(fighter);
     }
     drawProps(game, 1, true);
     drawPings(game);
@@ -2560,6 +2566,90 @@ export function createRenderer(canvas) {
     context.restore();
   }
 
+  function drawToolPickups(game) {
+    for (const p of game.toolPickups || []) {
+      if (!p) continue;
+      const bob = Math.sin(p.bob || 0) * 3;
+      context.save();
+      context.globalAlpha = 0.95;
+      context.fillStyle = p.color || "#c8d0d8";
+      context.fillRect(p.x, p.y + bob, p.w || 22, p.h || 22);
+      context.strokeStyle = "rgba(255,255,255,.55)";
+      context.strokeRect(p.x + 1, p.y + bob + 1, (p.w || 22) - 2, (p.h || 22) - 2);
+      context.fillStyle = "#0a1014";
+      context.font = "bold 9px ui-monospace,Consolas";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(
+        (p.label || "?").slice(0, 5),
+        p.x + (p.w || 22) / 2,
+        p.y + bob + (p.h || 22) / 2
+      );
+      context.restore();
+    }
+  }
+
+  function drawToolProjectiles(game) {
+    for (const proj of game.toolProjectiles || []) {
+      if (!proj) continue;
+      context.save();
+      if (proj.kind === "spear") {
+        context.translate(proj.x, proj.y);
+        context.rotate(proj.angle || 0);
+        context.fillStyle = "#d8e0e8";
+        context.fillRect(-18, -2, 28, 4);
+        context.fillStyle = "#8aa0b0";
+        context.beginPath();
+        context.moveTo(10, 0);
+        context.lineTo(18, -4);
+        context.lineTo(18, 4);
+        context.closePath();
+        context.fill();
+      } else if (proj.kind === "grenade") {
+        context.fillStyle = "#6a8a48";
+        context.beginPath();
+        context.arc(proj.x, proj.y, 7, 0, Math.PI * 2);
+        context.fill();
+        context.fillStyle = "#2a3a20";
+        context.fillRect(proj.x - 2, proj.y - 10, 4, 5);
+      } else if (proj.kind === "sticky") {
+        context.fillStyle = "#c45a2a";
+        context.fillRect(proj.x - 6, proj.y - 6, 12, 12);
+        context.fillStyle = "#2a1810";
+        context.fillRect(proj.x - 2, proj.y - 2, 4, 4);
+      } else if (proj.kind === "bolas") {
+        context.translate(proj.x, proj.y);
+        context.rotate(proj.spin || 0);
+        context.strokeStyle = "#c4a070";
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(-10, 0);
+        context.lineTo(10, 0);
+        context.stroke();
+        context.fillStyle = "#8a6a40";
+        context.beginPath();
+        context.arc(-10, 0, 5, 0, Math.PI * 2);
+        context.arc(10, 0, 5, 0, Math.PI * 2);
+        context.fill();
+      }
+      context.restore();
+    }
+  }
+
+  function drawHeldToolPickup(fighter) {
+    if (!fighter?.heldToolPickup) return;
+    const aim = Number.isFinite(fighter.aim) ? fighter.aim : 0;
+    const x = fighter.x + SIZE / 2 + Math.cos(aim) * 26;
+    const y = fighter.y + SIZE / 2 + Math.sin(aim) * 26;
+    context.save();
+    context.fillStyle = "#e8f0ff";
+    context.globalAlpha = 0.9;
+    context.fillRect(x - 7, y - 7, 14, 14);
+    context.strokeStyle = "#4af";
+    context.strokeRect(x - 7, y - 7, 14, 14);
+    context.restore();
+  }
+
   function drawBullets(game, viewer = null) {
     const truth = hasIllusionTruthSight(viewer);
     for (const bullet of game.bullets) {
@@ -2839,6 +2929,19 @@ export function createRenderer(canvas) {
         context.fillStyle = `rgba(255,140,40,${(1 - t) * 0.35})`;
         context.beginPath();
         context.arc(effect.x, effect.y, r * 0.55, 0, Math.PI * 2);
+        context.fill();
+      }
+      if (effect.type === "hookLine") {
+        context.globalAlpha = clamp(effect.life * 5, 0, 1);
+        context.strokeStyle = effect.color || "#5a8aaa";
+        context.lineWidth = 2.5;
+        context.beginPath();
+        context.moveTo(effect.x1, effect.y1);
+        context.lineTo(effect.x2, effect.y2);
+        context.stroke();
+        context.fillStyle = effect.color || "#5a8aaa";
+        context.beginPath();
+        context.arc(effect.x2, effect.y2, 4, 0, Math.PI * 2);
         context.fill();
       }
       if (effect.type === "lootPopup") {

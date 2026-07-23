@@ -29,6 +29,10 @@ import {
   isShieldSteal, tickShieldStealBeam, tickShieldStealFighter
 } from "./shield-steal.js";
 import {
+  attackToolSecondary, bindToolHpDamager, bindToolPowerCrateDamager,
+  bindToolPropDamager, isToolSecondary, tickToolSecondary
+} from "./tool-secondaries.js";
+import {
   isCombatClone, tickCombatCloneFighter
 } from "./combat-clone.js";
 import {
@@ -50,6 +54,9 @@ import { angleDiff, clamp, dist, lerp, segmentHitsBox } from "./utils.js";
 
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
 bindExplosiveBarrelPowerCrateDamager(damagePowerCrate);
+bindToolHpDamager(applyHpDamage);
+bindToolPropDamager(damageProp);
+bindToolPowerCrateDamager(damagePowerCrate);
 
 function landableSurfaces(game) {
   if (game?._landables) return game._landables;
@@ -422,6 +429,22 @@ export function attack(fighter, game, random = Math.random) {
     }
     return;
   }
+  if (isToolSecondary(fighter) || fighter.heldToolPickup) {
+    const fired = attackToolSecondary(fighter, game);
+    if (!fired) return;
+    if (fighter.buddy && game.mode === "training") {
+      game.stats.buddyAttacks++;
+      game.lastBuddyAttackAt = game.elapsed;
+    }
+    if (fighter.human && game.mode === "training") {
+      game.stats.attacks++;
+      game.lastPlayerAttackAt = game.elapsed;
+      const buddy = game.fighters.find((candidate) => candidate.buddy);
+      if (buddy) game.stats.attackRangeSum += dist(fighter, buddy);
+      if (fighter.hp < 180) game.stats.lowHpAttack++;
+    }
+    return;
+  }
   if (isSpellbook(fighter)) {
     const cast = castSpellbook(fighter, game);
     if (!cast) return;
@@ -595,6 +618,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   tickIllusionistFighter(fighter, dt, game);
   tickCombatCloneFighter(fighter, dt);
   tickShieldStealFighter(fighter, dt);
+  if (!decoy && !clone) tickToolSecondary(fighter, dt);
   // Humans: know fire intent before nanotech tick so hold-to-shoot blocks regen.
   let intent = null;
   if (fighter.human && getHumanIntent) {

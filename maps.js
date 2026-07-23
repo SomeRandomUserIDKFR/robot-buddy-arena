@@ -9,6 +9,7 @@ import {
   RED_BARREL_KIND, shouldDetonateOnDestroy
 } from "./explosive-barrel.js";
 import { playBreakableDestroySfx, playBreakableHitSfx } from "./sfx.js";
+import { maybeDropToolFromCrate } from "./tool-secondaries.js";
 
 const MAP_CEILING = 12;
 const MAP_WORLD = { w: 3600, h: 1600 };
@@ -839,6 +840,7 @@ export function damageProp(prop, amount, game, impactX, impactY, opts = null) {
       });
     }
     spawnPropDebris(game, prop, ix, iy);
+    maybeDropToolFromCrate(prop, game, ix, iy);
     const boom = shouldDetonateOnDestroy(prop);
     playBreakableDestroySfx({ explosive: boom });
     if (boom) {

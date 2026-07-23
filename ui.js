@@ -27,6 +27,7 @@ import {
   findBraceTarget, normalizeReconjurerType, paintReconjurerPreview,
   reconjurerTypeLabel, RECONJURER_METAL_TYPE
 } from "./reconjurer-builder.js";
+import { TOOL_DEFS, toolDef } from "./tool-secondaries.js";
 import {
   illusionPropKindLabel, normalizeIllusionPropKind
 } from "./illusionist.js";
@@ -392,7 +393,13 @@ export function updateHud(game) {
     const showDoppel = !!player?.combatCloneGear && !player.dead;
     const showSpell = !!player && isSpellbook(player) && !player.dead
       && !showTrap && !showIllu && !showDoppel;
-    ui.trapHud.classList.toggle("hidden", !showTrap && !showIllu && !showDoppel && !showSpell);
+    const showTool = !player?.dead
+      && !showTrap && !showIllu && !showDoppel && !showSpell
+      && (!!player?.toolSecondary || !!player?.heldToolPickup);
+    ui.trapHud.classList.toggle(
+      "hidden",
+      !showTrap && !showIllu && !showDoppel && !showSpell && !showTool
+    );
     ui.trapHud.classList.toggle("illusion", showIllu);
     ui.trapHud.classList.toggle("doppel", showDoppel && !showIllu);
     ui.trapHud.classList.toggle("spell", showSpell);
@@ -470,6 +477,30 @@ export function updateHud(game) {
         ui.trapHudSub.textContent = `${cost} mana · ${mana} ready`;
         ui.trapHudSub.classList.remove("hidden");
         ui.trapHudSub.classList.remove("metal");
+      }
+    } else if (showTool) {
+      clearTrapHudKinds();
+      const held = player.heldToolPickup ? toolDef(player.heldToolPickup) : null;
+      const eq = player.toolSecondary ? toolDef(player.toolSecondary) : null;
+      if (held) {
+        if (ui.trapHudKicker) ui.trapHudKicker.textContent = "PICKUP · CLICK TO USE";
+        if (ui.trapHudType) ui.trapHudType.textContent = held.label;
+        if (ui.trapHudSub) {
+          ui.trapHudSub.textContent = "one-shot";
+          ui.trapHudSub.classList.remove("hidden");
+        }
+      } else if (eq) {
+        const cd = player.toolCd || 0;
+        if (ui.trapHudKicker) {
+          ui.trapHudKicker.textContent = cd > 0 ? "TOOL · COOLDOWN" : "TOOL · READY";
+        }
+        if (ui.trapHudType) {
+          ui.trapHudType.textContent = cd > 0 ? `${Math.ceil(cd)}s` : eq.label;
+        }
+        if (ui.trapHudSub) {
+          ui.trapHudSub.textContent = `${eq.cd}s CD · infinite`;
+          ui.trapHudSub.classList.remove("hidden");
+        }
       }
     }
   }
@@ -1133,6 +1164,17 @@ function modifierMarkup(gear) {
         "<span>Raised plates must face you</span>",
         "<span>Drop your Q to fire</span>",
         "<span class=\"stat-down\">No effect on broken shields</span>"
+      ].join("");
+    }
+    if (gear.toolSecondary && TOOL_DEFS[gear.toolSecondary]) {
+      const def = TOOL_DEFS[gear.toolSecondary];
+      return [
+        `<span>Secondary · ${def.label} tool</span>`,
+        `<span class="stat-up">Infinite uses · ${def.cd}s cooldown</span>`,
+        "<span class=\"stat-up\">Also found in wood crates / on maps</span>",
+        "<span>Walk over a pickup to hold a one-shot</span>",
+        "<span>Same-tool pickup refreshes your CD</span>",
+        `<span>${def.damage} hit / blast power</span>`
       ].join("");
     }
     const stats = weaponStats(gear);

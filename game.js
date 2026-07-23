@@ -50,6 +50,9 @@ import {
   initPowerCrates, tickFighterPowerBuffs, tickPowerCrateSpawns
 } from "./powerups.js";
 import {
+  seedMapToolPickups, tickToolPickups, tickToolProjectiles
+} from "./tool-secondaries.js";
+import {
   acceptPerkSuggestion, choosePerkUnlock, equipPerk as equipOwnedPerk, setBuddyPerkAutonomy
 } from "./perks.js";
 import { keys, mouse, installInput } from "./input.js";
@@ -174,6 +177,8 @@ function makeGame(mode) {
     effects: [],
     groundDebris: [],
     thrownBreakables: [],
+    toolPickups: [],
+    toolProjectiles: [],
     reconquerQueue: [],
     forgeCasts: [],
     armorDummyBuilds: [],
@@ -211,6 +216,7 @@ function makeGame(mode) {
     }
   };
   initMapGimmicks(gameState);
+  seedMapToolPickups(gameState);
   return gameState;
 }
 
@@ -362,6 +368,8 @@ function update(dt) {
   tickCombatCloneWorld(game);
   stepBullets(game, dt);
   stepThrownProps(game, dt);
+  tickToolProjectiles(game, dt);
+  tickToolPickups(game, dt);
   tickPowerCrateSpawns(game, dt);
   trackTraining(game, dt);
   if (game.mode === "training") {
