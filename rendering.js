@@ -813,9 +813,6 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
         context.rotate(u * 4 + i);
         context.scale(0.45, 0.45);
         if (scrap && Array.isArray(scrap.verts) && scrap.verts.length >= 3) {
-          context.lineCap = "butt";
-          context.lineJoin = "miter";
-          context.miterLimit = 8;
           context.fillStyle = scrap.color || (i % 2 ? "#d8c4a0" : "#9a8a78");
           context.beginPath();
           context.moveTo(scrap.verts[0][0], scrap.verts[0][1]);
@@ -824,8 +821,6 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
           }
           context.closePath();
           context.fill();
-          context.strokeStyle = scrap.edge || "rgba(255,255,255,.35)";
-          context.stroke();
         } else {
           context.fillStyle = scrap?.color || (i % 2 ? "#d8c4a0" : "#9a8a78");
           context.fillRect(-2.5, -2, 5, 4);
@@ -1895,12 +1890,20 @@ export function createRenderer(canvas) {
     context.globalAlpha = settle * fogAlpha * pieceAlpha;
     context.fillStyle = color;
 
-    // Sharp prop shards — filled polygons with pointed miter corners only.
+    // Hard prop shards — fill only (strokes AA into soft/curved rims).
     if (piece.material !== "armor" && (piece.kind === "tile" || piece.homeLx != null)) {
-      context.lineCap = "butt";
-      context.lineJoin = "miter";
-      context.miterLimit = 8;
       if (Array.isArray(piece.verts) && piece.verts.length >= 3) {
+        // Dark hard under-fill (same polygon, slightly larger) for a crisp rim
+        // without stroking — keeps every silhouette edge perfectly straight.
+        context.fillStyle = edge;
+        context.beginPath();
+        context.moveTo(piece.verts[0][0] * 1.08, piece.verts[0][1] * 1.08);
+        for (let i = 1; i < piece.verts.length; i++) {
+          context.lineTo(piece.verts[i][0] * 1.08, piece.verts[i][1] * 1.08);
+        }
+        context.closePath();
+        context.fill();
+        context.fillStyle = color;
         context.beginPath();
         context.moveTo(piece.verts[0][0], piece.verts[0][1]);
         for (let i = 1; i < piece.verts.length; i++) {
@@ -1908,30 +1911,31 @@ export function createRenderer(canvas) {
         }
         context.closePath();
         context.fill();
-        context.strokeStyle = edge;
-        context.lineWidth = 1.15;
-        context.stroke();
       } else {
-        // Fallback stays rectangular (straight edges) — never ellipses.
+        // Fallback stays rectangular (straight edges) — never ellipses/strokes.
+        context.fillStyle = edge;
+        context.fillRect(-hw - 1, -hh - 1, piece.w + 2, piece.h + 2);
+        context.fillStyle = color;
         context.fillRect(-hw, -hh, piece.w, piece.h);
-        context.strokeStyle = edge;
-        context.lineWidth = 1.15;
-        context.strokeRect(-hw + 0.5, -hh + 0.5, piece.w - 1, piece.h - 1);
       }
+      // Detail marks: thin filled quads (not stroked lines) so ends stay square.
       if (Array.isArray(piece.marks)) {
-        context.lineWidth = 1.3;
         for (const mark of piece.marks) {
           const len = Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1);
-          // Guard: never draw prop-length streaks on a small shard.
-          if (!(len >= 2.5) || len > Math.max(piece.w, piece.h) * 1.35) continue;
-          context.strokeStyle = mark.color || edge;
-          context.globalAlpha = settle * fogAlpha * pieceAlpha * 0.85;
+          if (!(len >= 2.5) || len > Math.hypot(piece.w, piece.h) + 1.5) continue;
+          const dx = (mark.x2 - mark.x1) / len;
+          const dy = (mark.y2 - mark.y1) / len;
+          const nx = -dy * 0.7;
+          const ny = dx * 0.7;
+          context.fillStyle = mark.color || edge;
           context.beginPath();
-          context.moveTo(mark.x1, mark.y1);
-          context.lineTo(mark.x2, mark.y2);
-          context.stroke();
+          context.moveTo(mark.x1 + nx, mark.y1 + ny);
+          context.lineTo(mark.x2 + nx, mark.y2 + ny);
+          context.lineTo(mark.x2 - nx, mark.y2 - ny);
+          context.lineTo(mark.x1 - nx, mark.y1 - ny);
+          context.closePath();
+          context.fill();
         }
-        context.globalAlpha = settle * fogAlpha * pieceAlpha;
       }
       context.restore();
       return;
@@ -2041,9 +2045,18 @@ export function createRenderer(canvas) {
         context.globalAlpha = ghosted ? 0.55 : 1;
         context.fillStyle = ghosted ? "#c8b0ff" : (bullet.color || "#8a7a68");
         if (Array.isArray(bullet.scrapVerts) && bullet.scrapVerts.length >= 3) {
-          context.lineCap = "butt";
-          context.lineJoin = "miter";
-          context.miterLimit = 8;
+          // Fill only — no stroked rim (AA turns strokes into soft curves).
+          context.fillStyle = ghosted
+            ? "#c8b0ff"
+            : (bullet.edge || "rgba(40,24,16,.9)");
+          context.beginPath();
+          context.moveTo(bullet.scrapVerts[0][0] * 1.08, bullet.scrapVerts[0][1] * 1.08);
+          for (let i = 1; i < bullet.scrapVerts.length; i++) {
+            context.lineTo(bullet.scrapVerts[i][0] * 1.08, bullet.scrapVerts[i][1] * 1.08);
+          }
+          context.closePath();
+          context.fill();
+          context.fillStyle = ghosted ? "#c8b0ff" : (bullet.color || "#8a7a68");
           context.beginPath();
           context.moveTo(bullet.scrapVerts[0][0], bullet.scrapVerts[0][1]);
           for (let i = 1; i < bullet.scrapVerts.length; i++) {
@@ -2051,25 +2064,9 @@ export function createRenderer(canvas) {
           }
           context.closePath();
           context.fill();
-          context.strokeStyle = ghosted
-            ? "rgba(230,210,255,.7)"
-            : (bullet.edge || "rgba(255,255,255,.35)");
-          context.lineWidth = 1;
-          context.stroke();
-          if (Array.isArray(bullet.scrapMarks)) {
-            for (const mark of bullet.scrapMarks) {
-              context.strokeStyle = mark.color || context.strokeStyle;
-              context.beginPath();
-              context.moveTo(mark.x1, mark.y1);
-              context.lineTo(mark.x2, mark.y2);
-              context.stroke();
-            }
-          }
         } else {
+          context.fillStyle = ghosted ? "#c8b0ff" : (bullet.color || "#8a7a68");
           context.fillRect(-w / 2, -h / 2, w, h);
-          context.strokeStyle = ghosted ? "rgba(230,210,255,.7)" : "rgba(255,255,255,.35)";
-          context.lineWidth = 1;
-          context.strokeRect(-w / 2, -h / 2, w, h);
         }
         context.restore();
         continue;

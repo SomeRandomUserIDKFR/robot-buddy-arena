@@ -436,34 +436,15 @@ function pushSharpShard(tiles, vertsWorld, paint, colorAt, markLines, c, r) {
 }
 
 /**
- * Shared pointed tooth on segment A→B. Order-independent so neighboring cells
- * that traverse the edge opposite ways still get the same tip.
- */
-function pointedEdge(a, b, salt, jag) {
-  const swap = a[0] > b[0] || (Math.abs(a[0] - b[0]) < 1e-9 && a[1] > b[1]);
-  const p0 = swap ? b : a;
-  const p1 = swap ? a : b;
-  const dx = p1[0] - p0[0];
-  const dy = p1[1] - p0[1];
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = -dy / len;
-  const ny = dx / len;
-  const mx = (p0[0] + p1[0]) * 0.5;
-  const my = (p0[1] + p1[1]) * 0.5;
-  const amp = (0.55 + shardJitter(mx, my, salt) * 0.7) * jag;
-  const sign = shardJitter(mx, my, salt + 9) >= 0.5 ? 1 : -1;
-  return [mx + nx * amp * sign, my + ny * amp * sign];
-}
-
-/**
- * Sharp rectangular jigsaw: jittered corners + triangle cracks + pointed teeth.
- * Every edge is a straight segment into a corner — no rounded mids / arcs.
+ * Hard rectangular jigsaw: jittered corners cracked into pure triangles.
+ * Exactly 3 vertices per shard — straight edges into pointed tips only.
+ * No mid-edge teeth (those read as soft bumps under canvas AA).
  */
 function jaggedRectShards(localX, localY, w, h, cols, rows, paint, colorAt, markLines) {
   const tiles = [];
   const tw = w / cols;
   const th = h / rows;
-  const jag = Math.min(tw, th) * 0.36;
+  const jag = Math.min(tw, th) * 0.42;
 
   // Shared corner grid. Interior corners get sharp 2D offsets; boundary stays
   // on the outer rectangle so the assembled silhouette matches the prop.
@@ -491,37 +472,13 @@ function jaggedRectShards(localX, localY, w, h, cols, rows, paint, colorAt, mark
       const br = corners[r + 1][c + 1];
       const bl = corners[r + 1][c];
 
-      // Shared salts on grid edges so adjacent cells share the same tooth tip.
-      const topTooth = pointedEdge(tl, tr, 1000 + r * 40 + c, jag);
-      const bottomTooth = pointedEdge(bl, br, 1000 + (r + 1) * 40 + c, jag);
-      const leftTooth = pointedEdge(tl, bl, 2000 + r * 40 + c, jag);
-      const rightTooth = pointedEdge(tr, br, 2000 + r * 40 + (c + 1), jag);
-
-      // Crack into two pointed triangles (hashed diagonal).
+      // Pure triangles only — three hard corners, three straight edges.
       if (shardJitter(tl[0], tl[1], 3) >= 0.5) {
-        const diagTooth = pointedEdge(tl, br, 3000 + r * 40 + c, jag * 0.85);
-        pushSharpShard(
-          tiles,
-          [tl, topTooth, tr, rightTooth, br, diagTooth],
-          paint, colorAt, markLines, c, r
-        );
-        pushSharpShard(
-          tiles,
-          [tl, diagTooth, br, bottomTooth, bl, leftTooth],
-          paint, colorAt, markLines, c, r
-        );
+        pushSharpShard(tiles, [tl, tr, br], paint, colorAt, markLines, c, r);
+        pushSharpShard(tiles, [tl, br, bl], paint, colorAt, markLines, c, r);
       } else {
-        const diagTooth = pointedEdge(tr, bl, 3000 + r * 40 + c, jag * 0.85);
-        pushSharpShard(
-          tiles,
-          [tl, topTooth, tr, diagTooth, bl, leftTooth],
-          paint, colorAt, markLines, c, r
-        );
-        pushSharpShard(
-          tiles,
-          [tr, rightTooth, br, bottomTooth, bl, diagTooth],
-          paint, colorAt, markLines, c, r
-        );
+        pushSharpShard(tiles, [tl, tr, bl], paint, colorAt, markLines, c, r);
+        pushSharpShard(tiles, [tr, br, bl], paint, colorAt, markLines, c, r);
       }
     }
   }

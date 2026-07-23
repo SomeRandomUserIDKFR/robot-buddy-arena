@@ -44,7 +44,7 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   const crate = yard.props.find((p) => p.kind === "crate");
   const tiles = buildPropJigsaw(crate);
   assert.equal(tiles.length, 32, "4x4 crate cracked into pointed triangle shards");
-  assert.ok(tiles.every((t) => Array.isArray(t.verts) && t.verts.length >= 3), "jagged verts");
+  assert.ok(tiles.every((t) => Array.isArray(t.verts) && t.verts.length === 3), "pure triangles only");
   assert.ok(tiles.every((t) => t.shape === "poly"), "no ellipse / round shard shapes");
   assert.ok(tiles.every((t) => t.material === "wood"), "map crates are wood, not metal");
   // Source-region paint: edge shards shaded, interior wood — not one mosaic color.
@@ -54,22 +54,21 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
     "crate shards use more than one source-region shade"
   );
   assert.ok(tiles.some((t) => Array.isArray(t.marks) && t.marks.length), "crate X/border marks");
-  // Marks must be clipped to the shard — prop-length streaks look like stray lines.
+  // Marks must be clipped to the shard AABB — no prop-length streaks.
   for (const tile of tiles) {
     for (const mark of tile.marks || []) {
       const len = Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1);
       assert.ok(len >= 2.5, "mark long enough to see");
+      const diag = Math.hypot(tile.w, tile.h);
       assert.ok(
-        len <= Math.max(tile.w, tile.h) * 1.35 + 0.5,
-        `mark clipped to shard (len=${len.toFixed(1)} vs ${tile.w.toFixed(1)}x${tile.h.toFixed(1)})`
+        len <= diag + 1.5,
+        `mark clipped to shard (len=${len.toFixed(1)} vs diag ${diag.toFixed(1)})`
       );
     }
   }
   const area = tiles.reduce((sum, t) => sum + (t.area || 0), 0);
-  // Triangle cracks + teeth can slightly overlap / gap; stay near full coverage.
-  assert.ok(area > crate.w * crate.h * 0.85, "shards cover most of crate area");
-  assert.ok(area < crate.w * crate.h * 1.25, "shards do not hugely overshoot area");
-  // Shared teeth: the two shards from one cracked cell share diagonal tip vertices.
+  assert.ok(Math.abs(area - crate.w * crate.h) < 2, "triangle pair covers the crate area");
+  // The two shards from one cracked cell share the diagonal endpoints.
   const a = tiles[0];
   const b = tiles[1];
   const world = (tile, v) => [tile.homeLx + v[0], tile.homeLy + v[1]];
