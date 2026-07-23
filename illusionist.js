@@ -29,11 +29,36 @@ export const ILLUSION_FIGHTER_HITS = 10;
 export const ILLUSION_PHANTOM_DAMAGE = 40;
 /** How long phantom HP gaslight lingers after the last fake hit. */
 export const ILLUSION_PHANTOM_DECAY = 6;
+/** Swirling smoke dissolve when an illusion is broken / expires. */
+export const ILLUSION_BREAK_LIFE = 0.72;
 
 export const ILLUSION_PLATFORM_W = 160;
 export const ILLUSION_PLATFORM_H = 26;
 export const ILLUSION_PROP_W = 44;
 export const ILLUSION_PROP_H = 44;
+
+/**
+ * Cool swirling smoke puff when an illusion breaks — pale vapor spiral, not a flash.
+ * @param {{ w?: number, h?: number }} [options]
+ */
+export function spawnIllusionBreakSwirl(game, x, y, options = {}) {
+  if (!game) return null;
+  game.effects ||= [];
+  const w = Math.max(18, options.w || SIZE);
+  const h = Math.max(18, options.h || SIZE);
+  const effect = {
+    type: "illusionBreak",
+    x,
+    y,
+    life: ILLUSION_BREAK_LIFE,
+    maxLife: ILLUSION_BREAK_LIFE,
+    radius: Math.max(w, h) * 0.62,
+    seed: Math.random() * Math.PI * 2,
+    spin: Math.random() < 0.5 ? 1 : -1
+  };
+  game.effects.push(effect);
+  return effect;
+}
 
 export function isIllusionist(fighterOrId) {
   if (typeof fighterOrId === "string") return fighterOrId === ILLUSIONIST_ID;
@@ -217,15 +242,12 @@ export function fadeIllusionFighter(illusion, game) {
   illusion.hp = 0;
   illusion.illusionFakeHp = 0;
   illusion.life = 0;
-  if (game?.effects) {
-    game.effects.push({
-      type: "dash",
-      x: illusion.x,
-      y: illusion.y,
-      life: 0.28,
-      color: "rgba(200,220,240,0.55)"
-    });
-  }
+  spawnIllusionBreakSwirl(
+    game,
+    (illusion.x || 0) + SIZE / 2,
+    (illusion.y || 0) + SIZE / 2,
+    { w: SIZE, h: SIZE }
+  );
 }
 
 /** Mark a real bullet as visually gone while it keeps traveling for collisions. */
@@ -250,14 +272,12 @@ export function registerIllusionObjectHit(illusion, game) {
   if (!illusion || illusion.destroyed) return false;
   illusion.destroyed = true;
   illusion.life = 0;
-  if (game?.effects) {
-    game.effects.push({
-      type: "propHit",
-      x: illusion.x + illusion.w / 2,
-      y: illusion.y + illusion.h / 2,
-      life: 0.14
-    });
-  }
+  spawnIllusionBreakSwirl(
+    game,
+    illusion.x + (illusion.w || 0) / 2,
+    illusion.y + (illusion.h || 0) / 2,
+    { w: illusion.w || ILLUSION_PROP_W, h: illusion.h || ILLUSION_PROP_H }
+  );
   return true;
 }
 
@@ -374,7 +394,7 @@ export function tryIllusionistPlant(fighter, game, FighterCtor = null) {
   return obj;
 }
 
-export function tickIllusionistFighter(fighter, dt) {
+export function tickIllusionistFighter(fighter, dt, game = null) {
   if (!fighter) return;
   const step = dt || 0;
   if (fighter.illusionistCd > 0) {
@@ -387,8 +407,7 @@ export function tickIllusionistFighter(fighter, dt) {
   if (isIllusionFighter(fighter) && !fighter.dead) {
     fighter.illusionLife = (fighter.illusionLife ?? ILLUSION_FIGHTER_LIFE) - step;
     if (fighter.illusionLife <= 0) {
-      fighter.dead = true;
-      fighter.hp = 0;
+      fadeIllusionFighter(fighter, game);
     }
   }
 }
@@ -400,7 +419,17 @@ export function tickIllusionistWorld(game, dt) {
   for (const ill of game.illusions) {
     if (!ill || ill.destroyed) continue;
     ill.life = (ill.life ?? ILLUSION_PROP_LIFE) - dt;
-    if (ill.life > 0) keep.push(ill);
+    if (ill.life > 0) {
+      keep.push(ill);
+    } else {
+      // Timed-out prop/platform — same smoke dissolve as a hit break.
+      spawnIllusionBreakSwirl(
+        game,
+        ill.x + (ill.w || 0) / 2,
+        ill.y + (ill.h || 0) / 2,
+        { w: ill.w || ILLUSION_PROP_W, h: ill.h || ILLUSION_PROP_H }
+      );
+    }
   }
   game.illusions = keep;
   // Drop faded decoys only when needed (avoid reallocating fighters every frame).

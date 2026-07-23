@@ -2256,6 +2256,58 @@ export function createRenderer(canvas) {
         context.lineTo(effect.x - 6, effect.y + 10);
         context.stroke();
       }
+      if (effect.type === "illusionBreak") {
+        // Illusion dissolves into swirling smoke — pale vapor spiral rising out.
+        const maxLife = effect.maxLife || 0.72;
+        const u = 1 - clamp(effect.life / maxLife, 0, 1);
+        const seed = effect.seed || 0;
+        const spin = effect.spin || 1;
+        const baseR = effect.radius || 28;
+        const fade = clamp((1 - u) * 1.15, 0, 1);
+        context.globalAlpha = fade * 0.85;
+        // Soft core mist that thins as the spiral opens.
+        context.fillStyle = `rgba(210, 222, 232,${0.22 * (1 - u)})`;
+        context.beginPath();
+        context.arc(effect.x, effect.y - u * 10, baseR * (0.35 + u * 0.55), 0, Math.PI * 2);
+        context.fill();
+        for (let i = 0; i < 16; i++) {
+          const layer = i % 3;
+          const ang = seed + spin * (i * 0.72 + u * (5.5 + layer * 1.4));
+          const arm = baseR * (0.25 + u * (0.95 + layer * 0.35))
+            + Math.sin(u * 7 + i * 1.3) * (3 + layer);
+          const px = effect.x + Math.cos(ang) * arm;
+          const py = effect.y + Math.sin(ang) * arm * 0.78 - u * (14 + layer * 6);
+          const size = (4.5 + layer * 2.2) * (1 - u * 0.62);
+          const a = fade * (0.55 - layer * 0.12) * (1 - u * 0.35);
+          context.fillStyle = layer === 0
+            ? `rgba(232, 238, 244,${a})`
+            : layer === 1
+              ? `rgba(186, 204, 218,${a * 0.9})`
+              : `rgba(154, 176, 194,${a * 0.75})`;
+          context.beginPath();
+          context.arc(px, py, Math.max(1.2, size), 0, Math.PI * 2);
+          context.fill();
+        }
+        // Thin spiral ribbons for a smoke-trail read.
+        context.strokeStyle = `rgba(200, 214, 226,${fade * 0.45})`;
+        context.lineWidth = 1.4;
+        for (let ribbon = 0; ribbon < 2; ribbon++) {
+          context.beginPath();
+          const turns = 2.2;
+          const steps = 18;
+          for (let s = 0; s <= steps; s++) {
+            const t = s / steps;
+            const uu = u * 0.85 + t * 0.15;
+            const ang = seed + spin * (ribbon * Math.PI + uu * turns * Math.PI * 2);
+            const r = baseR * (0.15 + uu * 1.05);
+            const x = effect.x + Math.cos(ang) * r;
+            const y = effect.y + Math.sin(ang) * r * 0.78 - uu * 18;
+            if (s === 0) context.moveTo(x, y);
+            else context.lineTo(x, y);
+          }
+          context.stroke();
+        }
+      }
       if (effect.type === "nanoIngest") {
         // Debris collapses into the blade tip as a tight cyan swirl.
         const u = 1 - clamp(effect.life / 0.26, 0, 1);

@@ -546,7 +546,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   tickAdaptiveWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
   if (!decoy && !clone) tickTrapperFighter(fighter, dt);
-  tickIllusionistFighter(fighter, dt);
+  tickIllusionistFighter(fighter, dt, game);
   tickCombatCloneFighter(fighter, dt);
   tickShieldStealFighter(fighter, dt);
   // Humans: know fire intent before nanotech tick so hold-to-shoot blocks regen.

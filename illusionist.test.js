@@ -5,9 +5,10 @@ import {
 } from "./equipment.js";
 import {
   applyPhantomDamage, createFighterIllusion, cycleIllusionistType, displayedHp,
-  hasIllusionTruthSight, ILLUSION_FIGHTER_HITS, ILLUSION_PHANTOM_DAMAGE,
-  isIllusionFighter, isIllusionist, isRealCombatant, refreshIllusionCaches,
-  registerIllusionFighterHit, tryIllusionistPlant
+  fadeIllusionFighter, hasIllusionTruthSight, ILLUSION_BREAK_LIFE,
+  ILLUSION_FIGHTER_HITS, ILLUSION_PHANTOM_DAMAGE, isIllusionFighter, isIllusionist,
+  isRealCombatant, refreshIllusionCaches, registerIllusionFighterHit,
+  registerIllusionObjectHit, tryIllusionistPlant
 } from "./illusionist.js";
 import { updateAIDecoy } from "./ai.js";
 
@@ -117,7 +118,7 @@ assert.equal(ILLUSION_PHANTOM_DAMAGE, 40);
 }
 
 {
-  // 10 hits fade the decoy.
+  // 10 hits fade the decoy into a swirling smoke break.
   const owner = applyLoadout(new Fighter({
     x: 0, y: 0, team: 0, name: "YOU", color: "#fff", hp: 500, maxHp: 500
   }), { ...DEFAULT_LOADOUT, extensionSecondary: ILLUSIONIST_ID });
@@ -127,6 +128,32 @@ assert.equal(ILLUSION_PHANTOM_DAMAGE, 40);
     registerIllusionFighterHit(decoy, game);
   }
   assert.equal(decoy.dead, true);
+  assert.ok(game.effects.some((e) => e.type === "illusionBreak"));
+  const swirl = game.effects.find((e) => e.type === "illusionBreak");
+  assert.ok(swirl.life >= ILLUSION_BREAK_LIFE - 0.001);
+  assert.ok(swirl.radius > 0);
+}
+
+{
+  // Prop/platform break also spawns the smoke swirl.
+  const game = { effects: [] };
+  const ill = {
+    illusionObject: true,
+    illusionType: "prop",
+    x: 100,
+    y: 200,
+    w: 44,
+    h: 44,
+    destroyed: false,
+    life: 10
+  };
+  assert.ok(registerIllusionObjectHit(ill, game));
+  assert.equal(ill.destroyed, true);
+  assert.ok(game.effects.some((e) => e.type === "illusionBreak"));
+  // Second hit is a no-op (already broken).
+  const n = game.effects.length;
+  assert.equal(registerIllusionObjectHit(ill, game), false);
+  assert.equal(game.effects.length, n);
 }
 
 {
