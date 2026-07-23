@@ -586,6 +586,8 @@ export function debrisNearFighter(game, fighter, radius = MATERIAL_CONSUMER_VACU
   const r2 = radius * radius;
   for (const piece of game.groundDebris || []) {
     if (!piece || !piece.sourceId) continue;
+    // Illusion ghost rubble is bait, not vacuum fuel.
+    if (piece.illusionGhostDebris || piece.sourceType === "illusionGhost") continue;
     const dx = piece.x - cx;
     const dy = piece.y - cy;
     if (dx * dx + dy * dy <= r2) return true;

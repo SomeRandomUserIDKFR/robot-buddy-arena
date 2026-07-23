@@ -376,11 +376,21 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.ok((victim.phantomDamage || 0) >= 40, "phantom gaslight on impact");
   assert.equal(crate.destroyed, false, "real cover intact");
   assert.equal(crate.hp, startHp);
-  assert.equal(isIllusionGhostedProp(crate), false, "real cover restored after fake shatter");
+  assert.ok(isIllusionGhostedProp(crate), "stays fake-broken until thrower fades");
   assert.equal(crate.x, startX);
   assert.equal(crate.y, startY);
-  assert.equal(game.groundDebris.length, 0, "no real reconquer debris");
-  assert.ok(game.effects.some((e) => e.type === "debris" || e.type === "illusionBreak"));
+  assert.ok(game.groundDebris.length > 0, "ghost debris looks like a real break");
+  assert.ok(game.groundDebris.every((d) => d.illusionGhostDebris && d.illusionThrower === decoy));
+  assert.ok(game.groundDebris.every((d) => d.sourceType === "illusionGhost"));
+  assert.ok(game.effects.some((e) => e.type === "crateBreak"));
+
+  // Thrower fades → ghost rubble gone, real cover restored.
+  decoy.dead = true;
+  releaseIllusionThrowBreakable(decoy, game);
+  assert.equal(isIllusionGhostedProp(crate), false, "cover restored when decoy fades");
+  assert.equal(game.groundDebris.length, 0, "ghost debris cleared with thrower");
+  assert.equal(crate.destroyed, false);
+  assert.equal(crate.hp, startHp);
 }
 
 // Fade while holding restores ghosted cover without destroying it.
@@ -564,6 +574,62 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.ok(tryGrabBreakable(enemy, game), "enemy grabs rival metal bait");
   assert.equal(enemy.heldProp, metalBait);
   assert.equal(metalBait.heldBy, enemy);
+}
+
+
+// Illusion decoys throwing planted bait still destroy it on impact (swirl, no ghost rubble).
+{
+  const owner = applyLoadout(new Fighter({
+    x: 200, y: 700, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: ILLUSIONIST_ID,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  const decoy = createFighterIllusion(owner, Fighter);
+  decoy.x = 400;
+  decoy.y = 700;
+  decoy.aim = 0;
+  selectWeaponSlot(decoy, "secondaryWeapon");
+  const bait = {
+    illusionObject: true,
+    illusionType: "prop",
+    kind: "barrel",
+    x: 430,
+    y: 700,
+    w: 34,
+    h: 48,
+    life: 28,
+    destroyed: false,
+    solid: false,
+    team: 0
+  };
+  const victim = new Fighter({ x: 560, y: 700, team: 1, hp: 500, maxHp: 500 });
+  const game = {
+    props: [],
+    powerCrates: [],
+    illusions: [bait],
+    platforms: [],
+    fighters: [owner, decoy, victim],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: []
+  };
+  assert.ok(tryGrabBreakable(decoy, game));
+  assert.ok(isPlantedIllusionProp(decoy.heldProp));
+  assert.ok(throwHeldBreakable(decoy, game));
+  const thrown = game.thrownBreakables[0];
+  thrown.x = victim.x + 23;
+  thrown.y = victim.y + 23;
+  thrown.vx = 0;
+  thrown.vy = 0;
+  stepThrownBreakables(game, 1 / 60, hit);
+  assert.equal(bait.destroyed, true);
+  assert.equal(bait.life, 0);
+  assert.equal(victim.hp, 500);
+  assert.equal(victim.phantomDamage || 0, 0);
+  assert.equal(game.groundDebris.length, 0, "planted bait does not leave ghost debris");
+  assert.ok(game.effects.some((e) => e.type === "illusionBreak"));
 }
 
 console.log("throw-breakable.test.js passed.");

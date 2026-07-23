@@ -1074,6 +1074,83 @@ export function spawnPowerCrateDebris(game, crate) {
   });
 }
 
+/** Visual-only debris from an illusion throw — looks real, never reconquers / vacuums. */
+export function isIllusionGhostDebris(piece) {
+  return !!piece?.illusionGhostDebris;
+}
+
+/**
+ * Spawn lasting "ghost" rubble that looks like a real break.
+ * Tied to `thrower` until that illusion fades (then clearIllusionGhostDebris).
+ * Does not mark the source prop as having dropped real debris.
+ */
+export function spawnIllusionGhostDebris(game, prop, impactX, impactY, thrower = null) {
+  if (!game || !prop) return null;
+  const kind = prop.kind || "crate";
+  const w = prop._fullW || prop.w || 40;
+  const h = prop._fullH || prop.h || 40;
+  const cx = Number.isFinite(impactX) ? impactX : prop.x + w / 2;
+  const cy = Number.isFinite(impactY) ? impactY : prop.y + h / 2;
+  const template = {
+    kind,
+    powerCrate: !!(prop.powerCrate || kind === "powerCrate"),
+    w,
+    h,
+    x: cx - w / 2,
+    y: cy - h / 2,
+    look: prop.look || null
+  };
+  const tiles = buildPropJigsaw(template, kind);
+  const sourceId = nextSourceId(game);
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[i];
+    burstPiece(game, {
+      material: tile.material,
+      kind: tile.kind,
+      x: cx + tile.homeLx,
+      y: cy + tile.homeLy,
+      w: tile.w,
+      h: tile.h,
+      color: tile.color,
+      edge: tile.edge,
+      shape: tile.shape,
+      detail: tile.detail,
+      verts: tile.verts,
+      marks: tile.marks,
+      homeLx: tile.homeLx,
+      homeLy: tile.homeLy,
+      index: i,
+      sourceType: "illusionGhost",
+      sourceKind: kind,
+      sourceId,
+      sourceProp: null,
+      originX: cx,
+      originY: cy
+    });
+  }
+  // Immortal ghost scraps: stay until the thrower illusion disappears.
+  for (const piece of game.groundDebris || []) {
+    if (piece.sourceId !== sourceId) continue;
+    piece.illusionGhostDebris = true;
+    piece.illusionThrower = thrower || null;
+    piece.immortal = true;
+    piece.life = Infinity;
+    piece.maxLife = Infinity;
+  }
+  return sourceId;
+}
+
+/** Remove all ghost debris spawned by a given illusion thrower. */
+export function clearIllusionGhostDebris(game, thrower) {
+  if (!game?.groundDebris?.length || !thrower) return 0;
+  const before = game.groundDebris.length;
+  game.groundDebris = game.groundDebris.filter((piece) => {
+    if (!isIllusionGhostDebris(piece)) return true;
+    return piece.illusionThrower !== thrower;
+  });
+  return before - game.groundDebris.length;
+}
+
 function pieceHasSupport(piece, surfaces) {
   const halfW = (piece.w * (piece.scale || 1)) * 0.5;
   const halfH = (piece.h * (piece.scale || 1)) * 0.5;
@@ -1486,6 +1563,7 @@ export function claimDebrisForMaterialConsume(
   const hitIds = new Set();
   for (const piece of pieces) {
     if (!piece.sourceId || isVacuumLockedMode(piece.despawnMode)) continue;
+    if (isIllusionGhostDebris(piece) || piece.sourceType === "illusionGhost") continue;
     const dx = piece.x - tipX;
     const dy = piece.y - tipY;
     // Also accept scraps near the fighter body when tip is offset.
@@ -1554,6 +1632,7 @@ export function vacuumNearbyDebris(game, x, y, radius) {
   for (const piece of pieces) {
     if (!piece.sourceId || piece.despawnMode === "gone") continue;
     if (isVacuumLockedMode(piece.despawnMode)) continue;
+    if (isIllusionGhostDebris(piece) || piece.sourceType === "illusionGhost") continue;
     const dx = piece.x - x;
     const dy = piece.y - y;
     if (dx * dx + dy * dy <= r2) hitIds.add(piece.sourceId);
@@ -1746,6 +1825,7 @@ function groupCentroid(group) {
 
 function isManualRebuildablePiece(piece) {
   if (!piece?.sourceId) return false;
+  if (isIllusionGhostDebris(piece) || piece.sourceType === "illusionGhost") return false;
   if (piece.sourceType !== "prop" && piece.sourceType !== "powerCrate") return false;
   if (isVacuumLockedMode(piece.despawnMode)) return false;
   return true;
