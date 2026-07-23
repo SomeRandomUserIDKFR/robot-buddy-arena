@@ -376,7 +376,9 @@ export function updateHud(game) {
           : cd > 0
             ? `ready in ${Math.ceil(cd)}s`
             : braceTarget
-              ? "3 brace · metal casing"
+              ? (braceTarget.powerCrate || braceTarget.kind === "powerCrate"
+                ? "3 brace · wood casing"
+                : "3 brace · metal casing")
               : "3 place · debris rebuild · brace cover";
       }
       if (ui.reconjurerPreviewCanvas) {
@@ -1043,8 +1045,8 @@ function modifierMarkup(gear) {
         "<span>Extension · T cycle · 3 place</span>",
         "<span class=\"stat-up\">Left preview · see the breakable look</span>",
         "<span class=\"stat-up\">Near debris · free rebuild +2 scraps</span>",
-        "<span class=\"stat-up\">Near cover · Patching / Bracing metal casing</span>",
-        "<span class=\"stat-up\">Casing absorbs hits before the wood</span>",
+        "<span class=\"stat-up\">Near cover · metal casing · metal boxes · wood casing</span>",
+        "<span class=\"stat-up\">Casing absorbs hits before the core</span>",
         "<span class=\"stat-up\">No target · conjure selected type</span>",
         "<span>Metal box · select · 10s user CD</span>",
         "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"

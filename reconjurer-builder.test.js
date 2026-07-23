@@ -7,14 +7,15 @@ import {
 } from "./equipment.js";
 import { spawnPropDebris, spawnPowerCrateDebris } from "./debris.js";
 import { createMapRuntime, damageProp } from "./maps.js";
-import { createPowerCrate, POWER_CRATE_HP } from "./powerups.js";
+import { createPowerCrate, damagePowerCrate, POWER_CRATE_HP } from "./powerups.js";
 import {
-  applyBraceCasing, canBraceBreakable, cycleReconjurerType, findBraceTarget,
-  hasExtensionSecondary, isReconjurerBuilder, listReconjurerChoices,
-  paintReconjurerPreview, RECONJURER_BOT_COST, RECONJURER_BRACE_BOT_COST,
-  RECONJURER_BRACE_HP, RECONJURER_COOLDOWN, RECONJURER_METAL_BOT_COST,
-  RECONJURER_METAL_COOLDOWN, RECONJURER_METAL_TYPE, RECONJURER_SCRAP_REWARD,
-  reconjurerTypeLabel, tryReconjurerBuild, tickReconjurerBuilder
+  applyBraceCasing, braceMaterialFor, canBraceBreakable, cycleReconjurerType,
+  findBraceTarget, hasExtensionSecondary, isReconjurerBuilder,
+  listReconjurerChoices, paintReconjurerPreview, RECONJURER_BOT_COST,
+  RECONJURER_BRACE_BOT_COST, RECONJURER_BRACE_HP, RECONJURER_COOLDOWN,
+  RECONJURER_METAL_BOT_COST, RECONJURER_METAL_COOLDOWN, RECONJURER_METAL_TYPE,
+  RECONJURER_SCRAP_REWARD, reconjurerTypeLabel, tryReconjurerBuild,
+  tickReconjurerBuilder
 } from "./reconjurer-builder.js";
 
 const clone = (value) => structuredClone(value);
@@ -329,6 +330,7 @@ assert.equal(RECONJURER_BRACE_BOT_COST, RECONJURER_BOT_COST);
   assert.ok(braced);
   assert.equal(braced, crate);
   assert.equal(crate.braced, true);
+  assert.equal(crate.braceMaterial, "metal");
   assert.equal(crate.braceHp, RECONJURER_BRACE_HP);
   assert.equal(crate.hp, startHp, "core HP unchanged by bracing");
   assert.equal(fighter.nanobotFree, botsBefore - RECONJURER_BRACE_BOT_COST);
@@ -349,6 +351,42 @@ assert.equal(RECONJURER_BRACE_BOT_COST, RECONJURER_BOT_COST);
   assert.equal(game.props.length, propsBefore + 1);
 }
 
+// Metal boxes get wood bracing (same shell HP, contrasting look).
+{
+  const metal = createPowerCrate({ x: 400, y: 400 }, "yard", "industrial", "brace-metal");
+  assert.equal(braceMaterialFor(metal), "wood");
+  assert.ok(canBraceBreakable(metal));
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: RECONJURER_BUILDER_ID,
+    body: "nanotech-chestplate"
+  });
+  fighter.x = metal.x;
+  fighter.y = metal.y;
+  fighter.aim = 0;
+  fighter.nanobotFree = 40;
+  fighter.materialEjectionTank = [];
+  const game = {
+    props: [],
+    powerCrates: [metal],
+    platforms: [],
+    groundDebris: [],
+    effects: [],
+    mapId: "yard",
+    theme: "industrial"
+  };
+  assert.equal(findBraceTarget(game, fighter), metal);
+  const startHp = metal.hp;
+  const braced = tryReconjurerBuild(fighter, game);
+  assert.ok(braced);
+  assert.equal(braced, metal);
+  assert.equal(metal.braced, true);
+  assert.equal(metal.braceMaterial, "wood");
+  assert.equal(metal.braceHp, RECONJURER_BRACE_HP);
+  assert.equal(metal.hp, startHp, "metal core unchanged by wood bracing");
+  assert.equal(fighter.reconjurerMetalCd || 0, 0, "wood brace does not start metal CD");
+}
+
 // Casing absorbs hits before the wood core.
 {
   const prop = {
@@ -364,6 +402,7 @@ assert.equal(RECONJURER_BRACE_BOT_COST, RECONJURER_BOT_COST);
     maxHp: 40
   };
   applyBraceCasing(prop, 20);
+  assert.equal(prop.braceMaterial, "metal");
   const game = { effects: [], groundDebris: [] };
   damageProp(prop, 12, game, 20, 20);
   assert.equal(prop.braceHp, 8);
@@ -372,6 +411,22 @@ assert.equal(RECONJURER_BRACE_BOT_COST, RECONJURER_BOT_COST);
   assert.equal(prop.braced, false);
   assert.equal(prop.braceHp, 0);
   assert.equal(prop.hp, 28, "overflow chips the core");
+}
+
+// Wood casing absorbs hits before the metal box core.
+{
+  const metal = createPowerCrate({ x: 100, y: 200 }, "yard", "industrial", "brace-dmg");
+  applyBraceCasing(metal, 20);
+  assert.equal(metal.braceMaterial, "wood");
+  const game = { effects: [], groundDebris: [], powerCrateState: { pending: [] }, fighters: [] };
+  const core = metal.hp;
+  damagePowerCrate(metal, 12, null, game, 120, 180);
+  assert.equal(metal.braceHp, 8);
+  assert.equal(metal.hp, core, "metal untouched while wood casing holds");
+  damagePowerCrate(metal, 20, null, game, 120, 180);
+  assert.equal(metal.braced, false);
+  assert.equal(metal.braceHp, 0);
+  assert.equal(metal.hp, core - 12, "overflow chips the metal core");
 }
 
 console.log("reconjurer-builder.test.js passed.");

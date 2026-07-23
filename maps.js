@@ -690,46 +690,64 @@ export function sightBlockers(game) {
   return [...platforms, ...props];
 }
 
+/** FX color when a Patching / Bracing casing finally pops. */
+export function braceShellBreakColor(prop) {
+  return prop?.braceMaterial === "wood" ? "#c4a06a" : "#d8e0ea";
+}
+
+/**
+ * Spend casing HP before the core. Returns remaining damage after the shell.
+ * Used by wood props (metal casing) and metal boxes (wood casing).
+ */
+export function absorbBraceShell(prop, amount, game, impactX, impactY) {
+  if (!prop || !(amount > 0)) return Math.max(0, amount || 0);
+  if (!(prop.braced && (prop.braceHp || 0) > 0)) return amount;
+  const ix = impactX ?? prop.x + (prop.w || 0) / 2;
+  const iy = impactY ?? prop.y + (prop.h || 0) / 2;
+  const absorbed = Math.min(prop.braceHp, amount);
+  prop.braceHp -= absorbed;
+  const left = amount - absorbed;
+  prop.hitFlash = 0.14;
+  if (game?.effects) {
+    game.effects.push({
+      type: "propHit",
+      x: ix,
+      y: iy,
+      life: 0.1
+    });
+  }
+  if (prop.braceHp <= 0) {
+    const breakColor = braceShellBreakColor(prop);
+    prop.braced = false;
+    prop.braceHp = 0;
+    prop.braceMaxHp = 0;
+    prop.braceMaterial = null;
+    if (game?.effects) {
+      game.effects.push({
+        type: "crateBreak",
+        x: ix,
+        y: iy,
+        life: 0.22,
+        color: breakColor
+      });
+    }
+  }
+  return left;
+}
+
 /**
  * Apply damage to a breakable prop. Returns true if the prop absorbed the hit
  * (projectile should stop). Emits crack/debris effects on the game.
- * Braced props spend metal casing HP before the wood core.
+ * Braced props spend casing HP before the wood core.
  */
 export function damageProp(prop, amount, game, impactX, impactY) {
   if (!prop || prop.destroyed || !prop.breakable) return false;
-  let left = Math.max(0, amount);
   const ix = impactX ?? prop.x + prop.w / 2;
   const iy = impactY ?? prop.y + prop.h / 2;
-  if (prop.braced && (prop.braceHp || 0) > 0 && left > 0) {
-    const absorbed = Math.min(prop.braceHp, left);
-    prop.braceHp -= absorbed;
-    left -= absorbed;
-    prop.hitFlash = 0.14;
-    if (game?.effects) {
-      game.effects.push({
-        type: "propHit",
-        x: ix,
-        y: iy,
-        life: 0.1
-      });
-    }
-    if (prop.braceHp <= 0) {
-      prop.braced = false;
-      prop.braceHp = 0;
-      if (game?.effects) {
-        game.effects.push({
-          type: "crateBreak",
-          x: ix,
-          y: iy,
-          life: 0.22,
-          color: "#d8e0ea"
-        });
-      }
-    }
-    if (left <= 0) {
-      playBreakableHitSfx();
-      return true;
-    }
+  const left = absorbBraceShell(prop, Math.max(0, amount), game, ix, iy);
+  if (left <= 0) {
+    playBreakableHitSfx();
+    return true;
   }
   prop.hp = Math.max(0, (prop.hp ?? prop.maxHp ?? 1) - left);
   prop.hitFlash = .14;
@@ -745,6 +763,8 @@ export function damageProp(prop, amount, game, impactX, impactY) {
     prop.destroyed = true;
     prop.braced = false;
     prop.braceHp = 0;
+    prop.braceMaxHp = 0;
+    prop.braceMaterial = null;
     prop.solid = false;
     prop.blocksProjectiles = false;
     prop.blocksSight = false;

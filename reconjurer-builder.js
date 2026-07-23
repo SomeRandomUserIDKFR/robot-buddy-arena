@@ -1,7 +1,8 @@
 /**
  * Reconjurer / Builder — extension secondary (key 3).
  * Near debris: rebuild that pile for free (+2 ejection scraps).
- * Near intact cover: Patching / Bracing — weld a metal casing shell.
+ * Near intact cover: Patching / Bracing — metal casing on wood, wood casing
+ * on metal boxes (same shell HP, contrasting look).
  * Otherwise: conjure the selected breakable for nanobots (T cycles type;
  * metal box costs more and has a 10s CD). Left-corner HUD previews the look.
  */
@@ -35,9 +36,9 @@ export const RECONJURER_SCRAP_REWARD = 2;
 export const RECONJURER_BOT_COST = MATERIAL_CONSUMER_BOTS_PER_PIECE;
 /** Free nanobots charged for a metal power-crate conjure. */
 export const RECONJURER_METAL_BOT_COST = MATERIAL_CONSUMER_BOTS_PER_PIECE * 2;
-/** Nanobots to weld a Patching / Bracing metal casing onto intact cover. */
+/** Nanobots to weld a Patching / Bracing casing onto intact cover. */
 export const RECONJURER_BRACE_BOT_COST = MATERIAL_CONSUMER_BOTS_PER_PIECE;
-/** Extra HP shell on a braced breakable (absorbs hits before wood). */
+/** Extra HP shell on a braced breakable (absorbs hits before the core). */
 export const RECONJURER_BRACE_HP = 48;
 
 /** Selection id for a metal power crate. */
@@ -152,7 +153,11 @@ function finishBuild(fighter, game, target, isMetal, opts = {}) {
       x: target.x + target.w * 0.5,
       y: target.y + target.h * 0.5,
       life: 0.35,
-      color: isMetal || opts.brace ? "#d8e0ea" : "#8ec4d0"
+      color: opts.brace
+        ? (target.braceMaterial === "wood" ? "#c4a06a" : "#d8e0ea")
+        : isMetal
+          ? "#d8e0ea"
+          : "#8ec4d0"
     });
     game.effects.push({
       type: "propHit",
@@ -164,11 +169,16 @@ function finishBuild(fighter, game, target, isMetal, opts = {}) {
   return target;
 }
 
-/** Whether a map prop can receive Patching / Bracing. */
+/** Metal boxes get wood casing; wood cover gets metal casing. */
+export function braceMaterialFor(prop) {
+  if (prop?.powerCrate || prop?.kind === "powerCrate") return "wood";
+  return "metal";
+}
+
+/** Whether a map prop / metal box can receive Patching / Bracing. */
 export function canBraceBreakable(prop) {
   if (!prop || prop.destroyed || !prop.breakable) return false;
   if (prop.braced && (prop.braceHp || 0) > 0) return false;
-  if (prop.powerCrate || prop.kind === "powerCrate") return false;
   if (prop.armorDummy || prop.forgeHidden || prop.illusionGhosted) return false;
   if (prop.lightCondensation || prop.kind === "lightCondensation") return false;
   if (prop.heldBy || prop.thrownInFlight) return false;
@@ -177,14 +187,18 @@ export function canBraceBreakable(prop) {
   return true;
 }
 
-/** Nearest intact breakable in brace range, or null. */
+/** Nearest intact breakable (cover or metal box) in brace range, or null. */
 export function findBraceTarget(game, fighter, maxRange = RECONJURER_BRACE_RADIUS) {
   if (!game || !fighter || !(maxRange > 0)) return null;
   const cx = fighter.x + SIZE / 2;
   const cy = fighter.y + SIZE / 2;
   let best = null;
   let bestD = maxRange;
-  for (const prop of game.props || []) {
+  const candidates = [
+    ...(game.props || []),
+    ...(game.powerCrates || [])
+  ];
+  for (const prop of candidates) {
     if (!canBraceBreakable(prop)) continue;
     const px = prop.x + (prop.w || 0) / 2;
     const py = prop.y + (prop.h || 0) / 2;
@@ -197,19 +211,20 @@ export function findBraceTarget(game, fighter, maxRange = RECONJURER_BRACE_RADIU
   return best;
 }
 
-/** Apply a metal casing shell to an intact breakable. */
+/** Apply a contrasting casing shell to an intact breakable. */
 export function applyBraceCasing(prop, hp = RECONJURER_BRACE_HP) {
   if (!prop) return null;
   const shell = Math.max(1, hp | 0);
   prop.braced = true;
   prop.braceHp = shell;
   prop.braceMaxHp = shell;
+  prop.braceMaterial = braceMaterialFor(prop);
   prop.hitFlash = Math.max(prop.hitFlash || 0, 0.18);
   return prop;
 }
 
 /**
- * Press 3 near intact cover: spend bots to weld a metal casing (Patching / Bracing).
+ * Press 3 near intact cover / metal box: spend bots for Patching / Bracing.
  * @returns {object|null}
  */
 export function tryBraceNearIntact(fighter, game) {
@@ -271,7 +286,7 @@ function conjureSelectedBreakable(fighter, game, random) {
 
 /**
  * Press 3 near debris: free rebuild (+2 scraps).
- * Else near intact cover: Patching / Bracing metal casing (bots).
+ * Else near intact cover / metal box: Patching / Bracing casing (bots).
  * Otherwise: paid conjure of the selected type (T cycles).
  * @returns {object|null} restored, braced, or spawned prop / power crate
  */
@@ -311,6 +326,7 @@ export function clearBraceCasing(prop) {
   prop.braced = false;
   prop.braceHp = 0;
   prop.braceMaxHp = 0;
+  prop.braceMaterial = null;
   return prop;
 }
 

@@ -6,7 +6,7 @@
 import { SIZE, SIGHT } from "./config.js";
 import { spawnPowerCrateDebris, tryReconquerAtSpawn } from "./debris.js";
 import { ADAPTIVE_NANOTECH_ID, healFighter, syncRetractableDisplayedHp } from "./equipment.js";
-import { POWER_CRATE_MAP, POWER_CRATE_SPAWNS } from "./maps.js";
+import { absorbBraceShell, POWER_CRATE_MAP, POWER_CRATE_SPAWNS } from "./maps.js";
 import { inLightCondensationReveal } from "./light-condensation.js";
 import { inBeamReveal, inDirectionalSight, hasLineOfSight } from "./vision.js";
 import { playBreakableDestroySfx, playBreakableHitSfx } from "./sfx.js";
@@ -422,19 +422,31 @@ export function awardPowerup(fighter, typeId, game) {
 export function damagePowerCrate(crate, amount, attacker, game, impactX, impactY) {
   if (!crate || crate.destroyed || crate.forgeHidden || !crate.breakable) return false;
   if (attacker) crate.lastDamager = attacker;
-  crate.hp = Math.max(0, (crate.hp ?? crate.maxHp ?? 1) - amount);
+  const ix = impactX ?? crate.x + crate.w / 2;
+  const iy = impactY ?? crate.y + crate.h / 2;
+  // Wood bracing casing absorbs hits before the metal core.
+  const left = absorbBraceShell(crate, Math.max(0, amount), game, ix, iy);
+  if (left <= 0) {
+    playBreakableHitSfx();
+    return true;
+  }
+  crate.hp = Math.max(0, (crate.hp ?? crate.maxHp ?? 1) - left);
   crate.hitFlash = .14;
   if (game?.effects) {
     game.effects.push({
       type: "propHit",
-      x: impactX ?? crate.x + crate.w / 2,
-      y: impactY ?? crate.y + crate.h / 2,
+      x: ix,
+      y: iy,
       life: .12
     });
   }
   if (crate.hp <= 0) {
     playBreakableDestroySfx();
     crate.destroyed = true;
+    crate.braced = false;
+    crate.braceHp = 0;
+    crate.braceMaxHp = 0;
+    crate.braceMaterial = null;
     crate.solid = false;
     crate.blocksProjectiles = false;
     const killer = crate.lastDamager || attacker;

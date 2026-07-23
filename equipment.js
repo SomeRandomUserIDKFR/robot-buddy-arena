@@ -433,7 +433,7 @@ export const GEAR = [
     RECONJURER_BUILDER_ID,
     "extensionSecondary",
     "Reconjurer / Builder",
-    "Extension tool: T cycles the next breakable (left-corner look preview), 3 places. Near debris: free rebuild (+2 ejection scraps). Near intact cover: Patching / Bracing welds a metal casing shell (bots). Away from both: conjure the selected prop for nanobots (metal box costs more, 10s CD). Does not replace your 1/2 secondary.",
+    "Extension tool: T cycles the next breakable (left-corner look preview), 3 places. Near debris: free rebuild (+2 ejection scraps). Near intact cover: Patching / Bracing — metal casing on wood, wood casing on metal boxes (same shell HP, bots). Away from both: conjure the selected prop for nanobots (metal box costs more, 10s CD). Does not replace your 1/2 secondary.",
     {},
     {
       price: 200,

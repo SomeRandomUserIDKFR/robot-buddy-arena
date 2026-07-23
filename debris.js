@@ -1733,6 +1733,7 @@ export function restoreMapProp(prop) {
   prop.braced = false;
   prop.braceHp = 0;
   prop.braceMaxHp = 0;
+  prop.braceMaterial = null;
   return true;
 }
 
@@ -1813,6 +1814,11 @@ export function restorePowerCrate(crate) {
   crate.groundDebrisDropped = false;
   crate.heldBy = null;
   crate.thrownInFlight = false;
+  // Rebuilds come back bare — wood bracing must be reapplied.
+  crate.braced = false;
+  crate.braceHp = 0;
+  crate.braceMaxHp = 0;
+  crate.braceMaterial = null;
   return true;
 }
 

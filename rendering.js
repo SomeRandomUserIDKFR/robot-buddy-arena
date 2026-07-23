@@ -1581,13 +1581,57 @@ export function createRenderer(canvas) {
       context.lineTo(prop.x + prop.w - 6, prop.y + prop.h * .25);
       context.stroke();
     }
-    // Reconjurer Patching / Bracing: metal casing rim over the breakable.
+    // Reconjurer Patching / Bracing: contrasting casing over the breakable.
     if (prop.braced && (prop.braceHp || 0) > 0) {
-      const rim = Math.max(2, Math.min(prop.w, prop.h) * 0.08);
-      const wear = prop.braceMaxHp > 0
-        ? Math.max(0.35, prop.braceHp / prop.braceMaxHp)
-        : 1;
-      context.globalAlpha = alpha * (flash ? 1 : 0.82 + wear * 0.18);
+      drawBraceCasing(prop, alpha, flash);
+    }
+    context.globalAlpha = 1;
+  }
+
+  /** Metal rim on wood cover, or wood planks on metal boxes. */
+  function drawBraceCasing(prop, alpha = 1, flash = false) {
+    const rim = Math.max(2, Math.min(prop.w, prop.h) * 0.08);
+    const wear = prop.braceMaxHp > 0
+      ? Math.max(0.35, prop.braceHp / prop.braceMaxHp)
+      : 1;
+    const wood = prop.braceMaterial === "wood";
+    context.globalAlpha = alpha * (flash ? 1 : 0.82 + wear * 0.18);
+    if (wood) {
+      // Warm plank bands — reads against cool metal fill.
+      context.fillStyle = flash ? "rgba(240,210,150,.55)" : "rgba(140,96,48,.55)";
+      context.fillRect(prop.x, prop.y, prop.w, rim + 1);
+      context.fillRect(prop.x, prop.y + prop.h - rim - 1, prop.w, rim + 1);
+      context.fillRect(prop.x, prop.y, rim + 1, prop.h);
+      context.fillRect(prop.x + prop.w - rim - 1, prop.y, rim + 1, prop.h);
+      context.strokeStyle = flash ? "#f5e2b0" : "#6e4a24";
+      context.lineWidth = Math.max(1.5, rim * 0.55);
+      context.strokeRect(
+        prop.x + rim * 0.6,
+        prop.y + rim * 0.6,
+        prop.w - rim * 1.2,
+        prop.h - rim * 1.2
+      );
+      context.strokeStyle = flash ? "rgba(90,60,28,.55)" : "rgba(60,38,16,.45)";
+      context.lineWidth = 1;
+      for (let i = 1; i <= 3; i++) {
+        const gx = prop.x + rim + 3 + i * (prop.w - rim * 2 - 6) / 4;
+        context.beginPath();
+        context.moveTo(gx, prop.y + 2);
+        context.lineTo(gx + 2, prop.y + rim);
+        context.stroke();
+      }
+      context.fillStyle = flash ? "#e8c888" : "#5a3a1a";
+      const peg = Math.max(1.4, rim * 0.5);
+      const inset = rim + 2;
+      for (const [rx, ry] of [
+        [prop.x + inset, prop.y + inset],
+        [prop.x + prop.w - inset, prop.y + inset],
+        [prop.x + inset, prop.y + prop.h - inset],
+        [prop.x + prop.w - inset, prop.y + prop.h - inset]
+      ]) {
+        context.fillRect(rx - peg * 0.5, ry - peg * 0.5, peg, peg);
+      }
+    } else {
       context.strokeStyle = flash ? "#f0f4f8" : "#9aa4ae";
       context.lineWidth = Math.max(2, rim);
       context.strokeRect(
@@ -1601,7 +1645,6 @@ export function createRenderer(canvas) {
       context.fillRect(prop.x, prop.y + prop.h - rim, prop.w, rim);
       context.fillRect(prop.x, prop.y, rim, prop.h);
       context.fillRect(prop.x + prop.w - rim, prop.y, rim, prop.h);
-      // Rivets
       context.fillStyle = flash ? "#e8eef4" : "#4a545e";
       const r = Math.max(1.2, rim * 0.45);
       const inset = rim + 2;
@@ -1615,12 +1658,12 @@ export function createRenderer(canvas) {
         context.arc(rx, ry, r, 0, Math.PI * 2);
         context.fill();
       }
-      context.lineWidth = 1;
     }
+    context.lineWidth = 1;
     context.globalAlpha = 1;
   }
 
-  function drawCanopy(prop, alpha) {
+    function drawCanopy(prop, alpha) {
     if (prop.destroyed || !prop.canopy) return;
     const c = prop.canopy;
     context.globalAlpha = alpha * .85;
@@ -2031,6 +2074,10 @@ export function createRenderer(canvas) {
       context.lineTo(x + w * .45, y + h * .6);
       context.lineTo(x + w - 8, y + h * .28);
       context.stroke();
+    }
+    // Wood bracing casing for contrast on metal boxes.
+    if (crate.braced && (crate.braceHp || 0) > 0) {
+      drawBraceCasing(crate, 1, flash);
     }
     context.globalAlpha = 1;
   }
