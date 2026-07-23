@@ -1,8 +1,9 @@
 /**
  * Reconjurer / Builder — extension secondary (key 3).
- * Near debris: rebuild that pile for free (+2 ejection scraps).
  * Near intact cover: Patching / Bracing — metal casing on wood, wood casing
- * on metal boxes (same shell HP, contrasting look).
+ * on metal boxes (same shell HP, contrasting look). Checked before rebuild so
+ * scrap debris cannot steal the press.
+ * Near debris: rebuild that pile for free (+2 ejection scraps).
  * Otherwise: conjure the selected breakable for nanobots (T cycles type;
  * metal box costs more and has a 10s CD). Left-corner HUD previews the look.
  */
@@ -303,15 +304,21 @@ function conjureSelectedBreakable(fighter, game, random) {
 }
 
 /**
- * Press 3 near debris: free rebuild (+2 scraps).
- * Else near intact cover / metal box: Patching / Bracing casing (bots).
+ * Press 3 near intact cover / metal box: Patching / Bracing casing (bots).
+ * Else near debris: free rebuild (+2 scraps).
  * Otherwise: paid conjure of the selected type (T cycles).
+ *
+ * Brace is checked before rebuild so nearby scrap piles cannot steal the press
+ * when the player is standing next to intact cover they want to reinforce.
  * @returns {object|null} restored, braced, or spawned prop / power crate
  */
 export function tryReconjurerBuild(fighter, game, random = Math.random) {
   if (!fighter || fighter.dead || !game) return null;
   if (!isReconjurerBuilder(fighter)) return null;
   if ((fighter.reconjurerCd || 0) > 0) return null;
+
+  const braced = tryBraceNearIntact(fighter, game);
+  if (braced) return braced;
 
   const cx = fighter.x + SIZE / 2;
   const cy = fighter.y + SIZE / 2;
@@ -331,9 +338,6 @@ export function tryReconjurerBuild(fighter, game, random = Math.random) {
       rebuilt.sourceType === "powerCrate"
     );
   }
-
-  const braced = tryBraceNearIntact(fighter, game);
-  if (braced) return braced;
 
   return conjureSelectedBreakable(fighter, game, random);
 }

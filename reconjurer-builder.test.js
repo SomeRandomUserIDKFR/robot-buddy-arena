@@ -351,6 +351,76 @@ assert.equal(RECONJURER_BRACE_BOT_COST, RECONJURER_BOT_COST);
   assert.equal(game.props.length, propsBefore + 1);
 }
 
+// Intact cover + nearby scrap: brace wins (debris must not steal the press).
+{
+  const yard = createMapRuntime("yard");
+  const intact = yard.props.find((p) => p.kind === "crate" && !p.destroyed);
+  assert.ok(intact);
+  const scrap = yard.props.find(
+    (p) => p !== intact && p.kind === "crate" && !p.destroyed
+  ) || {
+    kind: "crate",
+    breakable: true,
+    destroyed: false,
+    solid: true,
+    x: intact.x + 80,
+    y: intact.y,
+    w: 40,
+    h: 40,
+    hp: 40,
+    maxHp: 40,
+    groundDebrisDropped: false,
+    baseSolid: true,
+    baseBlocksProjectiles: true,
+    baseBlocksSight: false
+  };
+  if (!yard.props.includes(scrap)) yard.props.push(scrap);
+  scrap.destroyed = true;
+  scrap.solid = false;
+  scrap.hp = 0;
+  scrap.groundDebrisDropped = false;
+
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: RECONJURER_BUILDER_ID,
+    body: "nanotech-chestplate"
+  });
+  fighter.x = intact.x - 10;
+  fighter.y = intact.y;
+  fighter.aim = 0;
+  fighter.nanobotFree = 40;
+  fighter.materialEjectionTank = [];
+  fighter.reconjurerType = RECONJURER_METAL_TYPE;
+  fighter.reconjurerMetalCd = RECONJURER_METAL_COOLDOWN; // metal CD must not block brace
+
+  const game = {
+    props: yard.props,
+    powerCrates: [],
+    platforms: yard.platforms,
+    groundDebris: [],
+    effects: [],
+    reconquerQueue: [],
+    forgeCasts: [],
+    mapId: "yard",
+    theme: "industrial"
+  };
+  spawnPropDebris(game, scrap, scrap.x + scrap.w / 2, scrap.y + scrap.h / 2);
+  assert.ok(game.groundDebris.length > 0, "scrap debris present");
+  assert.equal(findBraceTarget(game, fighter), intact);
+
+  const botsBefore = fighter.nanobotFree;
+  const result = tryReconjurerBuild(fighter, game);
+  assert.ok(result);
+  assert.equal(result, intact, "braces intact cover instead of rebuilding scrap");
+  assert.equal(intact.braced, true);
+  assert.equal(intact.braceMaterial, "metal");
+  assert.equal(intact.braceHp, RECONJURER_BRACE_HP);
+  assert.equal(scrap.destroyed, true, "scrap stays destroyed");
+  assert.ok(game.groundDebris.length > 0, "debris not consumed");
+  assert.equal(fighter.nanobotFree, botsBefore - RECONJURER_BRACE_BOT_COST);
+  assert.equal(fighter.reconjurerMetalCd, RECONJURER_METAL_COOLDOWN, "brace ignores metal CD");
+}
+
 // Metal boxes get wood bracing (same shell HP, contrasting look).
 {
   const metal = createPowerCrate({ x: 400, y: 400 }, "yard", "industrial", "brace-metal");
