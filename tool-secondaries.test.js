@@ -7,8 +7,9 @@ import { Fighter, stepFighter } from "./combat.js";
 import {
   attackToolSecondary, bindToolHpDamager, bindToolPropDamager, BOLAS_SNARE_ID,
   createToolPickup, FRAG_GRENADE_ID, heldToolIdOf, heldToolUsesOf,
-  HOOK_RANGE, HOOK_REEL_ARRIVE, HOOK_REEL_SPEED, HOOKSHOT_WINCH_ID,
-  isHookAnchored, maybeDropToolFromBreakable,
+  HOOK_ENEMY_DAMAGE, HOOK_RANGE, HOOK_REEL_ARRIVE, HOOK_REEL_SPEED,
+  HOOKSHOT_WINCH_ID, isHookAnchored, maybeDropToolFromBreakable,
+  PULSE_RIFLE_HIT_DAMAGE,
   maybeDropToolFromCrate, rollToolUses, seedMapToolPickups, STICKY_CHARGE_ID,
   THROWING_SPEAR_ID, tickToolPickups, tickToolProjectiles,
   TOOL_BREAKABLE_DROP_CHANCE, TOOL_CRATE_DROP_CHANCE, TOOL_DEFS,
@@ -238,6 +239,98 @@ for (const id of TOOL_SECONDARY_IDS) {
   });
   stepFighter(fighter, 1 / 60, game, { weapons: {} }, {}, jet);
   assert.equal(fighter.hookHang, null, "jetpack input drops the hang");
+}
+
+{
+  // Enemy hook: 2× pulse damage + pull victim to shooter.
+  assert.equal(HOOK_ENEMY_DAMAGE, PULSE_RIFLE_HIT_DAMAGE * 2);
+  assert.equal(TOOL_DEFS[HOOKSHOT_WINCH_ID].damage, HOOK_ENEMY_DAMAGE);
+  const shooter = applyLoadout(new Fighter({
+    x: 80, y: 220, team: 0, aim: 0, human: true, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: HOOKSHOT_WINCH_ID
+  });
+  selectWeaponSlot(shooter, "secondaryWeapon");
+  const enemy = applyLoadout(new Fighter({
+    x: 400, y: 220, team: 1, aim: Math.PI, human: true, hp: 500, maxHp: 500
+  }), { ...DEFAULT_LOADOUT });
+  const game = {
+    fighters: [shooter, enemy],
+    props: [],
+    platforms: [{ x: 0, y: 500, w: 900, h: 40 }],
+    effects: [],
+    toolProjectiles: [],
+    toolPickups: [],
+    powerCrates: [],
+    ceiling: 12
+  };
+  const hpBefore = enemy.hp;
+  assert.ok(attackToolSecondary(shooter, game));
+  assert.equal(enemy.hp, hpBefore - HOOK_ENEMY_DAMAGE, "enemy takes 2× pulse hit");
+  assert.ok(enemy.hookDrag, "enemy is dragged toward shooter");
+  assert.equal(enemy.hookDrag.friendly, false);
+  const idle = () => ({
+    mx: 0, jump: false, jet: false, jetHeld: false,
+    attack: false, chuck: false, ejectVacuum: false, dodge: false
+  });
+  const startDist = Math.hypot(
+    enemy.center().x - shooter.center().x,
+    enemy.center().y - shooter.center().y
+  );
+  for (let i = 0; i < 180 && enemy.hookDrag; i++) {
+    stepFighter(shooter, 1 / 60, game, { weapons: {} }, {}, idle);
+    stepFighter(enemy, 1 / 60, game, { weapons: {} }, {}, idle);
+  }
+  assert.equal(enemy.hookDrag, null, "drag finishes");
+  const endDist = Math.hypot(
+    enemy.center().x - shooter.center().x,
+    enemy.center().y - shooter.center().y
+  );
+  assert.ok(endDist < startDist * 0.35, "enemy pulled close to shooter");
+}
+
+{
+  // Teammate hook: no damage, still pulled in.
+  const shooter = applyLoadout(new Fighter({
+    x: 80, y: 220, team: 0, aim: 0, human: true, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: HOOKSHOT_WINCH_ID
+  });
+  selectWeaponSlot(shooter, "secondaryWeapon");
+  const ally = applyLoadout(new Fighter({
+    x: 400, y: 220, team: 0, aim: Math.PI, human: true, hp: 500, maxHp: 500
+  }), { ...DEFAULT_LOADOUT });
+  const game = {
+    fighters: [shooter, ally],
+    props: [],
+    platforms: [{ x: 0, y: 500, w: 900, h: 40 }],
+    effects: [],
+    toolProjectiles: [],
+    toolPickups: [],
+    powerCrates: [],
+    ceiling: 12
+  };
+  const hpBefore = ally.hp;
+  assert.ok(attackToolSecondary(shooter, game));
+  assert.equal(ally.hp, hpBefore, "teammate takes no hook damage");
+  assert.ok(ally.hookDrag, "teammate is still dragged");
+  assert.equal(ally.hookDrag.friendly, true);
+  const idle = () => ({
+    mx: 0, jump: false, jet: false, jetHeld: false,
+    attack: false, chuck: false, ejectVacuum: false, dodge: false
+  });
+  for (let i = 0; i < 180 && ally.hookDrag; i++) {
+    stepFighter(shooter, 1 / 60, game, { weapons: {} }, {}, idle);
+    stepFighter(ally, 1 / 60, game, { weapons: {} }, {}, idle);
+  }
+  assert.equal(ally.hookDrag, null);
+  const endDist = Math.hypot(
+    ally.center().x - shooter.center().x,
+    ally.center().y - shooter.center().y
+  );
+  assert.ok(endDist <= HOOK_REEL_ARRIVE + 20, "ally arrives near shooter");
 }
 
 {

@@ -664,10 +664,11 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
     * moveSpeedBuffMult(fighter)
     * iceSlowMult(fighter)
     * (isTrapLocked(fighter) ? 0.35 : 1);
-  // Hookshot reel / hang owns velocity — walk friction was cancelling the pull.
+  // Hookshot reel / hang / drag owns velocity — walk friction was cancelling the pull.
   const reeling = !!fighter.hookReel;
   const hanging = !!fighter.hookHang;
-  const anchored = reeling || hanging;
+  const dragging = !!fighter.hookDrag;
+  const anchored = reeling || hanging || dragging;
   if (!anchored) {
     if (Math.abs(fighter.vx) < speedCap * 1.25) {
       fighter.vx += intent.mx * fighter.acceleration * dt;
