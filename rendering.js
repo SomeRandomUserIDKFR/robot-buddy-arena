@@ -1039,6 +1039,7 @@ export function createRenderer(canvas) {
     for (const fighter of game.fighters) {
       if (!fighterVisibleToViewer(game, player, fighter)) continue;
       drawHeldToolPickup(fighter);
+      drawHookAnchorCable(fighter);
     }
     drawProps(game, 1, true);
     drawPings(game);
@@ -2825,6 +2826,29 @@ export function createRenderer(canvas) {
     }
   }
 
+  /** Cable from fighter to latch while reeling or hanging. */
+  function drawHookAnchorCable(fighter) {
+    const latch = fighter?.hookReel || fighter?.hookHang;
+    if (!latch || fighter.dead) return;
+    const x1 = fighter.x + SIZE / 2;
+    const y1 = fighter.y + SIZE / 2;
+    const x2 = latch.x;
+    const y2 = latch.y;
+    context.save();
+    context.globalAlpha = fighter.hookHang ? 0.85 : 0.95;
+    context.strokeStyle = TOOL_DEFS[HOOKSHOT_WINCH_ID]?.color || "#5a8aaa";
+    context.lineWidth = fighter.hookHang ? 2 : 2.5;
+    context.beginPath();
+    context.moveTo(x1, y1);
+    context.lineTo(x2, y2);
+    context.stroke();
+    context.fillStyle = context.strokeStyle;
+    context.beginPath();
+    context.arc(x2, y2, fighter.hookHang ? 3.5 : 4, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+  }
+
   function drawHeldToolPickup(fighter) {
     const toolId = handheldToolId(fighter);
     if (!toolId) return;
@@ -3145,13 +3169,19 @@ export function createRenderer(canvas) {
         let y1 = effect.y1;
         let x2 = effect.x2;
         let y2 = effect.y2;
-        // Live winch cable: stay attached to the reeling fighter.
+        // Live winch cable: stay attached while reeling or hanging on the latch.
         const owner = effect.followOwner;
-        if (owner && !owner.dead && owner.hookReel) {
+        if (owner && !owner.dead && (owner.hookReel || owner.hookHang)) {
           x1 = owner.x + SIZE / 2;
           y1 = owner.y + SIZE / 2;
-          x2 = effect.latchX ?? owner.hookReel.x;
-          y2 = effect.latchY ?? owner.hookReel.y;
+          x2 = effect.latchX
+            ?? owner.hookReel?.x
+            ?? owner.hookHang?.x
+            ?? x2;
+          y2 = effect.latchY
+            ?? owner.hookReel?.y
+            ?? owner.hookHang?.y
+            ?? y2;
         }
         context.globalAlpha = clamp(0.35 + effect.life * 1.2, 0, 1);
         context.strokeStyle = effect.color || "#5a8aaa";

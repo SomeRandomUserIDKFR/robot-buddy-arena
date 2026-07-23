@@ -532,15 +532,47 @@ export function tickToolSecondary(fighter, dt) {
         fighter.x += nx * Math.min(dist - HOOK_REEL_ARRIVE * 0.35, HOOK_REEL_SPEED * step);
         fighter.y += ny * Math.min(dist - HOOK_REEL_ARRIVE * 0.35, HOOK_REEL_SPEED * step);
       }
+      beginHookHang(fighter, reel.x, reel.y);
       fighter.hookReel = null;
-      fighter.vx *= 0.2;
-      fighter.vy *= 0.2;
     } else {
       const ang = Math.atan2(dy, dx);
       fighter.vx = Math.cos(ang) * HOOK_REEL_SPEED;
       fighter.vy = Math.sin(ang) * HOOK_REEL_SPEED;
     }
+  } else if (fighter.hookHang) {
+    // Stay pinned at the latch until combat clears hang on move / jet input.
+    pinHookHang(fighter);
   }
+}
+
+/** Latch the fighter at a world point after a successful winch. */
+export function beginHookHang(fighter, x, y) {
+  if (!fighter) return null;
+  fighter.hookHang = {
+    x: Number(x) || 0,
+    y: Number(y) || 0
+  };
+  pinHookHang(fighter);
+  return fighter.hookHang;
+}
+
+export function clearHookHang(fighter) {
+  if (!fighter) return;
+  fighter.hookHang = null;
+}
+
+/** True while reeling in or hanging on a latch. */
+export function isHookAnchored(fighter) {
+  return !!(fighter?.hookReel || fighter?.hookHang);
+}
+
+function pinHookHang(fighter) {
+  if (!fighter?.hookHang) return;
+  fighter.vx = 0;
+  fighter.vy = 0;
+  fighter.grounded = false;
+  fighter.x = fighter.hookHang.x - SIZE / 2;
+  fighter.y = fighter.hookHang.y - SIZE / 2;
 }
 
 function circleHitsFighter(x, y, r, foe) {
@@ -903,6 +935,7 @@ export function ensureToolSecondaryState(fighter) {
   fighter.toolFlash = fighter.toolFlash || 0;
   fighter.heldToolPickup = normalizeHeldToolPickup(fighter.heldToolPickup);
   fighter.hookReel = fighter.hookReel || null;
+  fighter.hookHang = fighter.hookHang || null;
   if (!isToolSecondaryId(fighter.toolSecondary)) fighter.toolSecondary = null;
 }
 
