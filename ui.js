@@ -27,7 +27,9 @@ import {
   findBraceTarget, normalizeReconjurerType, paintReconjurerPreview,
   reconjurerTypeLabel, RECONJURER_METAL_TYPE
 } from "./reconjurer-builder.js";
-import { TOOL_DEFS, toolDef } from "./tool-secondaries.js";
+import {
+  heldToolUsesOf, TOOL_DEFS, toolDef
+} from "./tool-secondaries.js";
 import {
   illusionPropKindLabel, normalizeIllusionPropKind
 } from "./illusionist.js";
@@ -482,10 +484,13 @@ export function updateHud(game) {
       const held = player.heldToolPickup ? toolDef(player.heldToolPickup) : null;
       const eq = player.toolSecondary ? toolDef(player.toolSecondary) : null;
       if (held) {
+        const uses = heldToolUsesOf(player);
         if (ui.trapHudKicker) ui.trapHudKicker.textContent = "PICKUP · CLICK TO USE";
-        if (ui.trapHudType) ui.trapHudType.textContent = held.label;
+        if (ui.trapHudType) {
+          ui.trapHudType.textContent = uses > 1 ? `${held.label}×${uses}` : held.label;
+        }
         if (ui.trapHudSub) {
-          ui.trapHudSub.textContent = "one-shot";
+          ui.trapHudSub.textContent = uses > 1 ? `${uses} uses left` : "one-shot";
           ui.trapHudSub.classList.remove("hidden");
         }
       } else if (eq) {
@@ -1172,8 +1177,8 @@ function modifierMarkup(gear) {
       return [
         `<span>Secondary · ${def.label} tool</span>`,
         `<span class="stat-up">Infinite uses · ${def.cd}s cooldown</span>`,
-        "<span class=\"stat-up\">Also found in wood crates / on maps</span>",
-        "<span>Ground pickups need Throw Breakable to grab</span>",
+        "<span class=\"stat-up\">Drops from crates / breakables / maps</span>",
+        "<span>Packs with 1 / 3 / 5 / 10 uses · grab with Throw Breakable</span>",
         `<span>${def.damage} hit / blast power</span>`
       ].join("");
     }

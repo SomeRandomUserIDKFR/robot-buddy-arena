@@ -10,6 +10,7 @@ import { absorbBraceShell, POWER_CRATE_MAP, POWER_CRATE_SPAWNS } from "./maps.js
 import { inLightCondensationReveal } from "./light-condensation.js";
 import { inBeamReveal, inDirectionalSight, hasLineOfSight } from "./vision.js";
 import { playBreakableDestroySfx, playBreakableHitSfx } from "./sfx.js";
+import { maybeDropToolFromBreakable } from "./tool-secondaries.js";
 import { clamp, dist } from "./utils.js";
 
 export const POWER_CRATE_HP = 60;
@@ -472,6 +473,12 @@ export function damagePowerCrate(crate, amount, attacker, game, impactX, impactY
       });
     }
     spawnPowerCrateDebris(game, crate);
+    maybeDropToolFromBreakable(
+      crate,
+      game,
+      crate.x + crate.w / 2,
+      crate.y + crate.h / 2
+    );
     scheduleRespawn(game, crate);
   } else {
     playBreakableHitSfx();
