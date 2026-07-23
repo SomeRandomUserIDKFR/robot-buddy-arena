@@ -260,6 +260,7 @@ export const PROP_DEBRIS_COLORS = Object.freeze({
   pipe: { fill: "#6a7888", fill2: "#3a4858", edge: "#2a343e", material: "metal" },
   pillar: { fill: "#7a6a72", fill2: "#4a3e48", edge: "#2e262c", material: "stone" },
   barrel: { fill: "#8a5030", edge: "#3a2010", material: "metal" },
+  redBarrel: { fill: "#c62828", fill2: "#f0c020", edge: "#4a1010", material: "metal" },
   powerCrate: { fill: "#6a7078", rim: "#2a3038", edge: "#1a2028", material: "metal" }
 });
 
@@ -394,6 +395,12 @@ export function buildPropJigsaw(prop, kind = prop.kind) {
     return gridRect(
       -prop.w / 2, -prop.h / 2, prop.w, prop.h, 3, 4,
       { ...PROP_DEBRIS_COLORS.barrel, detail: "barrel" }
+    );
+  }
+  if (kind === "redBarrel") {
+    return gridRect(
+      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 3, 4,
+      { ...PROP_DEBRIS_COLORS.redBarrel, detail: "barrel" }
     );
   }
   if (kind === "powerCrate") {
