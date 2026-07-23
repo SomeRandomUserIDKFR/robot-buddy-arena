@@ -12,8 +12,8 @@ import {
   FAKE_PLATFORM_DAMAGE, inSignalTripwireReveal, isTrapLocked, isTrapper,
   LAND_MINE_BLAST_DAMAGE, LAND_MINE_BLAST_RADIUS, LAND_MINE_W, listTrapperTraps,
   SIGNAL_TRIPWIRE_REVEAL, SIGNAL_TRIPWIRE_SNARE, SPRING_PAD_DAMAGE,
-  tickTrapperFighter, tickTrapperWorld, TRAP_TYPES, TRAPPER_ARM_TIME,
-  TRAPPER_COOLDOWN, tryTrapperPlant
+  SPRING_PAD_USES, tickTrapperFighter, tickTrapperWorld, TRAP_TYPES,
+  TRAPPER_ARM_TIME, TRAPPER_COOLDOWN, tryTrapperPlant
 } from "./trapper.js";
 import { visibleToTeam } from "./vision.js";
 
@@ -126,7 +126,7 @@ assert.ok(LAND_MINE_W > 28);
 }
 
 {
-  // Spring pad launches away from trapper position.
+  // Spring pad: 3 uses, launches away from trapper, not spent on first hit.
   const owner = applyLoadout(new Fighter({
     x: 100, y: 700, team: 0, aim: 0, hp: 500, maxHp: 500
   }), {
@@ -140,13 +140,32 @@ assert.ok(LAND_MINE_W > 28);
   const game = { traps: [], effects: [], fighters: [owner, victim] };
   const trap = tryTrapperPlant(owner, game);
   assert.equal(trap.trapType, "springPad");
+  assert.equal(trap.usesLeft, SPRING_PAD_USES);
   trap.x = victim.x + 4;
   trap.y = victim.y + 36;
   tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
-  assert.equal(trap.destroyed, true);
+  assert.equal(trap.destroyed, false, "first launch does not spend spring");
+  assert.equal(trap.usesLeft, SPRING_PAD_USES - 1);
   assert.ok(victim.hp <= 500 - SPRING_PAD_DAMAGE + 0.001);
   assert.ok(victim.vx > 100, "launched away from trapper to the right");
   assert.equal(victim.grounded, false);
+
+  // Same continuous contact does not burn another use.
+  victim.vx = 0;
+  tickTrapperWorld(game, 0.05);
+  assert.equal(trap.usesLeft, SPRING_PAD_USES - 1, "no re-launch while still on pad");
+
+  // Leave and re-enter to consume remaining uses.
+  for (let i = 0; i < SPRING_PAD_USES - 1; i++) {
+    victim.x = 900;
+    tickTrapperWorld(game, 0.05);
+    victim.x = trap.x - 4;
+    victim.y = trap.y - 36;
+    victim.vx = 0;
+    tickTrapperWorld(game, 0.05);
+  }
+  assert.equal(trap.destroyed, true, "spent after last use");
+  assert.equal(trap.usesLeft, 0);
 }
 
 {
@@ -276,7 +295,7 @@ assert.ok(LAND_MINE_W > 28);
 }
 
 {
-  // Spring pad launches decoys away without killing them (and spends).
+  // Spring pad launches decoys away without killing them (uses a charge).
   const trapper = applyLoadout(new Fighter({
     x: 100, y: 700, team: 0, aim: 0
   }), { ...DEFAULT_LOADOUT, extensionSecondary: TRAPPER_ID });
@@ -298,7 +317,8 @@ assert.ok(LAND_MINE_W > 28);
   tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
   assert.equal(decoy.dead, false, "spring does not kill decoy");
   assert.ok(decoy.vx > 100, "decoy launched away from trapper");
-  assert.equal(trap.destroyed, true, "spring pad spent by illusion");
+  assert.equal(trap.destroyed, false, "spring stays for remaining uses");
+  assert.equal(trap.usesLeft, SPRING_PAD_USES - 1);
 }
 
 {

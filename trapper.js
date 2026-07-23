@@ -8,7 +8,8 @@
  * Land mine: larger cue than bear; splash slightly weaker than a red barrel.
  * Owner immune. Bear / fake plat / mine pop illusions on contact (without
  * spending, except real triggers). Spring launches fighter decoys away
- * (and spends). Signal tripwire ignores illusions entirely.
+ * and has 3 uses by default (not spent on first launch). Signal tripwire
+ * ignores illusions entirely.
  */
 import { SIZE, WORLD } from "./config.js";
 import { applyHpDamage, GEAR_BY_ID } from "./equipment.js";
@@ -47,6 +48,7 @@ export const FAKE_PLATFORM_H = 26;
 
 export const SPRING_PAD_DAMAGE = 8;
 export const SPRING_PAD_LAUNCH = 900;
+export const SPRING_PAD_USES = 3;
 export const SPRING_PAD_W = 72;
 export const SPRING_PAD_H = 16;
 
@@ -148,7 +150,10 @@ function createFakePlatform(fighter) {
 }
 
 function createSpringPad(fighter) {
-  return baseTrap(fighter, "springPad", SPRING_PAD_W, SPRING_PAD_H);
+  return baseTrap(fighter, "springPad", SPRING_PAD_W, SPRING_PAD_H, {
+    usesLeft: SPRING_PAD_USES,
+    victims: new Set()
+  });
 }
 
 function createSignalTripwire(fighter) {
@@ -323,15 +328,22 @@ function springLaunchAwayFromTrapper(trap, victim) {
 function applySpringPad(trap, victim, game) {
   if (!victim || victim.dead) return false;
   if (victim === trap.owner) return false;
+  if ((trap.usesLeft ?? 0) <= 0 || trap.triggered) return false;
+  trap.victims ||= new Set();
+  // One launch per continuous contact; leaving the pad clears the mark.
+  if (trap.victims.has(victim)) return false;
+  trap.victims.add(victim);
+
   if (isIllusionFighter(victim)) {
-    // Decoys get launched, not killed — spring still spends.
+    // Decoys get launched, not killed.
     springLaunchAwayFromTrapper(trap, victim);
   } else {
     applyHpDamage(victim, SPRING_PAD_DAMAGE, game);
     springLaunchAwayFromTrapper(trap, victim);
     victim.hitFlash = Math.max(victim.hitFlash || 0, 0.16);
   }
-  spendTrap(trap, game, { debris: true });
+
+  trap.usesLeft = Math.max(0, (trap.usesLeft ?? SPRING_PAD_USES) - 1);
   if (game?.effects) {
     game.effects.push({
       type: "propHit",
@@ -340,7 +352,22 @@ function applySpringPad(trap, victim, game) {
       life: 0.16
     });
   }
+  // Spent only after the last use — launches are otherwise free.
+  if (trap.usesLeft <= 0) {
+    spendTrap(trap, game, { debris: true });
+  }
   return true;
+}
+
+/** Drop contact marks for fighters who left the spring pad. */
+function refreshSpringPadContacts(trap, game) {
+  if (!trap?.victims?.size) return;
+  const still = new Set();
+  for (const victim of trap.victims) {
+    if (!victim || victim.dead) continue;
+    if (overlapsTrap(victim, trap)) still.add(victim);
+  }
+  trap.victims = still;
 }
 
 function applySignalTripwire(trap, victim, game) {
@@ -523,7 +550,7 @@ export function tickTrapperWorld(game, dt, oldYByFighter = null) {
           applyFakePlatform(trap, fighter, game);
         }
       } else if (trap.trapType === "springPad") {
-        if (!trap.triggered && overlapsTrap(fighter, trap)) {
+        if (overlapsTrap(fighter, trap)) {
           applySpringPad(trap, fighter, game);
         }
       } else if (trap.trapType === "signalTripwire") {
@@ -541,11 +568,15 @@ export function tickTrapperWorld(game, dt, oldYByFighter = null) {
       }
     }
 
-    // Visual prop/platform illusions — pop on contact; only spring spends.
+    // Visual prop/platform illusions — pop on contact; spring/signal ignore.
     if (!trap.destroyed) {
       for (const ill of game.illusions || []) {
         if (applyTrapToIllusionObject(trap, ill, game) && trap.destroyed) break;
       }
+    }
+
+    if (!trap.destroyed && trap.trapType === "springPad") {
+      refreshSpringPadContacts(trap, game);
     }
 
     if (!trap.destroyed && trap.life > 0) keep.push(trap);
