@@ -1743,14 +1743,10 @@ export function createRenderer(canvas) {
       context.globalAlpha = Math.max(0, Math.min(1, fogAlpha));
       context.fillStyle = color;
       context.fillRect(x, y, w, h);
+      // Outer edge of the full cast only — no inner inset outlines.
       context.strokeStyle = mixHexColors(color, "#fff4c0", forge.phase === "cool" ? 0.15 : 0.45);
       context.lineWidth = 2;
       context.strokeRect(x + 1, y + 1, w - 2, h - 2);
-      if (forge.phase === "cast" || (forge.cool || 0) < 0.55) {
-        context.strokeStyle = "rgba(255, 220, 80, 0.55)";
-        context.lineWidth = 1.5;
-        context.strokeRect(x + 4, y + 4, Math.max(0, w - 8), Math.max(0, h - 8));
-      }
     }
 
     context.restore();
@@ -1873,6 +1869,72 @@ export function createRenderer(canvas) {
     context.restore();
   }
 
+  /** True while scraps are assembling into a rebuilt object (reconquer / forge / dummy). */
+  function isRebuildAssemblyPiece(piece) {
+    const mode = piece?.despawnMode;
+    return mode === "reconquer-home"
+      || mode === "reconquer-seated"
+      || mode === "forge-ingest"
+      || mode === "build-dummy-melt";
+  }
+
+  function debrisEdgeKey(ax, ay, bx, by) {
+    const a = `${ax.toFixed(2)},${ay.toFixed(2)}`;
+    const b = `${bx.toFixed(2)},${by.toFixed(2)}`;
+    return a < b ? `${a}|${b}` : `${b}|${a}`;
+  }
+
+  /**
+   * Outer silhouette of a jigsaw rebuild: unshared home-slot edges only.
+   * Internal shard seams stay undrawn.
+   */
+  function drawRebuildAssemblyOutline(group, fogAlpha = 1) {
+    if (!group?.length) return;
+    const edgeCounts = new Map();
+    const edgeSegs = new Map();
+    let edgeColor = null;
+    for (const piece of group) {
+      const hx = (piece.homeX || 0) + (piece.homeLx || 0);
+      const hy = (piece.homeY || 0) + (piece.homeLy || 0);
+      if (!edgeColor) {
+        const fill = piece.color || "#8aa4b0";
+        edgeColor = piece.edge || mixHexColors(fill, "#061018", 0.45);
+      }
+      const worldVerts = Array.isArray(piece.verts) && piece.verts.length >= 3
+        ? piece.verts.map((v) => [hx + v[0], hy + v[1]])
+        : [
+          [hx - (piece.w || 8) * 0.5, hy - (piece.h || 8) * 0.5],
+          [hx + (piece.w || 8) * 0.5, hy - (piece.h || 8) * 0.5],
+          [hx + (piece.w || 8) * 0.5, hy + (piece.h || 8) * 0.5],
+          [hx - (piece.w || 8) * 0.5, hy + (piece.h || 8) * 0.5]
+        ];
+      for (let i = 0; i < worldVerts.length; i++) {
+        const a = worldVerts[i];
+        const b = worldVerts[(i + 1) % worldVerts.length];
+        const key = debrisEdgeKey(a[0], a[1], b[0], b[1]);
+        edgeCounts.set(key, (edgeCounts.get(key) || 0) + 1);
+        if (!edgeSegs.has(key)) edgeSegs.set(key, { a, b });
+      }
+    }
+    context.save();
+    context.globalAlpha = Math.max(0, Math.min(1, fogAlpha * 0.9));
+    context.strokeStyle = edgeColor || "#2a2018";
+    context.lineWidth = 1.6;
+    context.lineJoin = "miter";
+    context.beginPath();
+    let segs = 0;
+    for (const [key, count] of edgeCounts) {
+      if (count !== 1) continue;
+      const seg = edgeSegs.get(key);
+      if (!seg) continue;
+      context.moveTo(seg.a[0], seg.a[1]);
+      context.lineTo(seg.b[0], seg.b[1]);
+      segs += 1;
+    }
+    if (segs) context.stroke();
+    context.restore();
+  }
+
   function drawGroundDebrisPiece(piece, fogAlpha = 1) {
     const color = piece.color || "#8aa4b0";
     const edge = piece.edge || mixHexColors(color, "#061018", 0.4);
@@ -1882,6 +1944,8 @@ export function createRenderer(canvas) {
     const pieceAlpha = Math.max(0, Math.min(1, piece.alpha ?? 1));
     const hw = piece.w / 2;
     const hh = piece.h / 2;
+    // During rebuild, drop per-shard rims — only the full-object outer outline stays.
+    const hideShardRim = isRebuildAssemblyPiece(piece);
     context.save();
     context.translate(piece.x, piece.y);
     context.rotate(piece.rot || 0);
@@ -1894,16 +1958,18 @@ export function createRenderer(canvas) {
     // sharp; ellipse props may carry extra verts along the curved silhouette.
     if (piece.material !== "armor" && (piece.kind === "tile" || piece.homeLx != null)) {
       if (Array.isArray(piece.verts) && piece.verts.length >= 3) {
-        // Dark hard under-fill (same polygon, slightly larger) for a crisp rim
-        // without stroking.
-        context.fillStyle = edge;
-        context.beginPath();
-        context.moveTo(piece.verts[0][0] * 1.08, piece.verts[0][1] * 1.08);
-        for (let i = 1; i < piece.verts.length; i++) {
-          context.lineTo(piece.verts[i][0] * 1.08, piece.verts[i][1] * 1.08);
+        if (!hideShardRim) {
+          // Dark hard under-fill (same polygon, slightly larger) for a crisp rim
+          // without stroking — loose debris only, not mid-rebuild.
+          context.fillStyle = edge;
+          context.beginPath();
+          context.moveTo(piece.verts[0][0] * 1.08, piece.verts[0][1] * 1.08);
+          for (let i = 1; i < piece.verts.length; i++) {
+            context.lineTo(piece.verts[i][0] * 1.08, piece.verts[i][1] * 1.08);
+          }
+          context.closePath();
+          context.fill();
         }
-        context.closePath();
-        context.fill();
         context.fillStyle = color;
         context.beginPath();
         context.moveTo(piece.verts[0][0], piece.verts[0][1]);
@@ -1912,6 +1978,9 @@ export function createRenderer(canvas) {
         }
         context.closePath();
         context.fill();
+      } else if (hideShardRim) {
+        context.fillStyle = color;
+        context.fillRect(-hw, -hh, piece.w, piece.h);
       } else {
         // Fallback stays rectangular (straight edges) — never stroked ovals.
         context.fillStyle = edge;
@@ -1977,6 +2046,26 @@ export function createRenderer(canvas) {
   function drawGroundDebris(game, fogAlpha = 1) {
     const pieces = game.groundDebris || game.armorDebris || [];
     for (const piece of pieces) drawGroundDebrisPiece(piece, fogAlpha);
+    // One outer silhouette per jigsaw rebuild — no per-shard outlines.
+    const bySource = new Map();
+    for (const piece of pieces) {
+      if (
+        !piece?.sourceId
+        || (piece.despawnMode !== "reconquer-home"
+          && piece.despawnMode !== "reconquer-seated")
+      ) {
+        continue;
+      }
+      let list = bySource.get(piece.sourceId);
+      if (!list) {
+        list = [];
+        bySource.set(piece.sourceId, list);
+      }
+      list.push(piece);
+    }
+    for (const group of bySource.values()) {
+      drawRebuildAssemblyOutline(group, fogAlpha);
+    }
   }
 
   /** Metal training dummies forged from melted armor plates. */
