@@ -18,9 +18,11 @@ import {
 import {
   attackThrowBreakable, bindThrowBreakablePowerCrateDamager, canGrabBreakable,
   canGrabIllusionProp, damageBreakableByIllusion, dropHeldBreakable,
-  isIllusionGhostedProp, isIllusionHeldProp, isPlantedIllusionProp, isThrowBreakable,
+  hasMetalBraceCasing, isIllusionGhostedProp, isIllusionHeldProp,
+  isPlantedIllusionProp, isThrowBreakable, metalBraceThrowSelfDamage,
   releaseIllusionThrowBreakable, shatterBreakableAt, stepThrownBreakables,
-  THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID, throwHeldBreakable, tickThrowBreakable,
+  THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID, THROW_METAL_BRACE_DAMAGE_MULT,
+  throwHeldBreakable, thrownBreakableImpactDamage, tickThrowBreakable,
   tryGrabBreakable
 } from "./throw-breakable.js";
 
@@ -765,7 +767,7 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.equal(fighter.heldProp, null);
 }
 
-// Braced throw: casing takes impact damage, prop reseats as solid pickable cover.
+// Metal-cased throw: half casing self-damage, 1.25x hit damage, stays pickable.
 {
   const fighter = applyLoadout(new Fighter({
     x: 100, y: 200, team: 0, aim: 0, hp: 500, maxHp: 500
@@ -793,7 +795,14 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
     groundDebrisDropped: false
   };
   applyBraceCasing(crate, RECONJURER_BRACE_HP);
+  assert.ok(hasMetalBraceCasing(crate));
+  assert.equal(metalBraceThrowSelfDamage(crate), Math.ceil(RECONJURER_BRACE_HP * 0.5));
+  assert.equal(
+    thrownBreakableImpactDamage(crate),
+    THROW_BREAKABLE_DAMAGE * THROW_METAL_BRACE_DAMAGE_MULT
+  );
   const coreHp = crate.hp;
+  const selfDmg = metalBraceThrowSelfDamage(crate);
   const game = {
     props: [crate],
     platforms: [{ x: 0, y: 400, w: 800, h: 40 }],
@@ -807,63 +816,112 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.ok(tryGrabBreakable(fighter, game));
   assert.ok(throwHeldBreakable(fighter, game));
   assert.equal(crate.thrownInFlight, true);
-  // Drive into the floor so stepThrownBreakables finishes the throw.
   const thrown = game.thrownBreakables[0];
+  assert.equal(
+    thrown.damage,
+    THROW_BREAKABLE_DAMAGE * THROW_METAL_BRACE_DAMAGE_MULT,
+    "metal-cased throw deals 1.25x impact"
+  );
   thrown.x = 200;
   thrown.y = 360;
   thrown.vy = 400;
   stepThrownBreakables(game, 0.05);
   assert.equal(game.thrownBreakables.length, 0);
-  assert.equal(crate.destroyed, false, "brace lets the prop survive impact");
+  assert.equal(crate.destroyed, false, "metal casing lets the prop survive impact");
   assert.equal(crate.hp, coreHp, "core HP untouched while casing absorbs throw");
-  assert.ok((crate.braceHp || 0) < RECONJURER_BRACE_HP, "casing took impact damage");
+  assert.equal(crate.braceHp, RECONJURER_BRACE_HP - selfDmg, "half casing HP chipped");
   assert.equal(crate.solid, true, "surviving cover reseats solid");
   assert.equal(crate.blocksProjectiles, true);
   assert.equal(crate.thrownInFlight, false);
   assert.equal(crate.heldBy, null);
-  assert.ok(canGrabBreakable(crate), "surviving braced cover is pickable again");
+  assert.ok(canGrabBreakable(crate), "surviving metal-cased cover is pickable again");
 
   fighter.x = crate.x;
   fighter.y = crate.y;
-  assert.ok(tryGrabBreakable(fighter, game), "can re-grab after braced impact");
+  assert.ok(tryGrabBreakable(fighter, game), "can re-grab after metal-cased impact");
   assert.equal(fighter.heldProp, crate);
   tickThrowBreakable(fighter, game, 0.016);
   assert.equal(fighter.heldProp, crate, "hp>0 so hold is not auto-dropped");
 }
 
-// Braced metal box throw also reseats pickable (wood casing absorbs).
+// Second metal-cased throw strips the rest of the casing (still survives if core holds).
 {
-  const fighter = applyLoadout(new Fighter({
-    x: 300, y: 300, team: 0, aim: 0, hp: 500, maxHp: 500
-  }), {
-    ...DEFAULT_LOADOUT,
-    secondaryWeapon: THROW_BREAKABLE_ID
-  });
-  selectWeaponSlot(fighter, "secondaryWeapon");
+  const crate = {
+    kind: "crate",
+    breakable: true,
+    destroyed: false,
+    solid: true,
+    baseSolid: true,
+    baseBlocksProjectiles: true,
+    baseBlocksSight: false,
+    blocksProjectiles: true,
+    blocksSight: false,
+    x: 100,
+    y: 100,
+    w: 40,
+    h: 40,
+    hp: 50,
+    maxHp: 50,
+    groundDebrisDropped: false
+  };
+  applyBraceCasing(crate, RECONJURER_BRACE_HP);
+  const game = {
+    props: [crate],
+    platforms: [{ x: 0, y: 300, w: 800, h: 40 }],
+    effects: [],
+    groundDebris: []
+  };
+  shatterBreakableAt(crate, game, 120, 280);
+  assert.equal(crate.braceHp, RECONJURER_BRACE_HP / 2);
+  shatterBreakableAt(crate, game, 120, 280);
+  assert.equal(crate.braced, false, "second throw pops the metal casing");
+  assert.equal(crate.destroyed, false);
+  assert.equal(crate.hp, 50);
+  assert.equal(crate.solid, true);
+}
+
+// No metal casing (wood brace / unbraced) → thrown object breaks.
+{
   const metal = createPowerCrate({ x: 320, y: 340 }, "yard", "industrial", "brace-throw");
   metal.hp = POWER_CRATE_HP * 0.5;
   applyBraceCasing(metal, RECONJURER_BRACE_HP);
-  const coreHp = metal.hp;
+  assert.equal(metal.braceMaterial, "wood");
+  assert.equal(hasMetalBraceCasing(metal), false);
+  assert.equal(thrownBreakableImpactDamage(metal), THROW_BREAKABLE_DAMAGE);
   const game = {
     props: [],
     powerCrates: [metal],
     platforms: [{ x: 0, y: 500, w: 800, h: 40 }],
-    fighters: [fighter],
     effects: [],
     groundDebris: [],
-    thrownBreakables: [],
     powerCrateState: { pending: [] }
   };
-  shatterBreakableAt(metal, game, 340, 480, fighter);
-  assert.equal(metal.destroyed, false);
-  assert.equal(metal.hp, coreHp);
-  assert.ok((metal.braceHp || 0) < RECONJURER_BRACE_HP);
-  assert.equal(metal.solid, true);
-  assert.ok(canGrabBreakable(metal));
-  fighter.x = metal.x;
-  fighter.y = metal.y;
-  assert.ok(tryGrabBreakable(fighter, game));
-  assert.equal(fighter.heldProp, metal);
+  shatterBreakableAt(metal, game, 340, 480, null);
+  assert.equal(metal.destroyed, true, "wood-cased metal box breaks on throw impact");
+}
+
+{
+  const crate = {
+    kind: "crate",
+    breakable: true,
+    destroyed: false,
+    solid: true,
+    x: 50,
+    y: 50,
+    w: 40,
+    h: 40,
+    hp: 40,
+    maxHp: 40,
+    groundDebrisDropped: false
+  };
+  const game = {
+    props: [crate],
+    platforms: [{ x: 0, y: 200, w: 800, h: 40 }],
+    effects: [],
+    groundDebris: []
+  };
+  shatterBreakableAt(crate, game, 60, 180);
+  assert.equal(crate.destroyed, true, "unbraced throw still shatters");
 }
 
 console.log("throw-breakable.test.js passed.");
