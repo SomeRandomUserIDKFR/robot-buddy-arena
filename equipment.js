@@ -453,7 +453,7 @@ export const GEAR = [
     ILLUSIONIST_ID,
     "extensionSecondary",
     "Illusionist",
-    "Premium Extension: T cycles illusion type (HUD), 3 plants. Fighter decoys clone your kit with a fake HP bar (10 hits to fade) and AI-fight as gaslights; prop/platform illusions are visual-only with no cues to others. No collision or sight block. Real shots look like they die on the decoy but keep going invisible; illusion shots vanish and only phantom-damage bars (≥40). You have truth sight: outlined illusions, visible ghost rounds, and real enemy HP. Most expensive extension.",
+    "Premium Extension: T cycles illusion type (HUD), 3 plants. On PROP, Y cycles the breakable look (including metal crate bait). Fighter decoys clone your kit with a fake HP bar (10 hits to fade) and AI-fight as gaslights; prop/platform illusions are visual-only with no cues to others. No collision or sight block. Real shots look like they die on the decoy but keep going invisible; illusion shots vanish and only phantom-damage bars (≥40). You have truth sight: outlined illusions, visible ghost rounds, and real enemy HP. Most expensive extension.",
     {},
     {
       price: 320,
@@ -2707,6 +2707,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.illusionistCd = 0;
   fighter.illusionistFlash = 0;
   fighter.illusionistType = "fighter";
+  fighter.illusionPropKind = "crate";
   fighter.phantomDamage = 0;
   fighter.phantomDecayT = 0;
   fighter.combatCloneGear = !!extension?.combatClone;

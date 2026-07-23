@@ -1047,6 +1047,15 @@ button span { opacity: .6; font-size: 11px; }
   border-color: rgba(200, 180, 255, .5);
 }
 .trap-hud.illusion b { color: #e0d0ff; }
+.trap-hud-sub {
+  display: block;
+  margin-top: 4px;
+  color: rgba(210, 200, 230, .9);
+  font: 600 11px ui-monospace, Consolas, monospace;
+  letter-spacing: .05em;
+}
+.trap-hud-sub.hidden { display: none; }
+.trap-hud-sub.metal { color: #c8d0d8; }
 .trap-hud.doppel {
   border-color: rgba(140, 210, 255, .55);
 }

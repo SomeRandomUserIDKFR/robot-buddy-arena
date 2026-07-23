@@ -28,6 +28,9 @@ import {
   RECONJURER_METAL_TYPE
 } from "./reconjurer-builder.js";
 import {
+  illusionPropKindLabel, normalizeIllusionPropKind
+} from "./illusionist.js";
+import {
   ensureSettingsProfile, normalizeArmorDespawnTimer, normalizeOptimizeIllusions,
   normalizeReconquerRate
 } from "./settings.js";
@@ -66,6 +69,7 @@ export const ui = {
   trapHud: $("#trapHud"),
   trapHudKicker: $("#trapHudKicker"),
   trapHudType: $("#trapHudType"),
+  trapHudSub: $("#trapHudSub"),
   reconjurerPreview: $("#reconjurerPreview"),
   reconjurerPreviewCanvas: $("#reconjurerPreviewCanvas"),
   reconjurerPreviewKicker: $("#reconjurerPreviewKicker"),
@@ -389,6 +393,18 @@ export function updateHud(game) {
       if (ui.trapHudType) {
         ui.trapHudType.textContent = t === "prop" ? "PROP" : t === "plat" ? "PLAT" : "FIGHTER";
       }
+      if (ui.trapHudSub) {
+        if (t === "prop") {
+          const kind = normalizeIllusionPropKind(player.illusionPropKind, game);
+          ui.trapHudSub.textContent = `${illusionPropKindLabel(kind)} · Y`;
+          ui.trapHudSub.classList.remove("hidden");
+          ui.trapHudSub.classList.toggle("metal", kind === "metal");
+        } else {
+          ui.trapHudSub.textContent = "";
+          ui.trapHudSub.classList.add("hidden");
+          ui.trapHudSub.classList.remove("metal");
+        }
+      }
     } else if (showDoppel) {
       ui.trapHud.classList.toggle("fake", false);
       ui.trapHud.classList.toggle("bear", false);
@@ -399,6 +415,10 @@ export function updateHud(game) {
       if (ui.trapHudType) {
         ui.trapHudType.textContent = cd > 0 ? `${Math.ceil(cd)}s` : "READY";
       }
+      if (ui.trapHudSub) {
+        ui.trapHudSub.textContent = "";
+        ui.trapHudSub.classList.add("hidden");
+      }
     } else if (showTrap) {
       const type = player.trapperType === "fakePlatform" ? "fake" : "bear";
       ui.trapHud.classList.toggle("fake", type === "fake");
@@ -406,6 +426,10 @@ export function updateHud(game) {
       if (ui.trapHudKicker) ui.trapHudKicker.textContent = "NEXT TRAP · T cycle";
       if (ui.trapHudType) {
         ui.trapHudType.textContent = type === "fake" ? "FAKE PLAT" : "BEAR";
+      }
+      if (ui.trapHudSub) {
+        ui.trapHudSub.textContent = "";
+        ui.trapHudSub.classList.add("hidden");
       }
     }
   }
@@ -1002,7 +1026,8 @@ function modifierMarkup(gear) {
         "<span class=\"stat-up\">Gaslight hits · ≥40 phantom HP</span>",
         "<span class=\"stat-up\">Truth sight · outline fakes · ghost rounds · real HP</span>",
         "<span>Shots 'vanish' on decoy · keep going invisible</span>",
-        "<span>Prop / platform · visual only, no cues to others</span>",
+        "<span class=\"stat-up\">PROP · Y cycles look · metal crate bait</span>",
+        "<span>Platform · visual only, no cues to others</span>",
         "<span class=\"stat-down\">No real damage · most expensive</span>"
       ].join("");
     }

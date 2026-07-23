@@ -1172,6 +1172,113 @@ export function createRenderer(canvas) {
     context.globalAlpha = 1;
   }
 
+  /** Paint an illusion prop using the selected breakable / metal look. */
+  function drawIllusionPropLook(ill) {
+    const x = ill.x;
+    const y = ill.y;
+    const w = ill.w;
+    const h = ill.h;
+    const kind = ill.powerCrate || ill.kind === "powerCrate" || ill.illusionPropKind === "metal"
+      ? "metal"
+      : (ill.kind || "crate");
+    if (kind === "metal") {
+      context.fillStyle = "#6a7078";
+      context.fillRect(x, y, w, h);
+      context.fillStyle = "#2a3038";
+      context.fillRect(x, y, w, 4);
+      context.fillRect(x, y + h - 4, w, 4);
+      context.fillRect(x, y, 4, h);
+      context.fillRect(x + w - 4, y, 4, h);
+      context.strokeStyle = "rgba(220,230,240,.55)";
+      context.lineWidth = 1.5;
+      context.strokeRect(x + 5, y + 5, w - 10, h - 10);
+      context.beginPath();
+      context.moveTo(x + w / 2, y + 10);
+      context.lineTo(x + w - 10, y + h / 2);
+      context.lineTo(x + w / 2, y + h - 10);
+      context.lineTo(x + 10, y + h / 2);
+      context.closePath();
+      context.strokeStyle = "#4a3a28";
+      context.stroke();
+      context.lineWidth = 1;
+      return;
+    }
+    if (kind === "cactus") {
+      context.fillStyle = "#3d8a4a";
+      context.fillRect(x + 8, y, 12, h);
+      context.fillRect(x, y + h * 0.35, 28, 12);
+      context.fillRect(x + 4, y + h * 0.55, 10, 28);
+      return;
+    }
+    if (kind === "bush") {
+      context.fillStyle = "#6a5838";
+      context.beginPath();
+      context.ellipse(x + w / 2, y + h * 0.55, w / 2, h / 2, 0, 0, Math.PI * 2);
+      context.fill();
+      return;
+    }
+    if (kind === "tree") {
+      context.fillStyle = "#3a2818";
+      context.fillRect(x + w * 0.28, y, w * 0.44, h);
+      context.fillStyle = "#1a3a24";
+      context.beginPath();
+      context.ellipse(x + w / 2, y + h * 0.22, w * 0.55, h * 0.22, 0, 0, Math.PI * 2);
+      context.fill();
+      return;
+    }
+    if (kind === "pipe") {
+      context.fillStyle = "#6a7888";
+      context.fillRect(x, y, w, h);
+      context.fillStyle = "#3a4858";
+      context.fillRect(x + 8, y + 4, w - 16, h - 8);
+      return;
+    }
+    if (kind === "pillar") {
+      context.fillStyle = "#7a6a72";
+      context.fillRect(x, y, w, h);
+      context.fillStyle = "#4a3e48";
+      context.fillRect(x - 4, y, w + 8, 14);
+      context.fillRect(x - 4, y + h - 14, w + 8, 14);
+      return;
+    }
+    if (kind === "barrel") {
+      context.fillStyle = "#8a5030";
+      context.fillRect(x, y, w, h);
+      context.strokeStyle = "#3a2010";
+      context.beginPath();
+      context.moveTo(x, y + h * 0.3);
+      context.lineTo(x + w, y + h * 0.3);
+      context.moveTo(x, y + h * 0.7);
+      context.lineTo(x + w, y + h * 0.7);
+      context.stroke();
+      return;
+    }
+    if (kind === "redBarrel") {
+      context.fillStyle = "#c62828";
+      context.fillRect(x, y, w, h);
+      context.fillStyle = "#f0c020";
+      context.fillRect(x, y + h * 0.38, w, h * 0.24);
+      context.strokeStyle = "#4a1010";
+      context.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      return;
+    }
+    // crate / crateStack
+    context.fillStyle = "#8a6a3a";
+    context.fillRect(x, y, w, h);
+    context.strokeStyle = "#4a3818";
+    context.strokeRect(x + 2, y + 2, w - 4, h - 4);
+    context.beginPath();
+    context.moveTo(x, y);
+    context.lineTo(x + w, y + h);
+    context.stroke();
+    if (kind === "crateStack") {
+      context.beginPath();
+      context.moveTo(x, y + h * 0.5);
+      context.lineTo(x + w, y + h * 0.5);
+      context.stroke();
+    }
+  }
+
   /**
    * Illusionist props/platforms — drawn like the real thing with NO tell
    * for everyone except Illusionists, who get a lavender truth-sight outline.
@@ -1196,15 +1303,8 @@ export function createRenderer(canvas) {
           context.stroke();
         }
       } else {
-        // Crate-like prop silhouette — matches normal crates, no outline cue.
-        context.fillStyle = "#8a6a3a";
-        context.fillRect(ill.x, ill.y, ill.w, ill.h);
-        context.strokeStyle = "#4a3818";
-        context.strokeRect(ill.x + 2, ill.y + 2, ill.w - 4, ill.h - 4);
-        context.beginPath();
-        context.moveTo(ill.x, ill.y);
-        context.lineTo(ill.x + ill.w, ill.y + ill.h);
-        context.stroke();
+        // Selected breakable look (Y cycle) — no tell except Illusionist outline.
+        drawIllusionPropLook(ill);
       }
       if (truth) {
         context.strokeStyle = "rgba(210,180,255,.9)";

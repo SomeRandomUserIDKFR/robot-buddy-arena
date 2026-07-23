@@ -9,7 +9,8 @@ import {
   tryCombatCloneSpawn
 } from "./combat-clone.js";
 import {
-  cycleIllusionistType, isIllusionFighter, isIllusionist, isRealCombatant,
+  cycleIllusionistType, cycleIllusionPropKind, isIllusionFighter, isIllusionist,
+  isRealCombatant,
   refreshIllusionCaches, tickIllusionistWorld, tryIllusionistPlant
 } from "./illusionist.js";
 import { buddyChatReply, ensureCoaching } from "./coaching.js";
@@ -457,6 +458,10 @@ function handleKeyDown(event) {
     else if (isTrapper(player)) cycleTrapperType(player);
     else if (isReconjurerBuilder(player)) cycleReconjurerType(player, game);
   }
+  if (event.code === "KeyY" && !event.repeat) {
+    const player = game.fighters[0];
+    if (isIllusionist(player)) cycleIllusionPropKind(player, game);
+  }
   if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
   if (event.code === MATERIAL_CONSUMER_REFORM_KEY && !event.repeat) {
     const player = game.fighters[0];
@@ -489,7 +494,7 @@ function handleKeyDown(event) {
   }
   if ([
     "Space", "KeyW", "KeyA", "KeyD", "KeyB", "KeyC", "KeyQ", "KeyE", "KeyF", "KeyR",
-    "KeyT", "Digit1", "Digit2", "Digit3"
+    "KeyT", "KeyY", "Digit1", "Digit2", "Digit3"
   ].includes(event.code)) {
     event.preventDefault();
   }

@@ -4,9 +4,10 @@ import {
   applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID, ILLUSIONIST_ID
 } from "./equipment.js";
 import {
-  applyPhantomDamage, createFighterIllusion, cycleIllusionistType, displayedHp,
-  hasIllusionTruthSight, ILLUSION_BREAK_LIFE, ILLUSION_FIGHTER_HITS,
-  ILLUSION_PHANTOM_DAMAGE, isIllusionFighter, isIllusionist, isRealCombatant,
+  applyPhantomDamage, createFighterIllusion, cycleIllusionistType,
+  cycleIllusionPropKind, displayedHp, hasIllusionTruthSight, ILLUSION_BREAK_LIFE,
+  ILLUSION_FIGHTER_HITS, ILLUSION_METAL_PROP, ILLUSION_PHANTOM_DAMAGE,
+  isIllusionFighter, isIllusionist, isRealCombatant, listIllusionPropKinds,
   refreshIllusionCaches, registerIllusionFighterHit, registerIllusionObjectHit,
   tryIllusionistPlant
 } from "./illusionist.js";
@@ -162,12 +163,41 @@ assert.equal(ILLUSION_PHANTOM_DAMAGE, 40);
     x: 300, y: 600, team: 0, aim: 0
   }), { ...DEFAULT_LOADOUT, extensionSecondary: ILLUSIONIST_ID });
   owner.illusionistType = "prop";
-  const game = { fighters: [owner], illusions: [], effects: [] };
+  const game = { fighters: [owner], illusions: [], effects: [], theme: "yard" };
   const prop = tryIllusionistPlant(owner, game, Fighter);
   assert.ok(prop.illusionObject);
   assert.equal(prop.illusionType, "prop");
+  assert.equal(prop.kind, "crate");
   assert.equal(prop.blocksSight, false);
   assert.equal(prop.solid, false);
+}
+
+{
+  // Y cycles prop look under PROP; metal crate bait plants as powerCrate.
+  const owner = applyLoadout(new Fighter({
+    x: 300, y: 600, team: 0, aim: 0
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: ILLUSIONIST_ID });
+  assert.equal(owner.illusionPropKind, "crate");
+  // Y does nothing until type is PROP.
+  assert.equal(cycleIllusionPropKind(owner, { theme: "yard" }), null);
+  owner.illusionistType = "prop";
+  const kinds = listIllusionPropKinds({ theme: "yard" });
+  assert.ok(kinds.includes("crate"));
+  assert.ok(kinds.includes(ILLUSION_METAL_PROP), "metal bait in prop pool");
+  const first = cycleIllusionPropKind(owner, { theme: "yard" });
+  assert.ok(first);
+  assert.equal(owner.illusionPropKind, first);
+  // Force metal selection and plant.
+  owner.illusionPropKind = ILLUSION_METAL_PROP;
+  owner.illusionistCd = 0;
+  const game = { fighters: [owner], illusions: [], effects: [], theme: "yard" };
+  const metal = tryIllusionistPlant(owner, game, Fighter);
+  assert.ok(metal);
+  assert.equal(metal.illusionType, "prop");
+  assert.equal(metal.powerCrate, true);
+  assert.equal(metal.kind, "powerCrate");
+  assert.equal(metal.solid, false, "still visual-only bait");
+  assert.equal(metal.blocksProjectiles, false);
 }
 
 {

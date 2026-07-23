@@ -9,11 +9,27 @@
  */
 import { SIZE, WORLD } from "./config.js";
 import { applyLoadout, GEAR_BY_ID } from "./equipment.js";
+import { createMapProp, MAP_PROP_KINDS } from "./maps.js";
+import { POWER_CRATE_SIZE } from "./powerups.js";
 import { clamp } from "./utils.js";
 
 export const ILLUSIONIST_ID = "illusionist";
 
 export const ILLUSION_TYPES = Object.freeze(["fighter", "prop", "platform"]);
+/** Selection id for a metal power-crate illusion (bait). */
+export const ILLUSION_METAL_PROP = "metal";
+
+/** Theme pools mirror Reconjurer so bait looks native to the map. */
+const ILLUSION_THEME_KINDS = Object.freeze({
+  desert: ["cactus", "bush", "crate", "barrel"],
+  forest: ["tree", "bush", "crate", "barrel"],
+  industrial: ["crate", "pipe", "barrel", "redBarrel", "pillar"],
+  yard: ["crate", "pipe", "barrel", "redBarrel", "crateStack"],
+  ruins: ["pillar", "crate", "barrel", "bush"],
+  docks: ["crate", "barrel", "redBarrel", "pipe"],
+  city: ["crate", "barrel", "redBarrel", "pipe", "pillar"],
+  battlefield: ["crate", "barrel", "pipe", "bush"]
+});
 
 /** Plant cooldown (s). */
 export const ILLUSIONIST_COOLDOWN = 5;
@@ -93,6 +109,39 @@ export function cycleIllusionistType(fighter) {
   const idx = ILLUSION_TYPES.indexOf(cur);
   const next = ILLUSION_TYPES[(idx + 1) % ILLUSION_TYPES.length];
   fighter.illusionistType = next;
+  return next;
+}
+
+/** Theme breakables + metal — bait looks native to the map. */
+export function listIllusionPropKinds(game = null) {
+  const theme = game?.theme || game?.mapId || "battlefield";
+  const pool = ILLUSION_THEME_KINDS[theme] || ILLUSION_THEME_KINDS.battlefield;
+  const kinds = pool.filter((kind) => MAP_PROP_KINDS.includes(kind));
+  const base = kinds.length ? kinds : ["crate"];
+  return [...base, ILLUSION_METAL_PROP];
+}
+
+export function normalizeIllusionPropKind(kind, game = null) {
+  const choices = listIllusionPropKinds(game);
+  if (choices.includes(kind)) return kind;
+  return choices[0] || "crate";
+}
+
+export function illusionPropKindLabel(kind) {
+  if (kind === ILLUSION_METAL_PROP) return "METAL";
+  if (kind === "crateStack") return "STACK";
+  return String(kind || "crate").toUpperCase();
+}
+
+/** Y cycles the prop look while Illusionist type is PROP. */
+export function cycleIllusionPropKind(fighter, game = null) {
+  if (!isIllusionist(fighter)) return null;
+  if (normalizeIllusionType(fighter.illusionistType) !== "prop") return null;
+  const choices = listIllusionPropKinds(game);
+  const cur = normalizeIllusionPropKind(fighter.illusionPropKind, game);
+  const idx = choices.indexOf(cur);
+  const next = choices[(idx + 1) % choices.length];
+  fighter.illusionPropKind = next;
   return next;
 }
 
@@ -281,16 +330,34 @@ export function registerIllusionObjectHit(illusion, game) {
   return true;
 }
 
-function createPropIllusion(owner) {
-  const { x, y } = placePoint(owner, ILLUSION_PROP_W, ILLUSION_PROP_H);
+function createPropIllusion(owner, kind = "crate", game = null) {
+  const sel = normalizeIllusionPropKind(kind ?? owner?.illusionPropKind, game);
+  let w = ILLUSION_PROP_W;
+  let h = ILLUSION_PROP_H;
+  let propKind = "crate";
+  let powerCrate = false;
+  if (sel === ILLUSION_METAL_PROP) {
+    w = POWER_CRATE_SIZE;
+    h = POWER_CRATE_SIZE;
+    propKind = "powerCrate";
+    powerCrate = true;
+  } else {
+    const probe = createMapProp(sel, 0, 0);
+    w = probe.w || w;
+    h = probe.h || h;
+    propKind = probe.kind || sel;
+  }
+  const { x, y } = placePoint(owner, w, h);
   return {
     illusionObject: true,
     illusionType: "prop",
-    kind: "crate",
+    kind: propKind,
+    illusionPropKind: sel,
+    powerCrate,
     x,
     y,
-    w: ILLUSION_PROP_W,
-    h: ILLUSION_PROP_H,
+    w,
+    h,
     owner,
     team: owner.team,
     life: ILLUSION_PROP_LIFE,
@@ -387,7 +454,7 @@ export function tryIllusionistPlant(fighter, game, FighterCtor = null) {
   game.illusions ||= [];
   const obj = type === "platform"
     ? createPlatformIllusion(fighter)
-    : createPropIllusion(fighter);
+    : createPropIllusion(fighter, fighter.illusionPropKind, game);
   game.illusions.push(obj);
   fighter.illusionistCd = ILLUSIONIST_COOLDOWN;
   fighter.illusionistFlash = 0.18;
