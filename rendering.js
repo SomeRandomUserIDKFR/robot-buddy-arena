@@ -1318,8 +1318,8 @@ export function createRenderer(canvas) {
   }
 
   /**
-   * Trapper traps: tiny bear jaws; fake platforms almost match real plates
-   * but hatch / top edge are slightly wrong. Ally outline, faint enemy cue.
+   * Trapper traps: bear jaws, fake plats, spring pads, signal wires, land mines.
+   * Ally outline; enemies get faint cues (signal wire nearly invisible).
    */
   function drawTraps(game, alpha, viewerTeam = 0) {
     const colors = platformColors(game);
@@ -1328,9 +1328,12 @@ export function createRenderer(canvas) {
       const ally = trap.team === viewerTeam;
       const arming = !trap.armed;
       const pulse = arming ? 0.55 + 0.35 * Math.sin((game.elapsed || 0) * 14) : 1;
-      context.globalAlpha = alpha * pulse * (ally ? 1 : 0.72);
+      const type = trap.trapType || "bear";
+      // Signal wires stay nearly invisible to enemies once armed.
+      const enemyAlpha = type === "signalTripwire" && !arming ? 0.12 : 0.72;
+      context.globalAlpha = alpha * pulse * (ally ? 1 : enemyAlpha);
 
-      if (trap.trapType === "fakePlatform") {
+      if (type === "fakePlatform") {
         // Almost real — fill matches, but top edge is thinner/wrong hue and hatch skews.
         context.fillStyle = colors.fill;
         context.fillRect(trap.x, trap.y, trap.w, trap.h);
@@ -1363,6 +1366,67 @@ export function createRenderer(canvas) {
           context.moveTo(trap.x + trap.w - 8, trap.y);
           context.lineTo(trap.x + trap.w, trap.y);
           context.stroke();
+        }
+      } else if (type === "springPad") {
+        // Solid plate with a coiled center — real enough to step on.
+        context.fillStyle = ally ? "#4a5a62" : "#3a4248";
+        context.fillRect(trap.x, trap.y, trap.w, trap.h);
+        context.fillStyle = ally ? "#6a8a74" : "#4a5a50";
+        context.fillRect(trap.x + 2, trap.y + 2, trap.w - 4, 3);
+        context.strokeStyle = ally ? "#9ad0a8" : "#6a8070";
+        const cx = trap.x + trap.w / 2;
+        const cy = trap.y + trap.h / 2;
+        context.beginPath();
+        context.moveTo(cx - 10, cy + 2);
+        context.quadraticCurveTo(cx - 4, cy - 5, cx, cy + 2);
+        context.quadraticCurveTo(cx + 4, cy + 8, cx + 10, cy + 2);
+        context.stroke();
+        if (ally) {
+          context.strokeStyle = "rgba(120,255,180,.85)";
+          context.strokeRect(trap.x - 2, trap.y - 2, trap.w + 4, trap.h + 4);
+        } else {
+          context.fillStyle = "rgba(180,255,160,.22)";
+          context.fillRect(cx - 3, cy - 1, 6, 2);
+        }
+      } else if (type === "signalTripwire") {
+        // Thin wire — bright for allies, almost gone for enemies.
+        const y = trap.y + trap.h / 2;
+        context.strokeStyle = ally
+          ? (arming ? "rgba(255,220,120,.9)" : "rgba(255,200,80,.75)")
+          : "rgba(220,200,140,.35)";
+        context.lineWidth = ally ? 2 : 1;
+        context.beginPath();
+        context.moveTo(trap.x, y);
+        context.lineTo(trap.x + trap.w, y);
+        context.stroke();
+        context.lineWidth = 1;
+        // End posts.
+        context.fillStyle = ally ? "#e8c060" : "rgba(180,160,100,.4)";
+        context.fillRect(trap.x - 1, trap.y - 2, 3, trap.h + 4);
+        context.fillRect(trap.x + trap.w - 2, trap.y - 2, 3, trap.h + 4);
+        if (ally) {
+          context.strokeStyle = "rgba(255,220,100,.55)";
+          context.strokeRect(trap.x - 3, trap.y - 3, trap.w + 6, trap.h + 6);
+        }
+      } else if (type === "landMine") {
+        // Disc slightly larger than bear — faint red tip.
+        const cx = trap.x + trap.w / 2;
+        const cy = trap.y + trap.h / 2;
+        context.fillStyle = ally ? "#3a3834" : "#2a2824";
+        context.beginPath();
+        context.ellipse(cx, cy, trap.w / 2, trap.h / 2, 0, 0, Math.PI * 2);
+        context.fill();
+        context.strokeStyle = ally ? "#8a7060" : "#5a5048";
+        context.beginPath();
+        context.ellipse(cx, cy, trap.w / 2 - 1, trap.h / 2 - 1, 0, 0, Math.PI * 2);
+        context.stroke();
+        context.fillStyle = ally ? "#ff6a3a" : "rgba(255,100,60,.45)";
+        context.beginPath();
+        context.arc(cx, cy, 3, 0, Math.PI * 2);
+        context.fill();
+        if (ally) {
+          context.strokeStyle = "rgba(255,140,80,.9)";
+          context.strokeRect(trap.x - 2, trap.y - 2, trap.w + 4, trap.h + 4);
         }
       } else {
         // Bear trap — very small jaws; ally cyan outline, enemy faint rust ticks.
@@ -1581,6 +1645,21 @@ export function createRenderer(canvas) {
       context.lineWidth = 2.5;
       context.setLineDash([6, 4]);
       context.strokeRect(fighter.x - 4, fighter.y - 4, SIZE + 8, SIZE + 8);
+      context.setLineDash([]);
+      context.lineWidth = 1;
+    }
+    // Signal tripwire mark — visible to the revealing team.
+    if (
+      !fighter.dead
+      && viewer
+      && (fighter.signalRevealT || 0) > 0
+      && fighter.signalRevealTeam === viewer.team
+    ) {
+      const pulse = 0.55 + 0.45 * Math.sin((game.elapsed || 0) * 10);
+      context.strokeStyle = `rgba(255,210,80,${0.55 + 0.35 * pulse})`;
+      context.lineWidth = 2;
+      context.setLineDash([5, 3]);
+      context.strokeRect(fighter.x - 5, fighter.y - 5, SIZE + 10, SIZE + 10);
       context.setLineDash([]);
       context.lineWidth = 1;
     }

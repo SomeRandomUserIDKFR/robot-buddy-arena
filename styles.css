@@ -1043,6 +1043,9 @@ button span { opacity: .6; font-size: 11px; }
 }
 .trap-hud.fake b { color: #c8e0a8; }
 .trap-hud.bear b { color: #ffc8a0; }
+.trap-hud.spring b { color: #a8e8c0; }
+.trap-hud.signal b { color: #f0d878; }
+.trap-hud.mine b { color: #ff9a6a; }
 .trap-hud.illusion {
   border-color: rgba(200, 180, 255, .5);
 }

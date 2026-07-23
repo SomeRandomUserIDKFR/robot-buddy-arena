@@ -4,6 +4,7 @@ import { isIllusionFighter } from "./illusionist.js";
 import { inLightCondensationReveal } from "./light-condensation.js";
 import { sightBlockers } from "./maps.js";
 import { optimizeIllusionsEnabled } from "./settings.js";
+import { inSignalTripwireReveal } from "./trapper.js";
 import { angleDiff, dist, segmentHitsBox } from "./utils.js";
 
 function cachedSightBlockers(game) {
@@ -70,7 +71,8 @@ export function visibleToTeam(game, observer, target) {
     )
   )
     || inBeamReveal(game, observer.team, target)
-    || inLightCondensationReveal(game, observer.team, target);
+    || inLightCondensationReveal(game, observer.team, target)
+    || inSignalTripwireReveal(game, observer.team, target);
 }
 
 export function visibleToSelf(observer, target, game = null) {

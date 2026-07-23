@@ -6,12 +6,16 @@ import {
 import {
   createFighterIllusion, isIllusionFighter, tryIllusionistPlant
 } from "./illusionist.js";
+import { RED_BARREL_BLAST_DAMAGE, RED_BARREL_BLAST_RADIUS } from "./explosive-barrel.js";
 import {
   applyTrapLockToIntent, BEAR_TRAP_DAMAGE, BEAR_TRAP_LOCK, cycleTrapperType,
-  FAKE_PLATFORM_DAMAGE, isTrapLocked, isTrapper, listTrapperTraps,
-  tickTrapperFighter, tickTrapperWorld, TRAPPER_ARM_TIME, TRAPPER_COOLDOWN,
-  tryTrapperPlant
+  FAKE_PLATFORM_DAMAGE, inSignalTripwireReveal, isTrapLocked, isTrapper,
+  LAND_MINE_BLAST_DAMAGE, LAND_MINE_BLAST_RADIUS, LAND_MINE_W, listTrapperTraps,
+  SIGNAL_TRIPWIRE_REVEAL, SIGNAL_TRIPWIRE_SNARE, SPRING_PAD_DAMAGE,
+  tickTrapperFighter, tickTrapperWorld, TRAP_TYPES, TRAPPER_ARM_TIME,
+  TRAPPER_COOLDOWN, tryTrapperPlant
 } from "./trapper.js";
+import { visibleToTeam } from "./vision.js";
 
 assert.equal(GEAR_BY_ID[TRAPPER_ID].slot, "extensionSecondary");
 assert.equal(GEAR_BY_ID[TRAPPER_ID].trapper, true);
@@ -19,6 +23,12 @@ assert.equal(TRAPPER_ARM_TIME > 0, true);
 assert.equal(BEAR_TRAP_LOCK, 5);
 assert.equal(BEAR_TRAP_DAMAGE, 25);
 assert.equal(FAKE_PLATFORM_DAMAGE, 10);
+assert.deepEqual([...TRAP_TYPES], [
+  "bear", "fakePlatform", "springPad", "signalTripwire", "landMine"
+]);
+assert.ok(LAND_MINE_BLAST_DAMAGE < RED_BARREL_BLAST_DAMAGE);
+assert.ok(LAND_MINE_BLAST_RADIUS < RED_BARREL_BLAST_RADIUS);
+assert.ok(LAND_MINE_W > 28);
 
 {
   const fighter = applyLoadout(new Fighter({
@@ -30,6 +40,9 @@ assert.equal(FAKE_PLATFORM_DAMAGE, 10);
   assert.ok(isTrapper(fighter));
   assert.equal(fighter.trapperType, "bear");
   assert.equal(cycleTrapperType(fighter), "fakePlatform");
+  assert.equal(cycleTrapperType(fighter), "springPad");
+  assert.equal(cycleTrapperType(fighter), "signalTripwire");
+  assert.equal(cycleTrapperType(fighter), "landMine");
   assert.equal(cycleTrapperType(fighter), "bear");
 
   const game = { traps: [], effects: [], fighters: [fighter] };
@@ -110,6 +123,93 @@ assert.equal(FAKE_PLATFORM_DAMAGE, 10);
   const hpAfter = victim.hp;
   tickTrapperWorld(game, 0.05, prev2);
   assert.equal(victim.hp, hpAfter, "fake platform damages once per victim");
+}
+
+{
+  // Spring pad launches away from trapper position.
+  const owner = applyLoadout(new Fighter({
+    x: 100, y: 700, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: TRAPPER_ID
+  });
+  owner.trapperType = "springPad";
+  const victim = new Fighter({
+    x: 300, y: 700, team: 1, hp: 500, maxHp: 500, grounded: true, vx: 0, vy: 0
+  });
+  const game = { traps: [], effects: [], fighters: [owner, victim] };
+  const trap = tryTrapperPlant(owner, game);
+  assert.equal(trap.trapType, "springPad");
+  trap.x = victim.x + 4;
+  trap.y = victim.y + 36;
+  tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
+  assert.equal(trap.destroyed, true);
+  assert.ok(victim.hp <= 500 - SPRING_PAD_DAMAGE + 0.001);
+  assert.ok(victim.vx > 100, "launched away from trapper to the right");
+  assert.equal(victim.grounded, false);
+}
+
+{
+  // Signal tripwire: snare + team reveal + ping.
+  const owner = applyLoadout(new Fighter({
+    x: 100, y: 700, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: TRAPPER_ID
+  });
+  owner.trapperType = "signalTripwire";
+  owner.sight = 60;
+  owner.directionalSightRange = 0;
+  const victim = new Fighter({
+    x: 900, y: 700, team: 1, hp: 500, maxHp: 500, grounded: true
+  });
+  const game = {
+    traps: [], effects: [], fighters: [owner, victim], pings: [], props: [],
+    beamReveals: []
+  };
+  const trap = tryTrapperPlant(owner, game);
+  assert.equal(trap.trapType, "signalTripwire");
+  trap.x = victim.x;
+  trap.y = victim.y + 20;
+  assert.equal(visibleToTeam(game, owner, victim), false, "out of sight before trip");
+  tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
+  assert.equal(trap.destroyed, true);
+  assert.ok(victim.trapLockT >= SIGNAL_TRIPWIRE_SNARE - 0.01);
+  assert.ok(victim.signalRevealT >= SIGNAL_TRIPWIRE_REVEAL - 0.01);
+  assert.equal(victim.signalRevealTeam, 0);
+  assert.ok(inSignalTripwireReveal(game, 0, victim));
+  assert.equal(visibleToTeam(game, owner, victim), true, "signal reveals for team");
+  assert.ok(game.pings.length >= 1);
+}
+
+{
+  // Land mine: splash weaker than barrel; ally immune; spends trap.
+  const owner = applyLoadout(new Fighter({
+    x: 100, y: 700, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: TRAPPER_ID
+  });
+  owner.trapperType = "landMine";
+  const victim = new Fighter({
+    x: 300, y: 700, team: 1, hp: 500, maxHp: 500, grounded: true
+  });
+  const far = new Fighter({
+    x: 900, y: 700, team: 1, hp: 500, maxHp: 500, grounded: true
+  });
+  const game = { traps: [], effects: [], fighters: [owner, victim, far] };
+  const trap = tryTrapperPlant(owner, game);
+  assert.equal(trap.trapType, "landMine");
+  assert.ok(trap.w > 28);
+  trap.x = victim.x + 4;
+  trap.y = victim.y + 34;
+  tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
+  assert.equal(trap.destroyed, true);
+  assert.ok(victim.hp < 500 - 10, "mine damages nearby foe");
+  assert.ok(victim.hp > 500 - LAND_MINE_BLAST_DAMAGE - 1);
+  assert.equal(far.hp, 500, "out of blast radius");
+  assert.equal(owner.hp, 500, "owner immune to mine splash");
+  assert.ok(game.effects.some((e) => e.type === "explosion"));
 }
 
 {

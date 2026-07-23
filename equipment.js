@@ -429,7 +429,7 @@ export const GEAR = [
     TRAPPER_ID,
     "extensionSecondary",
     "Trapper",
-    "Extension tool: T cycles trap type (HUD shows next), 3 plants after a short arm time. Bear trap: 25 dmg + 5s no jump/jet/dodge. Fake platform: looks almost real but wrong — no collision, 10 dmg on fall-through. Owner immune. Instantly destroys illusions on contact. Does not replace 1/2 secondary.",
+    "Extension tool: T cycles trap type (HUD shows next), 3 plants after a short arm time. Bear: 25 dmg + 5s no jump/jet/dodge. Fake platform: looks almost real but wrong — no collision, 10 dmg on fall-through. Spring pad: launches the victim away from you. Signal tripwire: thin snare + team reveal ping. Land mine: larger cue than bear, splash slightly weaker than a red barrel. Owner immune. Instantly destroys illusions on contact. Does not replace 1/2 secondary.",
     {},
     {
       price: 190,

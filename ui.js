@@ -34,6 +34,7 @@ import {
   ensureSettingsProfile, normalizeArmorDespawnTimer, normalizeOptimizeIllusions,
   normalizeReconquerRate
 } from "./settings.js";
+import { normalizeTrapType, trapTypeLabel } from "./trapper.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -381,14 +382,20 @@ export function updateHud(game) {
     ui.trapHud.classList.toggle("hidden", !showTrap && !showIllu && !showDoppel);
     ui.trapHud.classList.toggle("illusion", showIllu);
     ui.trapHud.classList.toggle("doppel", showDoppel && !showIllu);
+    const clearTrapHudKinds = () => {
+      ui.trapHud.classList.toggle("fake", false);
+      ui.trapHud.classList.toggle("bear", false);
+      ui.trapHud.classList.toggle("spring", false);
+      ui.trapHud.classList.toggle("signal", false);
+      ui.trapHud.classList.toggle("mine", false);
+    };
     if (showIllu) {
       const t = player.illusionistType === "prop"
         ? "prop"
         : player.illusionistType === "platform"
           ? "plat"
           : "fighter";
-      ui.trapHud.classList.toggle("fake", false);
-      ui.trapHud.classList.toggle("bear", false);
+      clearTrapHudKinds();
       if (ui.trapHudKicker) ui.trapHudKicker.textContent = "NEXT ILLUSION · T cycle";
       if (ui.trapHudType) {
         ui.trapHudType.textContent = t === "prop" ? "PROP" : t === "plat" ? "PLAT" : "FIGHTER";
@@ -406,8 +413,7 @@ export function updateHud(game) {
         }
       }
     } else if (showDoppel) {
-      ui.trapHud.classList.toggle("fake", false);
-      ui.trapHud.classList.toggle("bear", false);
+      clearTrapHudKinds();
       const cd = player.combatCloneCd || 0;
       if (ui.trapHudKicker) {
         ui.trapHudKicker.textContent = cd > 0 ? "DOPPEL · COOLDOWN" : "DOPPEL · PRESS 3";
@@ -420,13 +426,15 @@ export function updateHud(game) {
         ui.trapHudSub.classList.add("hidden");
       }
     } else if (showTrap) {
-      const type = player.trapperType === "fakePlatform" ? "fake" : "bear";
-      ui.trapHud.classList.toggle("fake", type === "fake");
+      const type = normalizeTrapType(player.trapperType);
+      clearTrapHudKinds();
+      ui.trapHud.classList.toggle("fake", type === "fakePlatform");
       ui.trapHud.classList.toggle("bear", type === "bear");
+      ui.trapHud.classList.toggle("spring", type === "springPad");
+      ui.trapHud.classList.toggle("signal", type === "signalTripwire");
+      ui.trapHud.classList.toggle("mine", type === "landMine");
       if (ui.trapHudKicker) ui.trapHudKicker.textContent = "NEXT TRAP · T cycle";
-      if (ui.trapHudType) {
-        ui.trapHudType.textContent = type === "fake" ? "FAKE PLAT" : "BEAR";
-      }
+      if (ui.trapHudType) ui.trapHudType.textContent = trapTypeLabel(type);
       if (ui.trapHudSub) {
         ui.trapHudSub.textContent = "";
         ui.trapHudSub.classList.add("hidden");
@@ -1004,9 +1012,11 @@ function modifierMarkup(gear) {
         "<span>Extension · T cycle · 3 plant</span>",
         "<span class=\"stat-up\">Bear · 25 dmg + 5s no mobility</span>",
         "<span class=\"stat-up\">Fake plat · looks almost real, 10 dmg fall</span>",
+        "<span class=\"stat-up\">Spring · launches away from you</span>",
+        "<span class=\"stat-up\">Signal wire · snare + team reveal</span>",
+        "<span class=\"stat-up\">Land mine · splash under red barrel</span>",
         "<span class=\"stat-up\">Instantly pops illusions on contact</span>",
         "<span>Short arm time before triggers</span>",
-        "<span>Ally outline · faint enemy cue</span>",
         "<span class=\"stat-down\">Owner immune · max 3 active</span>"
       ].join("");
     }
