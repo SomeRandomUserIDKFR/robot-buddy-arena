@@ -115,6 +115,7 @@ export const LIGHT_CONDENSATION_ID = "light-condensation";
 export const TRAPPER_ID = "trapper";
 export const ILLUSIONIST_ID = "illusionist";
 export const COMBAT_CLONE_ID = "doppel";
+export const SPELLBOOK_ID = "spellbook";
 
 /** World position of the Material Consumer blade tip (aim-aligned). */
 export function materialConsumerTip(fighter) {
@@ -240,6 +241,33 @@ export const GEAR = [
     baseDamage: 24, rpm: 300, range: 64, movementMultiplier: 1.25,
     iframeMultiplier: 1.25
   }, 135),
+  item(
+    "spellbook",
+    "weapon",
+    "Spellbook",
+    "Arcane primary: E cycles Ice / Fire / Lightning. Casts spend mana (regens over time). Ice: unblockable forward spike — 2s pin, then 5s slow. Fire: AoE burst that ignites breakables and spreads. Lightning: chains across crates/pipes/barrels/pillars; metal nodes hit harder.",
+    { damage: 22 / 12, fireRate: 48 / 500, range: 520 / 1317.5 },
+    {
+      price: 220,
+      baseKind: "gun",
+      spellbook: true,
+      manaMax: 100,
+      weaponStats: {
+        kind: "gun",
+        baseDamage: 22,
+        rpm: 48,
+        range: 520,
+        projectileSpeed: 0,
+        dropoff: null,
+        aimSettle: 0,
+        unsettledSpread: 0,
+        cameraLead: 0.08,
+        sightExtension: 0,
+        movementMultiplier: 1,
+        iframeMultiplier: 1
+      }
+    }
+  ),
 
   // Nanotech: counterpart weapon stats × NANOTECH_DAMAGE_MULT; shared bot pool.
   // Weapons need free bots ≥ cost to fire / form.
@@ -1706,6 +1734,15 @@ export function applyActiveWeaponGear(fighter, gearId) {
   fighter.materialConsumer = !!gear.materialConsumer;
   fighter.throwBreakable = !!gear.throwBreakable;
   fighter.shieldSteal = !!gear.shieldSteal;
+  fighter.spellbook = !!gear.spellbook;
+  if (gear.spellbook) {
+    fighter.spellType = fighter.spellType || "ice";
+    fighter.manaMax = gear.manaMax ?? fighter.manaMax ?? 100;
+    if (fighter.mana == null) fighter.mana = fighter.manaMax;
+    else fighter.mana = Math.min(fighter.mana, fighter.manaMax);
+  } else {
+    fighter.manaMax = 0;
+  }
   fighter.nanotechWeaponCost = gear.nanotech ? nanotechFormCostOf(gear) : 0;
   fighter.nanobotShotCost = gear.nanotech ? Math.max(0, Number(gear.nanobotShotCost) || 0) : 0;
   fighter.nanotechAmmoBonus = gear.nanotech ? nanotechAmmoBonusOf(gear) : 0;
@@ -2675,6 +2712,14 @@ export function applyLoadout(fighter, loadout) {
   // Matches primary start above; secondaries are swapped in via 1/2 / scroll.
   fighter.materialConsumer = false;
   fighter.throwBreakable = false;
+  fighter.spellbook = !!weapon.spellbook;
+  fighter.spellType = "ice";
+  fighter.manaMax = weapon.spellbook ? (weapon.manaMax ?? 100) : 0;
+  fighter.mana = fighter.manaMax;
+  fighter.icePinT = 0;
+  fighter.iceSlowT = 0;
+  fighter.spellFlash = 0;
+  fighter.manaFlash = 0;
   fighter.shieldSteal = false;
   fighter.shieldStealHeld = false;
   fighter.shieldStealFlash = 0;

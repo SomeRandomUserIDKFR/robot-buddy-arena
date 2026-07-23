@@ -8,7 +8,8 @@ import {
 } from "./illusionist.js";
 import { RED_BARREL_BLAST_DAMAGE, RED_BARREL_BLAST_RADIUS } from "./explosive-barrel.js";
 import {
-  applyTrapLockToIntent, BEAR_TRAP_DAMAGE, BEAR_TRAP_LOCK, cycleTrapperType,
+  applyTrapLockToIntent, BEAR_TRAP_DAMAGE, BEAR_TRAP_LOCK,
+  BEAR_TRAP_SHIELD_DAMAGE_MULT, BEAR_TRAP_SHIELD_LOCK_MULT, cycleTrapperType,
   FAKE_PLATFORM_DAMAGE, inSignalTripwireReveal, isTrapLocked, isTrapper,
   LAND_MINE_BLAST_DAMAGE, LAND_MINE_BLAST_RADIUS, LAND_MINE_W, listTrapperTraps,
   SIGNAL_TRIPWIRE_REVEAL, SIGNAL_TRIPWIRE_SNARE, SPRING_PAD_DAMAGE,
@@ -380,6 +381,39 @@ assert.ok(LAND_MINE_W > 28);
   });
   assert.ok(listTrapperTraps({ traps: [] }).length === 0);
   assert.equal(isTrapper(fighter), true);
+}
+
+{
+  // Raised shield softens bear trap damage + lock, still spends the trap.
+  const owner = applyLoadout(new Fighter({
+    x: 200, y: 700, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: TRAPPER_ID
+  });
+  const victim = applyLoadout(new Fighter({
+    x: 400, y: 700, team: 1, aim: Math.PI, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    shield: "kinetic-targe"
+  });
+  victim.shieldRaised = true;
+  victim.shieldBroken = false;
+  victim.shieldDurability = victim.shieldMaxDurability;
+  const beforeShield = victim.shieldDurability;
+  const game = { traps: [], effects: [], fighters: [owner, victim] };
+  const trap = tryTrapperPlant(owner, game);
+  assert.ok(trap);
+  trap.x = victim.x + 8;
+  trap.y = victim.y + 36;
+  tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
+  const expectedDmg = BEAR_TRAP_DAMAGE * BEAR_TRAP_SHIELD_DAMAGE_MULT;
+  const expectedLock = BEAR_TRAP_LOCK * BEAR_TRAP_SHIELD_LOCK_MULT;
+  assert.ok(Math.abs((500 - victim.hp) - expectedDmg) < 0.001);
+  assert.ok(Math.abs(victim.trapLockT - expectedLock) < 0.001);
+  assert.ok(victim.shieldDurability < beforeShield);
+  assert.equal(BEAR_TRAP_SHIELD_DAMAGE_MULT, 0.4);
+  assert.equal(BEAR_TRAP_SHIELD_LOCK_MULT, 0.4);
 }
 
 console.log("trapper.test.js passed.");

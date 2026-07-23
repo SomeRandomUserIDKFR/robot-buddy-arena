@@ -51,6 +51,9 @@ const WEAPON_VISUALS = {
   "shield-steal": {
     length: 36, width: 5, gripOffset: 17, ally: "#7ec8ff", enemy: "#ff9a70", buddy: "#6ad8ff"
   },
+  spellbook: {
+    length: 22, width: 14, gripOffset: 16, ally: "#7eb8e8", enemy: "#d888a0", buddy: "#6ec8f0"
+  },
   // Legacy baseKind fallbacks
   gun: { length: 32, width: 10, gripOffset: 18, ally: "#6a8f9c", enemy: "#8a655c", buddy: "#5aa8b4" },
   saber: { length: 48, width: 5, gripOffset: 17, ally: "#70f3ff", enemy: "#ff8279", buddy: "#4df2ff" }
@@ -732,6 +735,19 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
       context.lineWidth = 1;
       context.strokeRect(visual.gripOffset, -width / 2, Math.min(length, 18), width);
     }
+    return;
+  }
+
+  // Spellbook: short thick tome silhouette.
+  if (fighter.spellbook) {
+    context.globalAlpha = alpha;
+    context.fillStyle = visual.color;
+    context.fillRect(visual.gripOffset, -width / 2, length, width);
+    context.fillStyle = "rgba(255,255,255,.22)";
+    context.fillRect(visual.gripOffset + 3, -width / 2 + 2, 3, width - 4);
+    context.strokeStyle = "rgba(255,255,255,.35)";
+    context.lineWidth = 1;
+    context.strokeRect(visual.gripOffset, -width / 2, length, width);
     return;
   }
 
@@ -2594,6 +2610,74 @@ export function createRenderer(canvas) {
         context.textBaseline = "middle";
         const rise = (1.1 - effect.life) * 36;
         context.fillText(effect.label || "Loot!", effect.x, effect.y - rise);
+      }
+      if (effect.type === "iceSpike") {
+        const ang = (effect.angle || 0) - Math.PI / 4;
+        const len = Math.hypot((effect.tipX || 0) - effect.x, (effect.tipY || 0) - effect.y) || 160;
+        context.translate(effect.x, effect.y);
+        context.rotate(ang);
+        context.globalAlpha = clamp(effect.life * 4, 0, 1);
+        context.fillStyle = "rgba(180, 230, 255, 0.85)";
+        context.beginPath();
+        context.moveTo(0, -6);
+        context.lineTo(len * 0.92, 0);
+        context.lineTo(0, 6);
+        context.closePath();
+        context.fill();
+        context.strokeStyle = "rgba(230, 248, 255, 0.95)";
+        context.lineWidth = 1.5;
+        context.stroke();
+      }
+      if (effect.type === "icePin") {
+        const target = effect.target;
+        if (target && !target.dead) {
+          const cx = target.x + SIZE / 2;
+          const cy = target.y + SIZE / 2;
+          context.translate(cx, cy);
+          context.rotate(effect.angle || -Math.PI / 4);
+          context.globalAlpha = clamp(effect.life * 0.7, 0, 0.9);
+          context.fillStyle = "rgba(170, 220, 255, 0.75)";
+          context.beginPath();
+          context.moveTo(-10, -5);
+          context.lineTo(42, 0);
+          context.lineTo(-10, 5);
+          context.closePath();
+          context.fill();
+          context.strokeStyle = "rgba(220, 244, 255, 0.9)";
+          context.lineWidth = 1.2;
+          context.stroke();
+        }
+      }
+      if (effect.type === "fireBurst") {
+        const r = effect.radius || 40;
+        const t = clamp(effect.life * 3.2, 0, 1);
+        context.globalAlpha = t * 0.85;
+        context.fillStyle = "rgba(255, 120, 40, 0.35)";
+        context.beginPath();
+        context.arc(effect.x, effect.y, r * (1.1 - t * 0.25), 0, Math.PI * 2);
+        context.fill();
+        context.strokeStyle = "rgba(255, 200, 80, 0.9)";
+        context.lineWidth = 2;
+        context.beginPath();
+        context.arc(effect.x, effect.y, r * (0.55 + (1 - t) * 0.45), 0, Math.PI * 2);
+        context.stroke();
+      }
+      if (effect.type === "lightningBolt") {
+        context.globalAlpha = clamp(effect.life * 5, 0, 1);
+        for (const bolt of effect.bolts || []) {
+          context.strokeStyle = "rgba(255, 240, 140, 0.95)";
+          context.lineWidth = 2.4;
+          context.beginPath();
+          context.moveTo(bolt.x1, bolt.y1);
+          const mx = (bolt.x1 + bolt.x2) / 2 + (Math.random() - 0.5) * 18;
+          const my = (bolt.y1 + bolt.y2) / 2 + (Math.random() - 0.5) * 18;
+          context.lineTo(mx, my);
+          context.lineTo(bolt.x2, bolt.y2);
+          context.stroke();
+          context.strokeStyle = "rgba(255, 255, 255, 0.7)";
+          context.lineWidth = 1;
+          context.stroke();
+        }
       }
       context.restore();
     }

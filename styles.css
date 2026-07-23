@@ -1063,6 +1063,12 @@ button span { opacity: .6; font-size: 11px; }
   border-color: rgba(140, 210, 255, .55);
 }
 .trap-hud.doppel b { color: #b8e4ff; }
+.trap-hud.spell {
+  border-color: rgba(140, 190, 255, .5);
+}
+.trap-hud.spell.ice b { color: #a8e4ff; }
+.trap-hud.spell.fire b { color: #ffb070; }
+.trap-hud.spell.lightning b { color: #e8d878; }
 .reconjurer-preview {
   position: absolute;
   left: 18px;
@@ -1160,6 +1166,12 @@ button span { opacity: .6; font-size: 11px; }
 .meter.reserve.empty { border-color: #6b7580; }
 .meter.reserve.empty span { color: #c5ced6; }
 .meter.reserve.empty i { background: #355a4c; }
+.meter.mana i { background: #5ab8ff; }
+.meter.mana.low { border-color: #7ec8ff; }
+.meter.mana.low span { color: #c8e8ff; }
+.meter.mana.empty { border-color: #6b7580; }
+.meter.mana.empty span { color: #c5ced6; }
+.meter.mana.empty i { background: #2a4a68; }
 .meter.exhausted { border-color: #ff5e56; }
 .meter.exhausted span { color: #ffb4ae; animation: exhaustedBlink 1s step-start infinite; }
 .meter.exhausted i { background: #ff5e56; }

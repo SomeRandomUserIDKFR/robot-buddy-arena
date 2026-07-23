@@ -39,6 +39,9 @@ export const TRAPPER_TRAP_LIFE = 40;
 
 export const BEAR_TRAP_DAMAGE = 25;
 export const BEAR_TRAP_LOCK = 5;
+/** Bear trap vs raised shield: reduced bite + shorter lock. */
+export const BEAR_TRAP_SHIELD_DAMAGE_MULT = 0.4;
+export const BEAR_TRAP_SHIELD_LOCK_MULT = 0.4;
 export const BEAR_TRAP_W = 28;
 export const BEAR_TRAP_H = 10;
 
@@ -265,10 +268,27 @@ function applyBearTrap(trap, victim, game) {
     fadeIllusionFighter(victim, game);
     return true;
   }
-  applyHpDamage(victim, BEAR_TRAP_DAMAGE, game);
-  victim.trapLockT = BEAR_TRAP_LOCK;
+  // Raised shield softens the snap (still triggers / spends the trap).
+  const shielded = !!victim.shieldRaised
+    && !victim.shieldBroken
+    && (victim.shieldDurability || 0) > 0;
+  const dmg = BEAR_TRAP_DAMAGE * (shielded ? BEAR_TRAP_SHIELD_DAMAGE_MULT : 1);
+  const lock = BEAR_TRAP_LOCK * (shielded ? BEAR_TRAP_SHIELD_LOCK_MULT : 1);
+  applyHpDamage(victim, dmg, game);
+  victim.trapLockT = lock;
   victim.trapLockKind = "bear";
   victim.hitFlash = Math.max(victim.hitFlash || 0, 0.2);
+  if (shielded) {
+    victim.shieldFlash = Math.max(victim.shieldFlash || 0, 0.16);
+    victim.shieldDurability = Math.max(
+      0,
+      (victim.shieldDurability || 0) - BEAR_TRAP_DAMAGE * 0.35
+    );
+    if (victim.shieldDurability <= 0) {
+      victim.shieldBroken = true;
+      victim.shieldRaised = false;
+    }
+  }
   spendBearTrap(trap, game);
   return true;
 }

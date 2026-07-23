@@ -42,6 +42,10 @@ import {
 import {
   playImpactSfx, playMeleeSfx, playShotSfx, setJetpackThrusting
 } from "./sfx.js";
+import {
+  applyIcePinToIntent, bindSpellbookHitter, castSpellbook, iceSlowMult,
+  isSpellbook, tickSpellbookFighter
+} from "./spellbook.js";
 import { angleDiff, clamp, dist, lerp, segmentHitsBox } from "./utils.js";
 
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
@@ -165,7 +169,7 @@ function hit(target, source, damage, angle, game, extras = {}) {
     && !target.shieldBroken;
   let dealt = damage * (target.damageTaken || 1);
   let shieldBlocked = false;
-  if (shieldBlocksAttack(target, angle) && dealt > 0) {
+  if (!extras.unblockable && shieldBlocksAttack(target, angle) && dealt > 0) {
     const shieldMult = extras.shieldDamageMult
       ?? source?.weaponStats?.shieldDamageMult
       ?? 1;
@@ -244,6 +248,7 @@ function hit(target, source, damage, angle, game, extras = {}) {
 
 export { hit };
 bindExplosiveBarrelHitter(hit);
+bindSpellbookHitter(hit);
 
 export function weaponAccuracySpread(fighter) {
   const required = fighter.aimSettleRequired || 0;
@@ -409,6 +414,22 @@ export function attack(fighter, game, random = Math.random) {
     }
     return;
   }
+  if (isSpellbook(fighter)) {
+    const cast = castSpellbook(fighter, game);
+    if (!cast) return;
+    if (fighter.buddy && game.mode === "training") {
+      game.stats.buddyAttacks++;
+      game.lastBuddyAttackAt = game.elapsed;
+    }
+    if (fighter.human && game.mode === "training") {
+      game.stats.attacks++;
+      game.lastPlayerAttackAt = game.elapsed;
+      const buddy = game.fighters.find((candidate) => candidate.buddy);
+      if (buddy) game.stats.attackRangeSum += dist(fighter, buddy);
+      if (fighter.hp < 180) game.stats.lowHpAttack++;
+    }
+    return;
+  }
   const spread = weaponAccuracySpread(fighter);
   const shotAngle = fighter.aim + (random() - .5) * spread * 2;
   const ox = fighter.x + SIZE / 2 + Math.cos(shotAngle) * 31;
@@ -560,6 +581,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   tickAdaptiveWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
   if (!decoy && !clone) tickTrapperFighter(fighter, dt);
+  tickSpellbookFighter(fighter, dt);
   tickIllusionistFighter(fighter, dt, game);
   tickCombatCloneFighter(fighter, dt);
   tickShieldStealFighter(fighter, dt);
@@ -584,6 +606,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
       : updateAI(fighter, dt, game, profile);
   }
   applyTrapLockToIntent(fighter, intent);
+  applyIcePinToIntent(fighter, intent);
   fighter.nanotechWantFire = !!intent.attack;
   const aimDelta = fighter.lastAim == null ? Infinity : Math.abs(angleDiff(fighter.aim, fighter.lastAim));
   fighter.aimSettle = aimDelta <= .012
@@ -597,6 +620,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   const speedCap = fighter.moveSpeed * shieldSpeedMultiplier(fighter)
     * retractableSpeedMultiplier(fighter)
     * moveSpeedBuffMult(fighter)
+    * iceSlowMult(fighter)
     * (isTrapLocked(fighter) ? 0.35 : 1);
   if (Math.abs(fighter.vx) < speedCap * 1.25) {
     fighter.vx += intent.mx * fighter.acceleration * dt;

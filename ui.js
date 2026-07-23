@@ -36,6 +36,7 @@ import {
 } from "./settings.js";
 import { applySfxSettings } from "./sfx.js";
 import { normalizeTrapType, trapTypeLabel } from "./trapper.js";
+import { isSpellbook, normalizeSpellType, spellManaCost, spellTypeLabel } from "./spellbook.js";
 import { gimmickLabel } from "./map-gimmicks.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -382,15 +383,21 @@ export function updateHud(game) {
     const showTrap = !!player?.trapper && !player.dead;
     const showIllu = !!player?.illusionist && !player.dead;
     const showDoppel = !!player?.combatCloneGear && !player.dead;
-    ui.trapHud.classList.toggle("hidden", !showTrap && !showIllu && !showDoppel);
+    const showSpell = !!player && isSpellbook(player) && !player.dead
+      && !showTrap && !showIllu && !showDoppel;
+    ui.trapHud.classList.toggle("hidden", !showTrap && !showIllu && !showDoppel && !showSpell);
     ui.trapHud.classList.toggle("illusion", showIllu);
     ui.trapHud.classList.toggle("doppel", showDoppel && !showIllu);
+    ui.trapHud.classList.toggle("spell", showSpell);
     const clearTrapHudKinds = () => {
       ui.trapHud.classList.toggle("fake", false);
       ui.trapHud.classList.toggle("bear", false);
       ui.trapHud.classList.toggle("spring", false);
       ui.trapHud.classList.toggle("signal", false);
       ui.trapHud.classList.toggle("mine", false);
+      ui.trapHud.classList.toggle("ice", false);
+      ui.trapHud.classList.toggle("fire", false);
+      ui.trapHud.classList.toggle("lightning", false);
     };
     if (showIllu) {
       const t = player.illusionistType === "prop"
@@ -441,6 +448,21 @@ export function updateHud(game) {
       if (ui.trapHudSub) {
         ui.trapHudSub.textContent = "";
         ui.trapHudSub.classList.add("hidden");
+      }
+    } else if (showSpell) {
+      const type = normalizeSpellType(player.spellType);
+      clearTrapHudKinds();
+      ui.trapHud.classList.toggle("ice", type === "ice");
+      ui.trapHud.classList.toggle("fire", type === "fire");
+      ui.trapHud.classList.toggle("lightning", type === "lightning");
+      if (ui.trapHudKicker) ui.trapHudKicker.textContent = "SPELL · E cycle";
+      if (ui.trapHudType) ui.trapHudType.textContent = spellTypeLabel(type);
+      if (ui.trapHudSub) {
+        const cost = spellManaCost(type);
+        const mana = Math.floor(player.mana || 0);
+        ui.trapHudSub.textContent = `${cost} mana · ${mana} ready`;
+        ui.trapHudSub.classList.remove("hidden");
+        ui.trapHudSub.classList.remove("metal");
       }
     }
   }
@@ -499,7 +521,10 @@ export function updateHud(game) {
     }
   }
   if (ui.reserveMeter) {
-    ui.reserveMeter.classList.toggle("hidden", !hasNanoPool);
+    const showMana = !!player && isSpellbook(player) && !player.dead && !hasNanoPool;
+    ui.reserveMeter.classList.toggle("hidden", !hasNanoPool && !showMana);
+    ui.reserveMeter.classList.toggle("mana", showMana);
+    ui.reserveMeter.classList.toggle("reserve", !showMana);
     if (hasNanoPool) {
       const max = player.nanobotMax || 0;
       const free = Math.max(0, Math.floor(player.nanobotFree || 0));
@@ -527,6 +552,14 @@ export function updateHud(game) {
       } else {
         ui.reserveLabel.textContent = `RESERVE ${free}`;
       }
+    } else if (showMana) {
+      const max = player.manaMax || 100;
+      const mana = Math.max(0, player.mana || 0);
+      const cost = spellManaCost(player.spellType);
+      ui.reserve.style.width = `${max > 0 ? (mana / max) * 100 : 0}%`;
+      ui.reserveMeter.classList.toggle("low", mana < cost);
+      ui.reserveMeter.classList.toggle("empty", mana <= 0);
+      ui.reserveLabel.textContent = `MANA ${Math.floor(mana)}/${Math.floor(max)}`;
     }
   }
   const hasShield = (player.shieldMaxDurability || 0) > 0;
@@ -1059,6 +1092,17 @@ function modifierMarkup(gear) {
     }
     if (gear.id === "no-extension") {
       return "<span>Empty extension slot · key 3 idle</span>";
+    }
+    if (gear.spellbook) {
+      return [
+        "<span>Primary · cast with fire · E cycles</span>",
+        "<span class=\"stat-up\">Mana pool · regens over time</span>",
+        "<span class=\"stat-up\">Ice spike · unblockable pin 2s → slow 5s</span>",
+        "<span class=\"stat-up\">Fire burst · ignites + spreads on cover</span>",
+        "<span class=\"stat-up\">Lightning · chains crates/pipes/barrels</span>",
+        "<span class=\"stat-up\">Metal nodes take heavier lightning</span>",
+        "<span class=\"stat-down\">No bullets · casts gated by mana</span>"
+      ].join("");
     }
     if (gear.throwBreakable) {
       const stats = weaponStats(gear);

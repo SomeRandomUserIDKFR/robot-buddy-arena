@@ -25,6 +25,7 @@ import {
   tryNanotechWeaponAction, toggleRetractableArmor, toggleShieldRaise, trainerLoadout,
   weaponKind
 } from "./equipment.js";
+import { cycleSpellType, isSpellbook, tickSpellbookWorld } from "./spellbook.js";
 import { tickGroundDebris } from "./debris.js";
 import { tickThrowBreakable } from "./throw-breakable.js";
 import {
@@ -338,6 +339,7 @@ function update(dt) {
   // Map specials (elevators move before feet resolve this frame).
   tickMapGimmicks(game, dt);
   tickGimmickEffects(game, dt);
+  tickSpellbookWorld(game, dt);
   const trapPrevY = new Map();
   for (const fighter of game.fighters) {
     stepFighter(fighter, dt, game, profile, keys, humanIntent);
@@ -437,7 +439,9 @@ function handleKeyDown(event) {
   }
   if (event.code === "KeyE" && !event.repeat) {
     const player = game.fighters[0];
-    if (isModularWeapon(player)) {
+    if (isSpellbook(player)) {
+      cycleSpellType(player);
+    } else if (isModularWeapon(player)) {
       cycleModularMode(player);
     } else if ((player.nanotechWeaponCost || 0) > 0) {
       tryNanotechWeaponAction(player);
