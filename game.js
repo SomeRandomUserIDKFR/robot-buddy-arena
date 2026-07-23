@@ -59,8 +59,9 @@ import {
   cloneSettings, ensureSettingsProfile, normalizeArmorDespawnStyle,
   normalizeArmorDespawnTimer, normalizeDebrisDespawnStyle,
   normalizeModularMorphStyle, normalizeOptimizeIllusions, normalizeReconquerRate,
-  normalizeUnlockAllGearTemporary
+  normalizeSfxEnabled, normalizeUnlockAllGearTemporary
 } from "./settings.js";
+import { applySfxSettings, setJetpackThrusting, unlockSfx } from "./sfx.js";
 import {
   bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, refreshSettings, showBuildStamp,
   showConquestSelect, showGame, showMenu, showPause, showResults, showSettings, ui, updateHud
@@ -413,6 +414,7 @@ function finish(win) {
 }
 
 function handleKeyDown(event) {
+  unlockSfx();
   if (!game || game.over) return;
   if (event.code === "KeyQ" && !event.repeat) {
     toggleShieldRaise(game.fighters[0]);
@@ -531,11 +533,13 @@ bindUi({
     showPause(false);
   },
   quit() {
+    setJetpackThrusting(false);
     game = null;
     setPendingEncounter(null);
     showMenu(false, profile);
   },
   menu() {
+    setJetpackThrusting(false);
     game = null;
     setPendingEncounter(null);
     showMenu(true, profile);
@@ -645,7 +649,8 @@ bindUi({
   },
   settingsChange({
     modularMorphStyle, debrisDespawnStyle, reconquerRate,
-    armorDespawnStyle, armorDespawnTimer, optimizeIllusions, unlockAllGearTemporary
+    armorDespawnStyle, armorDespawnTimer, optimizeIllusions, sfxEnabled,
+    unlockAllGearTemporary
   } = {}) {
     ensureSettingsProfile(profile);
     if (modularMorphStyle != null) {
@@ -666,6 +671,9 @@ bindUi({
     if (optimizeIllusions != null) {
       profile.settings.gameplay.optimizeIllusions = normalizeOptimizeIllusions(optimizeIllusions);
     }
+    if (sfxEnabled != null) {
+      profile.settings.gameplay.sfxEnabled = normalizeSfxEnabled(sfxEnabled);
+    }
     let gearUnlockChanged = false;
     if (unlockAllGearTemporary != null) {
       const next = normalizeUnlockAllGearTemporary(unlockAllGearTemporary);
@@ -676,6 +684,7 @@ bindUi({
     }
     saveProfile();
     refreshSettings(profile);
+    applySfxSettings(profile.settings);
     if (gearUnlockChanged) refreshMenu(profile);
     if (game) game.settings = cloneSettings(profile.settings);
   },

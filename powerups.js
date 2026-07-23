@@ -9,6 +9,7 @@ import { ADAPTIVE_NANOTECH_ID, healFighter, syncRetractableDisplayedHp } from ".
 import { POWER_CRATE_MAP, POWER_CRATE_SPAWNS } from "./maps.js";
 import { inLightCondensationReveal } from "./light-condensation.js";
 import { inBeamReveal, inDirectionalSight, hasLineOfSight } from "./vision.js";
+import { playBreakableDestroySfx, playBreakableHitSfx } from "./sfx.js";
 import { clamp, dist } from "./utils.js";
 
 export const POWER_CRATE_HP = 60;
@@ -432,6 +433,7 @@ export function damagePowerCrate(crate, amount, attacker, game, impactX, impactY
     });
   }
   if (crate.hp <= 0) {
+    playBreakableDestroySfx();
     crate.destroyed = true;
     crate.solid = false;
     crate.blocksProjectiles = false;
@@ -459,6 +461,8 @@ export function damagePowerCrate(crate, amount, attacker, game, impactX, impactY
     }
     spawnPowerCrateDebris(game, crate);
     scheduleRespawn(game, crate);
+  } else {
+    playBreakableHitSfx();
   }
   return true;
 }

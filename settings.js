@@ -62,6 +62,12 @@ export function normalizeOptimizeIllusions(value) {
   return true;
 }
 
+/** Default ON — missing / legacy saves keep combat SFX. */
+export function normalizeSfxEnabled(value) {
+  if (value === false || value === "false" || value === 0 || value === "0") return false;
+  return true;
+}
+
 /**
  * Whether Illusionist/Doppel swarm optimizations are active for this match.
  * Accepts a game (`game.settings`) or a settings object.
@@ -92,7 +98,8 @@ export function ensureSettingsProfile(profile, saved = profile) {
       armorDespawnTimer: normalizeArmorDespawnTimer(visual.armorDespawnTimer)
     },
     gameplay: {
-      optimizeIllusions: normalizeOptimizeIllusions(gameplay.optimizeIllusions)
+      optimizeIllusions: normalizeOptimizeIllusions(gameplay.optimizeIllusions),
+      sfxEnabled: normalizeSfxEnabled(gameplay.sfxEnabled)
     },
     developer: {
       unlockAllGearTemporary: normalizeUnlockAllGearTemporary(
@@ -118,7 +125,8 @@ export function cloneSettings(settings) {
       armorDespawnTimer: normalizeArmorDespawnTimer(settings?.visual?.armorDespawnTimer)
     },
     gameplay: {
-      optimizeIllusions: normalizeOptimizeIllusions(settings?.gameplay?.optimizeIllusions)
+      optimizeIllusions: normalizeOptimizeIllusions(settings?.gameplay?.optimizeIllusions),
+      sfxEnabled: normalizeSfxEnabled(settings?.gameplay?.sfxEnabled)
     },
     developer: {
       unlockAllGearTemporary: normalizeUnlockAllGearTemporary(

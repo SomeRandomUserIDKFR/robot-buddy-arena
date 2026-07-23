@@ -32,8 +32,9 @@ import {
 } from "./illusionist.js";
 import {
   ensureSettingsProfile, normalizeArmorDespawnTimer, normalizeOptimizeIllusions,
-  normalizeReconquerRate
+  normalizeReconquerRate, normalizeSfxEnabled
 } from "./settings.js";
+import { applySfxSettings } from "./sfx.js";
 import { normalizeTrapType, trapTypeLabel } from "./trapper.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -141,6 +142,7 @@ export const ui = {
   settingsDeveloperPanel: $("#settingsDeveloperPanel"),
   unlockAllGearTemporaryInput: $("#unlockAllGearTemporary"),
   optimizeIllusionsInput: $("#optimizeIllusions"),
+  sfxEnabledInput: $("#sfxEnabled"),
   modularMorphStyleInputs: [...document.querySelectorAll('input[name="modularMorphStyle"]')],
   debrisDespawnStyleInputs: [...document.querySelectorAll('input[name="debrisDespawnStyle"]')],
   reconquerRateInput: $("#reconquerRate"),
@@ -731,6 +733,12 @@ export function refreshSettings(profile) {
       profile.settings.gameplay?.optimizeIllusions
     );
   }
+  if (ui.sfxEnabledInput) {
+    ui.sfxEnabledInput.checked = normalizeSfxEnabled(
+      profile.settings.gameplay?.sfxEnabled
+    );
+  }
+  applySfxSettings(profile.settings);
 }
 
 export function showSettings(open) {
@@ -1462,6 +1470,11 @@ export function bindUi(handlers) {
     const optimizeIllusions = event.target.closest('input[name="optimizeIllusions"]');
     if (optimizeIllusions) {
       handlers.settingsChange?.({ optimizeIllusions: optimizeIllusions.checked });
+      return;
+    }
+    const sfxEnabled = event.target.closest('input[name="sfxEnabled"]');
+    if (sfxEnabled) {
+      handlers.settingsChange?.({ sfxEnabled: sfxEnabled.checked });
       return;
     }
     const unlockAll = event.target.closest('input[name="unlockAllGearTemporary"]');

@@ -80,7 +80,9 @@ export const DEFAULT_PROFILE = {
     },
     gameplay: {
       // Light decoy AI, no summon team-vision, leaner Illusionist/Doppel draw.
-      optimizeIllusions: true
+      optimizeIllusions: true,
+      // Procedural combat SFX (shots, hits, breakables, jetpack).
+      sfxEnabled: true
     },
     developer: {
       unlockAllGearTemporary: false

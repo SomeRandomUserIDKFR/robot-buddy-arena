@@ -38,6 +38,9 @@ import {
 import {
   applyTrapLockToIntent, isTrapLocked, tickTrapperFighter
 } from "./trapper.js";
+import {
+  playImpactSfx, playMeleeSfx, playShotSfx, setJetpackThrusting
+} from "./sfx.js";
 import { angleDiff, clamp, dist, lerp, segmentHitsBox } from "./utils.js";
 
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
@@ -173,6 +176,7 @@ function hit(target, source, damage, angle, game, extras = {}) {
     target.vx += Math.cos(angle) * 35;
     target.vy += Math.sin(angle) * 20 - 12;
     shieldBlocked = true;
+    playImpactSfx({ shield: true });
     game.effects.push({
       type: "shield",
       x: target.x + SIZE / 2,
@@ -207,6 +211,7 @@ function hit(target, source, damage, angle, game, extras = {}) {
   target.lastHitAt = game.elapsed;
   target.vx += Math.cos(angle) * 90;
   target.vy += Math.sin(angle) * 55 - 30;
+  playImpactSfx();
   source.totalDamage += dealt;
   if (target.human) game.lastShotAtPlayer = game.elapsed;
   if (source.buddy) {
@@ -412,6 +417,10 @@ export function attack(fighter, game, random = Math.random) {
   const formPct = nanotechFormPct(fighter);
   if (fighter.weapon === "gun") {
     fighter.attackCd = attackInterval;
+    playShotSfx({
+      hitscan: !!fighter.weaponStats?.hitscan,
+      tracer: !!fighter.weaponStats?.tracer
+    });
     if (fighter.weaponStats?.hitscan) {
       fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct);
     } else {
@@ -435,6 +444,7 @@ export function attack(fighter, game, random = Math.random) {
     consumeNanotechShot(fighter);
   } else {
     fighter.attackCd = attackInterval;
+    playMeleeSfx();
     const swingDmg = fighter.weaponBaseDamage * consumeOvercharge(fighter) * formPct;
     fighter.vx += Math.cos(fighter.aim) * 95;
     game.effects.push({
@@ -530,7 +540,10 @@ export function stepJetFuel(fighter, jetHeld, wantsThrust, dt) {
 }
 
 export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
-  if (fighter.dead) return;
+  if (fighter.dead) {
+    if (fighter.human) setJetpackThrusting(false);
+    return;
+  }
   const decoy = isIllusionFighter(fighter);
   const clone = isCombatClone(fighter);
   fighter.attackCd -= dt;
@@ -605,6 +618,8 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
       fighter.vy = Math.max(fighter.vy - fighter.jetThrust * dt, -riseLimit);
     }
   }
+  // Soft thruster loop for the local player only.
+  if (fighter.human) setJetpackThrusting(!!fighter.thrusting);
   fighter.vy += GRAVITY * dt;
   fighter.vy = Math.min(fighter.vy, 900);
 

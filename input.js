@@ -1,8 +1,11 @@
+import { unlockSfx } from "./sfx.js";
+
 export const keys = Object.create(null);
 export const mouse = { x: 0, y: 0, down: false, right: false };
 
 export function installInput(canvas, onKeyDown, onKeyUp, onWheel) {
   addEventListener("keydown", (event) => {
+    unlockSfx();
     keys[event.code] = true;
     onKeyDown?.(event);
   });
@@ -22,6 +25,7 @@ export function installInput(canvas, onKeyDown, onKeyUp, onWheel) {
     mouse.y = (event.clientY - bounds.top) * canvas.height / bounds.height;
   });
   canvas.addEventListener("mousedown", (event) => {
+    unlockSfx();
     if (event.button === 0) mouse.down = true;
     if (event.button === 2) mouse.right = true;
   });

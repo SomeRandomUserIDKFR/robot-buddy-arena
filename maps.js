@@ -7,6 +7,7 @@ import { spawnPropDebris } from "./debris.js";
 import {
   detonateExplosiveBarrel, isExplosiveBarrel, RED_BARREL_KIND
 } from "./explosive-barrel.js";
+import { playBreakableDestroySfx, playBreakableHitSfx } from "./sfx.js";
 
 const MAP_CEILING = 12;
 const MAP_WORLD = { w: 3600, h: 1600 };
@@ -715,9 +716,13 @@ export function damageProp(prop, amount, game, impactX, impactY) {
       });
     }
     spawnPropDebris(game, prop, ix, iy);
-    if (isExplosiveBarrel(prop)) {
+    const explosive = isExplosiveBarrel(prop);
+    playBreakableDestroySfx({ explosive });
+    if (explosive) {
       detonateExplosiveBarrel(prop, game, ix, iy, damageProp);
     }
+  } else {
+    playBreakableHitSfx();
   }
   return true;
 }
