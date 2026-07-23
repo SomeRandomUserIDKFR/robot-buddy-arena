@@ -243,40 +243,52 @@ export function playBreakableDestroySfx(opts = {}) {
   tone({ freq: 180, freqEnd: 60, dur: 0.1, type: "triangle", vol: 0.08, when: 0.03 });
 }
 
+function makeLoopNoise(audio) {
+  const samples = audio.sampleRate;
+  const buffer = audio.createBuffer(1, samples, samples);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < samples; i++) data[i] = Math.random() * 2 - 1;
+  const src = audio.createBufferSource();
+  src.buffer = buffer;
+  src.loop = true;
+  return src;
+}
+
 function ensureJetNodes(audio) {
   if (jetGain) return;
   jetGain = audio.createGain();
   jetGain.gain.value = 0;
   jetGain.connect(masterGain);
 
-  jetOsc = audio.createOscillator();
-  jetOsc.type = "sawtooth";
-  jetOsc.frequency.value = 68;
-  const oscFilter = audio.createBiquadFilter();
-  oscFilter.type = "lowpass";
-  oscFilter.frequency.value = 420;
-  jetOsc.connect(oscFilter);
-  oscFilter.connect(jetGain);
+  // Low air rush — whoosh body.
+  jetNoiseLow = makeLoopNoise(audio);
+  const lowFilter = audio.createBiquadFilter();
+  lowFilter.type = "lowpass";
+  lowFilter.frequency.value = 380;
+  lowFilter.Q.value = 0.5;
+  const lowGain = audio.createGain();
+  lowGain.gain.value = 0.9;
+  jetNoiseLow.connect(lowFilter);
+  lowFilter.connect(lowGain);
+  lowGain.connect(jetGain);
 
-  const samples = audio.sampleRate;
-  const buffer = audio.createBuffer(1, samples, samples);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < samples; i++) data[i] = Math.random() * 2 - 1;
-  jetNoise = audio.createBufferSource();
-  jetNoise.buffer = buffer;
-  jetNoise.loop = true;
-  const noiseFilter = audio.createBiquadFilter();
-  noiseFilter.type = "bandpass";
-  noiseFilter.frequency.value = 900;
-  noiseFilter.Q.value = 0.7;
-  jetNoise.connect(noiseFilter);
-  noiseFilter.connect(jetGain);
+  // Higher hush — wind / thruster hiss (not tonal).
+  jetNoiseHigh = makeLoopNoise(audio);
+  const highFilter = audio.createBiquadFilter();
+  highFilter.type = "bandpass";
+  highFilter.frequency.value = 1600;
+  highFilter.Q.value = 0.55;
+  const highGain = audio.createGain();
+  highGain.gain.value = 0.35;
+  jetNoiseHigh.connect(highFilter);
+  highFilter.connect(highGain);
+  highGain.connect(jetGain);
 
-  jetOsc.start();
-  jetNoise.start();
+  jetNoiseLow.start();
+  jetNoiseHigh.start();
 }
 
-/** Soft loop while the local player is thrusting. */
+/** Soft whoosh loop while the local player is thrusting. */
 export function setJetpackThrusting(active) {
   const audio = getCtx();
   if (!audio || !unlocked || !enabled) {
@@ -287,9 +299,10 @@ export function setJetpackThrusting(active) {
   const on = !!active;
   if (on === jetActive) return;
   jetActive = on;
-  const target = on ? 0.045 : 0.0001;
+  const target = on ? 0.07 : 0.0001;
   jetGain.gain.cancelScheduledValues(audio.currentTime);
-  jetGain.gain.setTargetAtTime(target, audio.currentTime, on ? 0.04 : 0.08);
+  // Slightly slower fade so it reads as air rush, not a switch click.
+  jetGain.gain.setTargetAtTime(target, audio.currentTime, on ? 0.08 : 0.12);
 }
 
 /** Sync mute/volume from profile settings. */
