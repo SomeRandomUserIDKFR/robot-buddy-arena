@@ -80,7 +80,9 @@ function tone({
   dur = 0.08,
   type = "square",
   vol = 0.2,
-  when = 0
+  when = 0,
+  /** Fraction of `dur` spent swelling in (0 = start at full vol). */
+  attack = 0
 } = {}) {
   const audio = getCtx();
   if (!audio || !unlocked || !enabled) return;
@@ -92,9 +94,52 @@ function tone({
   if (freqEnd != null) {
     osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), t0 + dur);
   }
-  gain.gain.setValueAtTime(Math.max(0.0001, vol), t0);
-  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  const peak = Math.max(0.0001, vol);
+  const attackT = Math.max(0, Math.min(dur * 0.85, dur * attack));
+  if (attackT > 0.001) {
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(peak, t0 + attackT);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  } else {
+    gain.gain.setValueAtTime(peak, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  }
   osc.connect(gain);
+  gain.connect(masterGain);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.02);
+}
+
+/** Soft band-limited pulse body for gunfire (swell in, ease out). */
+function pulseBody({
+  freq = 220,
+  freqEnd = 110,
+  dur = 0.14,
+  vol = 0.12,
+  when = 0,
+  filterFreq = 900
+} = {}) {
+  const audio = getCtx();
+  if (!audio || !unlocked || !enabled) return;
+  const t0 = audio.currentTime + when;
+  const osc = audio.createOscillator();
+  const filter = audio.createBiquadFilter();
+  const gain = audio.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(Math.max(20, freq), t0);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), t0 + dur);
+  filter.type = "lowpass";
+  filter.Q.value = 0.7;
+  filter.frequency.setValueAtTime(filterFreq * 0.55, t0);
+  filter.frequency.exponentialRampToValueAtTime(filterFreq, t0 + dur * 0.35);
+  filter.frequency.exponentialRampToValueAtTime(filterFreq * 0.35, t0 + dur);
+  const peak = Math.max(0.0001, vol);
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(peak, t0 + dur * 0.28);
+  gain.gain.exponentialRampToValueAtTime(peak * 0.55, t0 + dur * 0.55);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(masterGain);
   osc.start(t0);
   osc.stop(t0 + dur + 0.02);
@@ -125,23 +170,38 @@ function noiseBurst({ dur = 0.1, vol = 0.2, filterFreq = 1800, when = 0 } = {}) 
   src.stop(t0 + dur + 0.02);
 }
 
-/** Gun / laser fire. */
+/** Gun / laser fire — soft swell / pulse, not a sharp click. */
 export function playShotSfx(opts = {}) {
   if (!gated("shot", opts.hitscan ? 45 : 55)) return;
   if (opts.hitscan) {
-    tone({ freq: 2200, freqEnd: 900, dur: 0.045, type: "sawtooth", vol: 0.07 });
-    noiseBurst({ dur: 0.03, vol: 0.04, filterFreq: 4000 });
+    // Soft laser tick: muted hum pulse.
+    pulseBody({
+      freq: 720, freqEnd: 380, dur: 0.09, vol: 0.055, filterFreq: 1400
+    });
+    tone({
+      freq: 980, freqEnd: 520, dur: 0.07, type: "sine", vol: 0.035, attack: 0.4
+    });
     return;
   }
   if (opts.tracer) {
-    // Sniper report.
-    tone({ freq: 180, freqEnd: 70, dur: 0.16, type: "triangle", vol: 0.22 });
-    noiseBurst({ dur: 0.12, vol: 0.16, filterFreq: 900 });
+    // Sniper: longer swell + low bloom, light hush of air.
+    pulseBody({
+      freq: 140, freqEnd: 55, dur: 0.28, vol: 0.16, filterFreq: 520
+    });
+    tone({
+      freq: 220, freqEnd: 90, dur: 0.22, type: "triangle", vol: 0.08, attack: 0.35
+    });
+    noiseBurst({ dur: 0.14, vol: 0.06, filterFreq: 600 });
     return;
   }
-  // Standard projectile rifle.
-  tone({ freq: 420, freqEnd: 140, dur: 0.07, type: "square", vol: 0.12 });
-  noiseBurst({ dur: 0.05, vol: 0.1, filterFreq: 1600 });
+  // Standard projectile rifle — rounded pulse body.
+  pulseBody({
+    freq: 260, freqEnd: 110, dur: 0.15, vol: 0.11, filterFreq: 780
+  });
+  tone({
+    freq: 340, freqEnd: 150, dur: 0.12, type: "triangle", vol: 0.05, attack: 0.32
+  });
+  noiseBurst({ dur: 0.07, vol: 0.04, filterFreq: 900 });
 }
 
 /** Melee swing whoosh. */
