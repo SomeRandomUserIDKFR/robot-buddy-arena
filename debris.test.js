@@ -182,8 +182,24 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   const used = tryReconquerAtSpawn(game, fakeSpawn, { preferPowerCrate: false });
   assert.equal(used, true);
   assert.ok(game.groundDebris.every((p) => p.despawnMode === "reconquer-home"));
+
+  // First frames: some shards seat early, but the crate must stay destroyed
+  // until every piece is in its jigsaw slot.
+  let sawPartialSeat = false;
+  for (let i = 0; i < 40; i++) {
+    tickGroundDebris(game, 1 / 60);
+    const seated = game.groundDebris.filter((p) => p.despawnMode === "reconquer-seated");
+    const flying = game.groundDebris.filter((p) => p.despawnMode === "reconquer-home");
+    if (seated.length > 0 && flying.length > 0) {
+      sawPartialSeat = true;
+      assert.equal(crate.destroyed, true, "must not reform until all shards seat");
+    }
+    if (!crate.destroyed) break;
+  }
+  assert.ok(sawPartialSeat, "reconquer should seat shards progressively");
+
   for (let i = 0; i < 120; i++) tickGroundDebris(game, 1 / 60);
-  assert.equal(crate.destroyed, false, "crate rebuilt");
+  assert.equal(crate.destroyed, false, "crate rebuilt after full assembly");
   assert.ok(crate.hp > 0);
   assert.equal(game.groundDebris.length, 0);
 }
