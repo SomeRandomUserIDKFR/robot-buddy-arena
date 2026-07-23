@@ -2765,6 +2765,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.toolFlash = 0;
   fighter.heldToolPickup = null;
   fighter.hookReel = null;
+  fighter.hookHang = null;
   fighter.heldProp = null;
   fighter.materialScrapBank = [];
   fighter.materialEjectionTank = [];

@@ -8,7 +8,7 @@ import {
   attackToolSecondary, bindToolHpDamager, bindToolPropDamager, BOLAS_SNARE_ID,
   createToolPickup, FRAG_GRENADE_ID, heldToolIdOf, heldToolUsesOf,
   HOOK_RANGE, HOOK_REEL_ARRIVE, HOOK_REEL_SPEED, HOOKSHOT_WINCH_ID,
-  maybeDropToolFromBreakable,
+  isHookAnchored, maybeDropToolFromBreakable,
   maybeDropToolFromCrate, rollToolUses, seedMapToolPickups, STICKY_CHARGE_ID,
   THROWING_SPEAR_ID, tickToolPickups, tickToolProjectiles,
   TOOL_BREAKABLE_DROP_CHANCE, TOOL_CRATE_DROP_CHANCE, TOOL_DEFS,
@@ -183,11 +183,61 @@ for (const id of TOOL_SECONDARY_IDS) {
   const end = fighter.center();
   const endDist = Math.hypot(latchX - end.x, latchY - end.y);
   assert.equal(fighter.hookReel, null, "reel completes");
+  assert.ok(fighter.hookHang, "arriving latches into a hang");
+  assert.ok(isHookAnchored(fighter));
   assert.ok(
     endDist <= HOOK_REEL_ARRIVE + 8,
     `should arrive near latch (endDist=${endDist.toFixed(1)})`
   );
   assert.ok(fighter.x > 300, "should have traveled toward the wall");
+
+  // Idle hang: no gravity drift while the player stays still.
+  const hangX = fighter.x;
+  const hangY = fighter.y;
+  for (let i = 0; i < 45; i++) {
+    stepFighter(fighter, 1 / 60, game, { weapons: {} }, {}, idle);
+  }
+  assert.ok(fighter.hookHang, "hang holds without input");
+  assert.ok(Math.abs(fighter.x - hangX) < 0.5);
+  assert.ok(Math.abs(fighter.y - hangY) < 0.5);
+
+  // Move input releases the hang.
+  const move = () => ({
+    mx: 1, jump: false, jet: false, jetHeld: false,
+    attack: false, chuck: false, ejectVacuum: false, dodge: false
+  });
+  stepFighter(fighter, 1 / 60, game, { weapons: {} }, {}, move);
+  assert.equal(fighter.hookHang, null, "move input drops the hang");
+}
+
+{
+  // Jetpack input also releases a hang.
+  const fighter = applyLoadout(new Fighter({
+    x: 200, y: 200, team: 0, aim: 0, human: true, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: HOOKSHOT_WINCH_ID
+  });
+  selectWeaponSlot(fighter, "secondaryWeapon");
+  fighter.hookHang = { x: 223, y: 223 };
+  fighter.vx = 0;
+  fighter.vy = 0;
+  const game = {
+    fighters: [fighter],
+    props: [],
+    platforms: [{ x: 0, y: 500, w: 900, h: 40 }],
+    effects: [],
+    toolProjectiles: [],
+    toolPickups: [],
+    powerCrates: [],
+    ceiling: 12
+  };
+  const jet = () => ({
+    mx: 0, jump: false, jet: true, jetHeld: true,
+    attack: false, chuck: false, ejectVacuum: false, dodge: false
+  });
+  stepFighter(fighter, 1 / 60, game, { weapons: {} }, {}, jet);
+  assert.equal(fighter.hookHang, null, "jetpack input drops the hang");
 }
 
 {
