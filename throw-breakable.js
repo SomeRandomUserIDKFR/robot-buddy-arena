@@ -24,6 +24,33 @@ export const THROW_BREAKABLE_HOLD_REACH = 34;
 export const THROW_BREAKABLE_HOLD_MAX = 52;
 /** Power crates are only grabbable at or below this fraction of max HP. */
 export const THROW_POWER_CRATE_GRAB_HP_FRAC = 0.5;
+/** Metal-cased (Patching / Bracing) throws hit harder. */
+export const THROW_METAL_BRACE_DAMAGE_MULT = 1.25;
+
+/** True when a prop still has an active metal bracing casing. */
+export function hasMetalBraceCasing(prop) {
+  return !!(
+    prop
+    && prop.braced
+    && prop.braceMaterial === "metal"
+    && (prop.braceHp || 0) > 0
+  );
+}
+
+/** Fighter / cover impact damage for a thrown breakable. */
+export function thrownBreakableImpactDamage(prop) {
+  if (!prop || isPlantedIllusionProp(prop)) return 0;
+  if (hasMetalBraceCasing(prop)) {
+    return THROW_BREAKABLE_DAMAGE * THROW_METAL_BRACE_DAMAGE_MULT;
+  }
+  return THROW_BREAKABLE_DAMAGE;
+}
+
+/** Self-damage a metal-cased throw takes on landing (half casing max HP). */
+export function metalBraceThrowSelfDamage(prop) {
+  const max = Math.max(0, prop?.braceMaxHp || 0);
+  return Math.max(1, Math.ceil(max * 0.5));
+}
 
 /**
  * Late-bound damager for power crates (avoids throw-breakable ↔ powerups ↔ equipment cycle).
@@ -616,8 +643,8 @@ function restoreThrownCoverSolid(prop) {
  * Snaps the prop slot onto a valid stand surface (same checks as armor dummies)
  * near the impact so rebuild doesn't float mid-air.
  *
- * Braced props take throw impact damage through the casing first and reseat as
- * pickable cover when they survive (instead of a ghost hp=0 / solid=false slot).
+ * Metal-cased throws take half the casing's max HP as impact self-damage and
+ * reseat as pickable cover if they survive; anything else breaks on impact.
  * @param {*} attacker fighter credited for power-crate loot on kill
  */
 export function shatterBreakableAt(prop, game, impactX, impactY, attacker = null) {
@@ -648,27 +675,23 @@ export function shatterBreakableAt(prop, game, impactX, impactY, attacker = null
   syncCanopy(prop);
 
   const isMetal = !!(prop.powerCrate || prop.kind === "powerCrate");
-  const braceAlive = !!(prop.braced && (prop.braceHp || 0) > 0);
   const coreAlive = !prop.destroyed && (prop.hp == null || prop.hp > 0);
 
-  // Braced throw: chip the casing (overflow into core), then keep it as cover
-  // if anything remains — never leave an hp=0 ghost that can't be grabbed.
-  if (braceAlive && coreAlive) {
-    if (isMetal) {
-      if (!damagePowerCrateFn) return false;
-      damagePowerCrateFn(
-        prop, THROW_BREAKABLE_DAMAGE, attacker, game, impactX, impactY
-      );
-    } else {
-      damageProp(
-        prop, THROW_BREAKABLE_DAMAGE, game, impactX, impactY, { fromImpact: true }
-      );
-    }
+  // Metal casing only: half casing HP chips the shell; survive → reseat cover.
+  // Wood bracing / unbraced throws still fully break.
+  if (hasMetalBraceCasing(prop) && coreAlive) {
+    damageProp(
+      prop,
+      metalBraceThrowSelfDamage(prop),
+      game,
+      impactX,
+      impactY,
+      { fromImpact: true }
+    );
     if (!prop.destroyed && (prop.hp ?? 0) > 0) {
       restoreThrownCoverSolid(prop);
       return true;
     }
-    // Overflow killed the core — debris / loot already handled by damagers.
     prop.solid = false;
     prop.blocksProjectiles = false;
     prop.blocksSight = false;
@@ -678,6 +701,12 @@ export function shatterBreakableAt(prop, game, impactX, impactY, attacker = null
   prop.solid = false;
   prop.blocksProjectiles = false;
   prop.blocksSight = false;
+  // Non-metal casing (wood brace / none) never saves a throw — strip it so the
+  // hard shatter actually destroys the object.
+  prop.braced = false;
+  prop.braceHp = 0;
+  prop.braceMaxHp = 0;
+  prop.braceMaterial = null;
 
   if (isMetal) {
     if (prop.destroyed || prop.hp <= 0) {
@@ -728,8 +757,8 @@ export function throwHeldBreakable(fighter, game) {
     vx: Math.cos(aim) * THROW_BREAKABLE_SPEED,
     vy: Math.sin(aim) * THROW_BREAKABLE_SPEED * 0.92 - 80,
     life: 2.4,
-    // Planted illusion bait never deals damage on impact.
-    damage: isPlantedIllusionProp(prop) ? 0 : THROW_BREAKABLE_DAMAGE,
+    // Planted illusion bait never deals damage; metal casing hits 1.25x.
+    damage: thrownBreakableImpactDamage(prop),
     spin: (Math.random() - 0.5) * 10
   });
   if (game.effects) {
