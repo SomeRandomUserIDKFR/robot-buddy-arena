@@ -6,7 +6,8 @@
  * Spring pad: launches victim away from the trapper's position.
  * Signal tripwire: thin nearly-invisible line — snare + team reveal ping.
  * Land mine: larger cue than bear; splash slightly weaker than a red barrel.
- * Owner immune. Any illusion is destroyed instantly on contact / blast.
+ * Owner immune. Illusions pop instantly on contact / blast, but only spring
+ * pads can be spent / triggered by them — other traps stay armed.
  */
 import { SIZE, WORLD } from "./config.js";
 import { applyHpDamage, GEAR_BY_ID } from "./equipment.js";
@@ -254,14 +255,14 @@ function applyBearTrap(trap, victim, game) {
   if (!victim || victim.dead) return false;
   if (victim === trap.owner) return false;
   if (isIllusionFighter(victim)) {
-    // Decoys pop instantly — no chip / lock.
+    // Decoys pop instantly — trap stays armed (not spent).
     fadeIllusionFighter(victim, game);
-  } else {
-    applyHpDamage(victim, BEAR_TRAP_DAMAGE, game);
-    victim.trapLockT = BEAR_TRAP_LOCK;
-    victim.trapLockKind = "bear";
-    victim.hitFlash = Math.max(victim.hitFlash || 0, 0.2);
+    return true;
   }
+  applyHpDamage(victim, BEAR_TRAP_DAMAGE, game);
+  victim.trapLockT = BEAR_TRAP_LOCK;
+  victim.trapLockKind = "bear";
+  victim.hitFlash = Math.max(victim.hitFlash || 0, 0.2);
   spendBearTrap(trap, game);
   return true;
 }
@@ -344,17 +345,18 @@ function applySignalTripwire(trap, victim, game) {
   if (!victim || victim.dead) return false;
   if (victim === trap.owner) return false;
   if (isIllusionFighter(victim)) {
+    // Pop decoy without arming the signal / spending the wire.
     fadeIllusionFighter(victim, game);
-  } else {
-    if (SIGNAL_TRIPWIRE_DAMAGE > 0) {
-      applyHpDamage(victim, SIGNAL_TRIPWIRE_DAMAGE, game);
-    }
-    victim.trapLockT = Math.max(victim.trapLockT || 0, SIGNAL_TRIPWIRE_SNARE);
-    victim.trapLockKind = "signal";
-    victim.signalRevealT = Math.max(victim.signalRevealT || 0, SIGNAL_TRIPWIRE_REVEAL);
-    victim.signalRevealTeam = trap.team;
-    victim.hitFlash = Math.max(victim.hitFlash || 0, 0.18);
+    return true;
   }
+  if (SIGNAL_TRIPWIRE_DAMAGE > 0) {
+    applyHpDamage(victim, SIGNAL_TRIPWIRE_DAMAGE, game);
+  }
+  victim.trapLockT = Math.max(victim.trapLockT || 0, SIGNAL_TRIPWIRE_SNARE);
+  victim.trapLockKind = "signal";
+  victim.signalRevealT = Math.max(victim.signalRevealT || 0, SIGNAL_TRIPWIRE_REVEAL);
+  victim.signalRevealTeam = trap.team;
+  victim.hitFlash = Math.max(victim.hitFlash || 0, 0.18);
   spendTrap(trap, game, { debris: false });
   const cx = victim.x + SIZE / 2;
   const cy = victim.y + SIZE / 2;
@@ -437,14 +439,17 @@ function applyLandMine(trap, triggerVictim, game) {
   return true;
 }
 
-/** Prop / platform illusions die on contact with an armed enemy trap. */
+/**
+ * Prop / platform illusions pop on contact with an armed enemy trap.
+ * Only spring pads are spent / triggered by illusions; other traps stay armed.
+ */
 function applyTrapToIllusionObject(trap, ill, game) {
   if (!ill || ill.destroyed) return false;
   if (ill.owner === trap.owner) return false;
   if (ill.team === trap.team) return false;
+  if (!overlapsIllusionObject(ill, trap)) return false;
 
   if (trap.trapType === "fakePlatform") {
-    if (!overlapsIllusionObject(ill, trap)) return false;
     trap.victims ||= new Set();
     if (trap.victims.has(ill)) return false;
     trap.victims.add(ill);
@@ -460,21 +465,21 @@ function applyTrapToIllusionObject(trap, ill, game) {
     return true;
   }
 
-  if (trap.trapType === "landMine") {
-    if (trap.triggered || !overlapsIllusionObject(ill, trap)) return false;
-    applyLandMine(trap, null, game);
+  if (trap.trapType === "springPad") {
+    if (trap.triggered) return false;
+    registerIllusionObjectHit(ill, game);
+    spendTrap(trap, game, { debris: true });
     return true;
   }
 
-  // Single-use contact traps.
+  // Bear / signal / mine — pop illusion, leave trap armed.
   if (
     trap.trapType === "bear"
-    || trap.trapType === "springPad"
     || trap.trapType === "signalTripwire"
+    || trap.trapType === "landMine"
   ) {
-    if (trap.triggered || !overlapsIllusionObject(ill, trap)) return false;
+    if (trap.triggered) return false;
     registerIllusionObjectHit(ill, game);
-    spendTrap(trap, game, { debris: trap.trapType !== "signalTripwire" });
     return true;
   }
 
@@ -513,7 +518,7 @@ export function tickTrapperWorld(game, dt, oldYByFighter = null) {
       if (trap.destroyed || trap.triggered) break;
 
       if (trap.trapType === "bear") {
-        if (!trap.triggered && overlapsTrap(fighter, trap)) {
+        if (overlapsTrap(fighter, trap)) {
           applyBearTrap(trap, fighter, game);
         }
       } else if (trap.trapType === "fakePlatform") {
@@ -529,17 +534,21 @@ export function tickTrapperWorld(game, dt, oldYByFighter = null) {
           applySpringPad(trap, fighter, game);
         }
       } else if (trap.trapType === "signalTripwire") {
-        if (!trap.triggered && overlapsTrap(fighter, trap)) {
+        if (overlapsTrap(fighter, trap)) {
           applySignalTripwire(trap, fighter, game);
         }
       } else if (trap.trapType === "landMine") {
-        if (!trap.triggered && overlapsTrap(fighter, trap)) {
+        if (!overlapsTrap(fighter, trap)) continue;
+        if (isIllusionFighter(fighter)) {
+          // Pop decoy without detonating the mine.
+          fadeIllusionFighter(fighter, game);
+        } else if (!trap.triggered) {
           applyLandMine(trap, fighter, game);
         }
       }
     }
 
-    // Visual prop/platform illusions — same team rules, instant pop.
+    // Visual prop/platform illusions — pop on contact; only spring spends.
     if (!trap.destroyed) {
       for (const ill of game.illusions || []) {
         if (applyTrapToIllusionObject(trap, ill, game) && trap.destroyed) break;

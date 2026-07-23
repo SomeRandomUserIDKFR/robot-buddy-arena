@@ -226,7 +226,7 @@ assert.ok(LAND_MINE_W > 28);
 }
 
 {
-  // Bear trap instantly kills fighter decoys (no chip / lock).
+  // Bear trap pops decoys but stays armed (not spent).
   const trapper = applyLoadout(new Fighter({
     x: 100, y: 700, team: 0, aim: 0
   }), { ...DEFAULT_LOADOUT, extensionSecondary: TRAPPER_ID });
@@ -246,11 +246,13 @@ assert.ok(LAND_MINE_W > 28);
   assert.equal(decoy.dead, true, "decoy popped by bear trap");
   assert.ok(isIllusionFighter(decoy));
   assert.ok(game.effects.some((e) => e.type === "illusionBreak"));
-  assert.equal(trap.destroyed, true, "bear trap spent on illusion");
+  assert.equal(trap.destroyed, false, "bear trap not spent by illusion");
+  assert.equal(trap.triggered, false);
+  assert.ok(trap.life > 0);
 }
 
 {
-  // Fake platform instantly kills prop illusions on contact.
+  // Fake platform pops prop illusions on contact; trap remains.
   const trapper = applyLoadout(new Fighter({
     x: 100, y: 700, team: 0, aim: 0
   }), { ...DEFAULT_LOADOUT, extensionSecondary: TRAPPER_ID });
@@ -270,6 +272,55 @@ assert.ok(LAND_MINE_W > 28);
   tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
   assert.equal(prop.destroyed, true, "prop illusion popped by fake platform");
   assert.ok(game.effects.some((e) => e.type === "illusionBreak"));
+  assert.equal(trap.destroyed, false, "fake plat not spent by illusion");
+}
+
+{
+  // Spring pad is the exception — illusions can trigger / spend it.
+  const trapper = applyLoadout(new Fighter({
+    x: 100, y: 700, team: 0, aim: 0
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: TRAPPER_ID });
+  trapper.trapperType = "springPad";
+  const illu = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 1, aim: 0, hp: 500, maxHp: 500
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: ILLUSIONIST_ID });
+  const decoy = createFighterIllusion(illu, Fighter);
+  decoy.x = 220;
+  decoy.y = 700;
+  const game = {
+    traps: [], effects: [], fighters: [trapper, illu, decoy], illusions: []
+  };
+  const trap = tryTrapperPlant(trapper, game);
+  trap.x = decoy.x + 4;
+  trap.y = decoy.y + 36;
+  tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
+  assert.equal(decoy.dead, true, "decoy popped by spring pad");
+  assert.equal(trap.destroyed, true, "spring pad spent by illusion");
+}
+
+{
+  // Land mine: illusion contact pops decoy without detonating.
+  const trapper = applyLoadout(new Fighter({
+    x: 100, y: 700, team: 0, aim: 0
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: TRAPPER_ID });
+  trapper.trapperType = "landMine";
+  const illu = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 1, aim: 0, hp: 500, maxHp: 500
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: ILLUSIONIST_ID });
+  const decoy = createFighterIllusion(illu, Fighter);
+  decoy.x = 240;
+  decoy.y = 700;
+  const game = {
+    traps: [], effects: [], fighters: [trapper, illu, decoy], illusions: []
+  };
+  const trap = tryTrapperPlant(trapper, game);
+  trap.x = decoy.x + 4;
+  trap.y = decoy.y + 34;
+  tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
+  assert.equal(decoy.dead, true, "decoy popped by land mine contact");
+  assert.equal(trap.destroyed, false, "mine not detonated by illusion");
+  assert.equal(trap.triggered, false);
+  assert.ok(!game.effects.some((e) => e.type === "explosion"));
 }
 
 {
