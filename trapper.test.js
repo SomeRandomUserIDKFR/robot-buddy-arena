@@ -317,8 +317,8 @@ assert.ok(LAND_MINE_W > 28);
   tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
   assert.equal(decoy.dead, false, "spring does not kill decoy");
   assert.ok(decoy.vx > 100, "decoy launched away from trapper");
-  assert.equal(trap.destroyed, false, "spring stays for remaining uses");
-  assert.equal(trap.usesLeft, SPRING_PAD_USES - 1);
+  assert.equal(trap.destroyed, false, "spring stays armed");
+  assert.equal(trap.usesLeft, SPRING_PAD_USES, "illusion launch is free");
 }
 
 {

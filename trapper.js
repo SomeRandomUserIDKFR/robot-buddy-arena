@@ -7,8 +7,8 @@
  * Signal tripwire: thin nearly-invisible line — snare + team reveal ping.
  * Land mine: larger cue than bear; splash slightly weaker than a red barrel.
  * Owner immune. Bear / fake plat / mine pop illusions on contact (without
- * spending, except real triggers). Spring launches fighter decoys away
- * and has 3 uses by default (not spent on first launch). Signal tripwire
+ * spending, except real triggers). Spring has 3 uses vs real fighters;
+ * decoys still get launched but do not spend a use. Signal tripwire
  * ignores illusions entirely.
  */
 import { SIZE, WORLD } from "./config.js";
@@ -335,15 +335,15 @@ function applySpringPad(trap, victim, game) {
   trap.victims.add(victim);
 
   if (isIllusionFighter(victim)) {
-    // Decoys get launched, not killed.
+    // Decoys get launched for free — no use spent, not killed.
     springLaunchAwayFromTrapper(trap, victim);
   } else {
     applyHpDamage(victim, SPRING_PAD_DAMAGE, game);
     springLaunchAwayFromTrapper(trap, victim);
     victim.hitFlash = Math.max(victim.hitFlash || 0, 0.16);
+    trap.usesLeft = Math.max(0, (trap.usesLeft ?? SPRING_PAD_USES) - 1);
   }
 
-  trap.usesLeft = Math.max(0, (trap.usesLeft ?? SPRING_PAD_USES) - 1);
   if (game?.effects) {
     game.effects.push({
       type: "propHit",
@@ -352,8 +352,8 @@ function applySpringPad(trap, victim, game) {
       life: 0.16
     });
   }
-  // Spent only after the last use — launches are otherwise free.
-  if (trap.usesLeft <= 0) {
+  // Spent only after the last real use — launches are otherwise free.
+  if (!isIllusionFighter(victim) && trap.usesLeft <= 0) {
     spendTrap(trap, game, { debris: true });
   }
   return true;
