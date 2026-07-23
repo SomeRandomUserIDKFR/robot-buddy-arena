@@ -12,7 +12,7 @@ import { normalizeModularMorphStyle, optimizeIllusionsEnabled } from "./settings
 import { platformsOf } from "./maps.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
 import { clamp, dist } from "./utils.js";
-import { visibleToSelf, visibleToTeam } from "./vision.js";
+import { fighterVisibleToViewer, visibleToSelf, visibleToTeam } from "./vision.js";
 
 /**
  * Weapon silhouette map — simple aim-aligned rects (length × width, gripOffset from center).
@@ -993,15 +993,14 @@ export function createRenderer(canvas) {
     drawBullets(game, player);
     drawThrownBreakables(game, 1);
     for (const fighter of game.fighters) {
-      const enemy = fighter.team !== player.team;
-      if (!enemy || visibleToTeam(game, player, fighter) || fighter.buddy) {
+      // Allies always; enemies (including training buddy spar) need team sight.
+      if (fighterVisibleToViewer(game, player, fighter)) {
         drawFighter(game, fighter, player, viewerTruth, winningTeam, optimizeIllusions);
       }
     }
     // Held breakables sit on the hand — draw after the body so they read on top.
     for (const fighter of game.fighters) {
-      const enemy = fighter.team !== player.team;
-      if (enemy && !visibleToTeam(game, player, fighter) && !fighter.buddy) continue;
+      if (!fighterVisibleToViewer(game, player, fighter)) continue;
       const held = fighter.heldProp;
       if (!held || held.destroyed) continue;
       if (held.powerCrate || held.kind === "powerCrate") drawMetalPowerCrate(held);

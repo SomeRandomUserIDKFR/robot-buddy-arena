@@ -8,7 +8,7 @@ import {
   suggestBuddyLoadout, theoreticalDps, weaponStats
 } from "./equipment.js";
 import { weaponVisual } from "./rendering.js";
-import { inDirectionalSight, visibleToTeam } from "./vision.js";
+import { fighterVisibleToViewer, inDirectionalSight, visibleToTeam } from "./vision.js";
 
 const loadout = (weapon, body = "field-frame") => ({
   ...DEFAULT_LOADOUT, body, weapon
@@ -116,6 +116,28 @@ const loadout = (weapon, body = "field-frame") => ({
   assert.equal(inDirectionalSight(sniper, behind), false);
   assert.equal(visibleToTeam({ fighters: [sniper, ahead] }, sniper, ahead), true);
   assert.equal(visibleToTeam({ fighters: [sniper, behind] }, sniper, behind), false);
+
+  // Training / spar buddy is an enemy — must be in sight to draw (no always-on).
+  const you = new Fighter({ x: 100, y: 700, team: 0, human: true, sight: 200 });
+  const buddyNear = new Fighter({
+    x: 180, y: 700, team: 1, buddy: true, name: "Pixel"
+  });
+  const buddyFar = new Fighter({
+    x: 2000, y: 700, team: 1, buddy: true, name: "Pixel"
+  });
+  const training = { fighters: [you, buddyNear], mode: "training" };
+  assert.equal(fighterVisibleToViewer(training, you, buddyNear), true);
+  assert.equal(
+    fighterVisibleToViewer({ fighters: [you, buddyFar], mode: "training" }, you, buddyFar),
+    false,
+    "far training buddy stays hidden out of sight"
+  );
+  // Conquest ally buddy remains always visible (same team).
+  const allyBuddy = new Fighter({ x: 2000, y: 700, team: 0, buddy: true });
+  assert.equal(
+    fighterVisibleToViewer({ fighters: [you, allyBuddy], mode: "conquest" }, you, allyBuddy),
+    true
+  );
 
   const player = new Fighter({ x: 1000, y: 700, team: 0, human: true });
   const game = {

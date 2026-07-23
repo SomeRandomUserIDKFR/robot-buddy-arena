@@ -80,3 +80,14 @@ export function visibleToSelf(observer, target, game = null) {
   if (!game) return true;
   return hasLineOfSight(game, observer, target);
 }
+
+/**
+ * Whether the viewer should render `fighter`.
+ * Allies (same team) are always drawn; enemies — including the training buddy
+ * spar partner — only when in team sight / LOS.
+ */
+export function fighterVisibleToViewer(game, viewer, fighter) {
+  if (!game || !viewer || !fighter) return false;
+  if (fighter.team === viewer.team) return true;
+  return visibleToTeam(game, viewer, fighter);
+}
