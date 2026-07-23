@@ -382,12 +382,9 @@ function clipMarkToShard(x1, y1, x2, y2, homeLx, homeLy, hw, hh, color) {
   };
 }
 
-/**
- * Push one sharp polygonal shard (straight edges only — no curves).
- */
-function pushSharpShard(tiles, vertsWorld, paint, colorAt, markLines, c, r) {
-  if (!vertsWorld || vertsWorld.length < 3) return;
-  // Drop near-duplicates that can collapse an edge into a soft look.
+/** Drop near-duplicate / closed-loop verts that collapse an edge. */
+function cleanPolygonVerts(vertsWorld) {
+  if (!vertsWorld || vertsWorld.length < 3) return null;
   const cleaned = [];
   for (const p of vertsWorld) {
     const prev = cleaned[cleaned.length - 1];
@@ -399,7 +396,16 @@ function pushSharpShard(tiles, vertsWorld, paint, colorAt, markLines, c, r) {
     const last = cleaned[cleaned.length - 1];
     if (Math.hypot(first[0] - last[0], first[1] - last[1]) < 0.35) cleaned.pop();
   }
-  if (cleaned.length < 3) return;
+  return cleaned.length >= 3 ? cleaned : null;
+}
+
+/**
+ * Push one polygonal shard. Rect cracks stay sharp triangles; ellipse rims may
+ * carry a curved silhouette edge (extra verts along that edge only).
+ */
+function pushSharpShard(tiles, vertsWorld, paint, colorAt, markLines, c, r) {
+  const cleaned = cleanPolygonVerts(vertsWorld);
+  if (!cleaned) return;
 
   const center = polygonCentroid(cleaned);
   const verts = cleaned.map((p) => [p[0] - center.x, p[1] - center.y]);
@@ -433,6 +439,51 @@ function pushSharpShard(tiles, vertsWorld, paint, colorAt, markLines, c, r) {
     marks: marks.length ? marks : null,
     area: shoelaceArea(cleaned)
   });
+}
+
+function ellipseNorm2(x, y, cx, cy, rw, rh) {
+  const nx = (x - cx) / Math.max(1e-6, rw);
+  const ny = (y - cy) / Math.max(1e-6, rh);
+  return nx * nx + ny * ny;
+}
+
+function projectOntoEllipse(x, y, cx, cy, rw, rh) {
+  const nx = (x - cx) / Math.max(1e-6, rw);
+  const ny = (y - cy) / Math.max(1e-6, rh);
+  const len = Math.hypot(nx, ny) || 1;
+  return [cx + (nx / len) * rw, cy + (ny / len) * rh];
+}
+
+function ellipseAngle(x, y, cx, cy, rw, rh) {
+  return Math.atan2(
+    (y - cy) / Math.max(1e-6, rh),
+    (x - cx) / Math.max(1e-6, rw)
+  );
+}
+
+/** Short ellipse arc samples between A→B (endpoints excluded), CCW or CW. */
+function sampleEllipseArc(a, b, cx, cy, rw, rh, steps, ccw) {
+  let a0 = ellipseAngle(a[0], a[1], cx, cy, rw, rh);
+  let a1 = ellipseAngle(b[0], b[1], cx, cy, rw, rh);
+  if (ccw) {
+    while (a1 <= a0) a1 += Math.PI * 2;
+  } else {
+    while (a1 >= a0) a1 -= Math.PI * 2;
+  }
+  const out = [];
+  const n = Math.max(1, steps | 0);
+  for (let i = 1; i <= n; i++) {
+    const t = i / (n + 1);
+    const ang = a0 + (a1 - a0) * t;
+    out.push([cx + Math.cos(ang) * rw, cy + Math.sin(ang) * rh]);
+  }
+  return out;
+}
+
+function edgeKey(ax, ay, bx, by) {
+  const a = `${ax.toFixed(2)},${ay.toFixed(2)}`;
+  const b = `${bx.toFixed(2)},${by.toFixed(2)}`;
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
 /**
@@ -486,7 +537,9 @@ function jaggedRectShards(localX, localY, w, h, cols, rows, paint, colorAt, mark
 }
 
 /**
- * Jagged shards clipped to an ellipse (bush / canopy). Shared jags still match.
+ * Jagged shards clipped to an ellipse (bush / canopy).
+ * Fracture edges stay sharp (straight). Only unshared silhouette edges that
+ * sit on the object's curved rim may carry arc samples — that edge alone.
  */
 function jaggedEllipseShards(cx, cy, rw, rh, cols, rows, paint, colorAt) {
   const localX = cx - rw;
@@ -494,11 +547,101 @@ function jaggedEllipseShards(cx, cy, rw, rh, cols, rows, paint, colorAt) {
   const raw = jaggedRectShards(
     localX, localY, rw * 2, rh * 2, cols, rows, paint, colorAt, null
   );
-  return raw.filter((tile) => {
-    const nx = (tile.homeLx - cx) / rw;
-    const ny = (tile.homeLy - cy) / rh;
-    return nx * nx + ny * ny <= 1.12;
-  });
+
+  // Rebuild each triangle in world space, pull outsiders onto the ellipse rim.
+  const polys = [];
+  for (const tile of raw) {
+    // Keep the old centroid clip — do not project far-outside cells onto the
+    // rim (that would invent triangles spanning the interior).
+    if (ellipseNorm2(tile.homeLx, tile.homeLy, cx, cy, rw, rh) > 1.12) continue;
+    const world = tile.verts.map((v) => [tile.homeLx + v[0], tile.homeLy + v[1]]);
+    const onRim = [];
+    for (let i = 0; i < world.length; i++) {
+      const n2 = ellipseNorm2(world[i][0], world[i][1], cx, cy, rw, rh);
+      if (n2 >= 0.9) {
+        world[i] = projectOntoEllipse(world[i][0], world[i][1], cx, cy, rw, rh);
+        onRim[i] = true;
+      } else {
+        onRim[i] = false;
+      }
+    }
+    const cleaned = cleanPolygonVerts(world);
+    if (!cleaned || cleaned.length < 3) continue;
+    const center = polygonCentroid(cleaned);
+    if (ellipseNorm2(center.x, center.y, cx, cy, rw, rh) > 1.05) continue;
+    // Remap rim flags onto cleaned verts (nearest original).
+    const rimFlags = cleaned.map((p) => {
+      let best = 0;
+      let bestD = Infinity;
+      for (let i = 0; i < world.length; i++) {
+        const d = Math.hypot(p[0] - world[i][0], p[1] - world[i][1]);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+      return !!onRim[best];
+    });
+    polys.push({
+      verts: cleaned,
+      onRim: rimFlags,
+      color: tile.color,
+      edge: tile.edge,
+      detail: tile.detail,
+      material: tile.material
+    });
+  }
+
+  // Silhouette = unshared edges. Shared fracture edges must stay straight so
+  // neighboring shards still meet.
+  const edgeCounts = new Map();
+  for (const poly of polys) {
+    const v = poly.verts;
+    for (let i = 0; i < v.length; i++) {
+      const a = v[i];
+      const b = v[(i + 1) % v.length];
+      const key = edgeKey(a[0], a[1], b[0], b[1]);
+      edgeCounts.set(key, (edgeCounts.get(key) || 0) + 1);
+    }
+  }
+
+  const tiles = [];
+  for (const poly of polys) {
+    const v = poly.verts;
+    const curved = [];
+    for (let i = 0; i < v.length; i++) {
+      const a = v[i];
+      const b = v[(i + 1) % v.length];
+      curved.push(a);
+      const key = edgeKey(a[0], a[1], b[0], b[1]);
+      const silhouette = (edgeCounts.get(key) || 0) === 1
+        && poly.onRim[i]
+        && poly.onRim[(i + 1) % v.length];
+      if (!silhouette) continue;
+      // Curve only this rim edge — pick the short arc that stays outside the
+      // chord (away from the shard interior / ellipse center-ish).
+      const midChord = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+      const ccwArc = sampleEllipseArc(a, b, cx, cy, rw, rh, 3, true);
+      const cwArc = sampleEllipseArc(a, b, cx, cy, rw, rh, 3, false);
+      const score = (pts) => {
+        if (!pts.length) return -Infinity;
+        let s = 0;
+        for (const p of pts) {
+          // Prefer the arc that bulges away from the chord midpoint (outer rim).
+          s += Math.hypot(p[0] - midChord[0], p[1] - midChord[1]);
+        }
+        return s;
+      };
+      const arc = score(ccwArc) >= score(cwArc) ? ccwArc : cwArc;
+      for (const p of arc) curved.push(p);
+    }
+    pushSharpShard(
+      tiles, curved, paint,
+      () => poly.color,
+      null, 0, 0
+    );
+  }
+  return tiles;
 }
 
 function mixDebrisHex(a, b, t) {

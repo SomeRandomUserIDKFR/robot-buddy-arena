@@ -86,6 +86,36 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.tree.fill));
   assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.treeCanopy.fill
     || t.color === PROP_DEBRIS_COLORS.treeCanopy.fill2));
+  // Canopy is elliptical: rim shards may curve that silhouette edge only.
+  assert.ok(
+    tiles.some((t) => t.verts.length > 3),
+    "curved canopy rim shards carry arc samples on the silhouette edge"
+  );
+  // Trunk (rect) shards stay pure triangles.
+  const trunk = tiles.filter((t) => t.color === PROP_DEBRIS_COLORS.tree.fill);
+  assert.ok(trunk.length >= 8);
+  assert.ok(
+    trunk.every((t) => t.verts.length === 3),
+    "straight trunk cracks stay pure triangles"
+  );
+}
+
+{
+  // Bush: ellipse object — only the curved outer rim may bend.
+  const desert = createMapRuntime("desert");
+  const bush = desert.props.find((p) => p.kind === "bush")
+    || { kind: "bush", w: 48, h: 36, x: 0, y: 0 };
+  const tiles = buildPropJigsaw(bush, "bush");
+  assert.ok(tiles.length >= 8);
+  assert.ok(tiles.every((t) => Array.isArray(t.verts) && t.verts.length >= 3));
+  assert.ok(
+    tiles.some((t) => t.verts.length > 3),
+    "bush rim shards may be curved on the object edge"
+  );
+  assert.ok(
+    tiles.some((t) => t.verts.length === 3),
+    "interior bush cracks stay sharp triangles"
+  );
 }
 
 {

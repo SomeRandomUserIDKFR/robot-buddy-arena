@@ -1890,11 +1890,12 @@ export function createRenderer(canvas) {
     context.globalAlpha = settle * fogAlpha * pieceAlpha;
     context.fillStyle = color;
 
-    // Hard prop shards — fill only (strokes AA into soft/curved rims).
+    // Hard prop shards — fill only (no stroked rims). Fracture edges stay
+    // sharp; ellipse props may carry extra verts along the curved silhouette.
     if (piece.material !== "armor" && (piece.kind === "tile" || piece.homeLx != null)) {
       if (Array.isArray(piece.verts) && piece.verts.length >= 3) {
         // Dark hard under-fill (same polygon, slightly larger) for a crisp rim
-        // without stroking — keeps every silhouette edge perfectly straight.
+        // without stroking.
         context.fillStyle = edge;
         context.beginPath();
         context.moveTo(piece.verts[0][0] * 1.08, piece.verts[0][1] * 1.08);
@@ -1912,7 +1913,7 @@ export function createRenderer(canvas) {
         context.closePath();
         context.fill();
       } else {
-        // Fallback stays rectangular (straight edges) — never ellipses/strokes.
+        // Fallback stays rectangular (straight edges) — never stroked ovals.
         context.fillStyle = edge;
         context.fillRect(-hw - 1, -hh - 1, piece.w + 2, piece.h + 2);
         context.fillStyle = color;
