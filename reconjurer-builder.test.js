@@ -6,14 +6,15 @@ import {
   SLOT_LABELS, SLOT_ORDER, STARTER_GEAR
 } from "./equipment.js";
 import { spawnPropDebris, spawnPowerCrateDebris } from "./debris.js";
-import { createMapRuntime } from "./maps.js";
+import { createMapRuntime, damageProp } from "./maps.js";
 import { createPowerCrate, POWER_CRATE_HP } from "./powerups.js";
 import {
-  cycleReconjurerType, hasExtensionSecondary, isReconjurerBuilder,
-  listReconjurerChoices, paintReconjurerPreview, RECONJURER_BOT_COST,
-  RECONJURER_COOLDOWN, RECONJURER_METAL_BOT_COST, RECONJURER_METAL_COOLDOWN,
-  RECONJURER_METAL_TYPE, RECONJURER_SCRAP_REWARD, reconjurerTypeLabel,
-  tryReconjurerBuild, tickReconjurerBuilder
+  applyBraceCasing, canBraceBreakable, cycleReconjurerType, findBraceTarget,
+  hasExtensionSecondary, isReconjurerBuilder, listReconjurerChoices,
+  paintReconjurerPreview, RECONJURER_BOT_COST, RECONJURER_BRACE_BOT_COST,
+  RECONJURER_BRACE_HP, RECONJURER_COOLDOWN, RECONJURER_METAL_BOT_COST,
+  RECONJURER_METAL_COOLDOWN, RECONJURER_METAL_TYPE, RECONJURER_SCRAP_REWARD,
+  reconjurerTypeLabel, tryReconjurerBuild, tickReconjurerBuilder
 } from "./reconjurer-builder.js";
 
 const clone = (value) => structuredClone(value);
@@ -290,6 +291,87 @@ assert.equal(RECONJURER_METAL_COOLDOWN, 10);
   assert.ok(Math.abs(fighter.reconjurerMetalCd - 6) < 0.001);
   tickReconjurerBuilder(fighter, 7);
   assert.equal(fighter.reconjurerMetalCd, 0);
+}
+
+
+assert.equal(RECONJURER_BRACE_HP, 48);
+assert.equal(RECONJURER_BRACE_BOT_COST, RECONJURER_BOT_COST);
+
+// Near intact cover (no debris): Patching / Bracing welds a metal casing.
+{
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate" && !p.destroyed);
+  assert.ok(crate);
+  const startHp = crate.hp;
+  const fighter = applyLoadout({}, {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: RECONJURER_BUILDER_ID,
+    body: "nanotech-chestplate"
+  });
+  fighter.x = crate.x - 20;
+  fighter.y = crate.y;
+  fighter.aim = 0;
+  fighter.nanobotFree = 40;
+  fighter.materialEjectionTank = [];
+  const game = {
+    props: yard.props,
+    powerCrates: [],
+    platforms: yard.platforms,
+    groundDebris: [],
+    effects: [],
+    mapId: "yard",
+    theme: "industrial"
+  };
+  assert.ok(canBraceBreakable(crate));
+  assert.equal(findBraceTarget(game, fighter), crate);
+  const botsBefore = fighter.nanobotFree;
+  const braced = tryReconjurerBuild(fighter, game);
+  assert.ok(braced);
+  assert.equal(braced, crate);
+  assert.equal(crate.braced, true);
+  assert.equal(crate.braceHp, RECONJURER_BRACE_HP);
+  assert.equal(crate.hp, startHp, "core HP unchanged by bracing");
+  assert.equal(fighter.nanobotFree, botsBefore - RECONJURER_BRACE_BOT_COST);
+  assert.equal(fighter.materialEjectionTank.length, RECONJURER_SCRAP_REWARD);
+  assert.equal(fighter.reconjurerMetalCd || 0, 0, "brace does not start metal CD");
+  assert.ok(fighter.reconjurerCd > 0);
+
+  // Already braced → falls through to conjure (no second casing).
+  // Isolate so other yard props aren't also brace targets.
+  game.props = [crate];
+  tickReconjurerBuilder(fighter, RECONJURER_COOLDOWN + 0.01);
+  fighter.nanobotFree = 40;
+  fighter.reconjurerType = "barrel";
+  const propsBefore = game.props.length;
+  const conjured = tryReconjurerBuild(fighter, game, () => 0.5);
+  assert.ok(conjured);
+  assert.notEqual(conjured, crate);
+  assert.equal(game.props.length, propsBefore + 1);
+}
+
+// Casing absorbs hits before the wood core.
+{
+  const prop = {
+    kind: "crate",
+    breakable: true,
+    destroyed: false,
+    solid: true,
+    x: 0,
+    y: 0,
+    w: 40,
+    h: 40,
+    hp: 40,
+    maxHp: 40
+  };
+  applyBraceCasing(prop, 20);
+  const game = { effects: [], groundDebris: [] };
+  damageProp(prop, 12, game, 20, 20);
+  assert.equal(prop.braceHp, 8);
+  assert.equal(prop.hp, 40, "wood untouched while casing holds");
+  damageProp(prop, 20, game, 20, 20);
+  assert.equal(prop.braced, false);
+  assert.equal(prop.braceHp, 0);
+  assert.equal(prop.hp, 28, "overflow chips the core");
 }
 
 console.log("reconjurer-builder.test.js passed.");

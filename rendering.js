@@ -1581,6 +1581,42 @@ export function createRenderer(canvas) {
       context.lineTo(prop.x + prop.w - 6, prop.y + prop.h * .25);
       context.stroke();
     }
+    // Reconjurer Patching / Bracing: metal casing rim over the breakable.
+    if (prop.braced && (prop.braceHp || 0) > 0) {
+      const rim = Math.max(2, Math.min(prop.w, prop.h) * 0.08);
+      const wear = prop.braceMaxHp > 0
+        ? Math.max(0.35, prop.braceHp / prop.braceMaxHp)
+        : 1;
+      context.globalAlpha = alpha * (flash ? 1 : 0.82 + wear * 0.18);
+      context.strokeStyle = flash ? "#f0f4f8" : "#9aa4ae";
+      context.lineWidth = Math.max(2, rim);
+      context.strokeRect(
+        prop.x + rim * 0.5,
+        prop.y + rim * 0.5,
+        prop.w - rim,
+        prop.h - rim
+      );
+      context.fillStyle = flash ? "rgba(220,230,240,.35)" : "rgba(80,90,100,.28)";
+      context.fillRect(prop.x, prop.y, prop.w, rim);
+      context.fillRect(prop.x, prop.y + prop.h - rim, prop.w, rim);
+      context.fillRect(prop.x, prop.y, rim, prop.h);
+      context.fillRect(prop.x + prop.w - rim, prop.y, rim, prop.h);
+      // Rivets
+      context.fillStyle = flash ? "#e8eef4" : "#4a545e";
+      const r = Math.max(1.2, rim * 0.45);
+      const inset = rim + 2;
+      for (const [rx, ry] of [
+        [prop.x + inset, prop.y + inset],
+        [prop.x + prop.w - inset, prop.y + inset],
+        [prop.x + inset, prop.y + prop.h - inset],
+        [prop.x + prop.w - inset, prop.y + prop.h - inset]
+      ]) {
+        context.beginPath();
+        context.arc(rx, ry, r, 0, Math.PI * 2);
+        context.fill();
+      }
+      context.lineWidth = 1;
+    }
     context.globalAlpha = 1;
   }
 

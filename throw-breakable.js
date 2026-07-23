@@ -183,9 +183,10 @@ export function damageBreakableByIllusion(prop, amount, attacker, game, impactX,
   if (!(dmg > 0)) return false;
 
   if (prop.illusionFakeHp == null) {
-    const real = prop.hp ?? prop.maxHp ?? 1;
+    // Include metal casing so braced cover takes longer to fake-break.
+    const real = (prop.hp ?? prop.maxHp ?? 1) + Math.max(0, prop.braceHp || 0);
     prop.illusionFakeHp = real;
-    prop.illusionFakeMaxHp = prop.maxHp ?? real;
+    prop.illusionFakeMaxHp = real;
   }
   prop.illusionFakeHp = Math.max(0, prop.illusionFakeHp - dmg);
   prop.hitFlash = Math.max(prop.hitFlash || 0, 0.14);

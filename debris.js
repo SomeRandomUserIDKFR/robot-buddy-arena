@@ -1729,6 +1729,10 @@ export function restoreMapProp(prop) {
   prop.groundDebrisDropped = false;
   prop.thrownInFlight = false;
   prop.heldBy = null;
+  // Rebuilds come back bare — Patching / Bracing must be reapplied.
+  prop.braced = false;
+  prop.braceHp = 0;
+  prop.braceMaxHp = 0;
   return true;
 }
 

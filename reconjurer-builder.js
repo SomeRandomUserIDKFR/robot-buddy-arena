@@ -1,6 +1,7 @@
 /**
  * Reconjurer / Builder — extension secondary (key 3).
  * Near debris: rebuild that pile for free (+2 ejection scraps).
+ * Near intact cover: Patching / Bracing — weld a metal casing shell.
  * Otherwise: conjure the selected breakable for nanobots (T cycles type;
  * metal box costs more and has a 10s CD). Left-corner HUD previews the look.
  */
@@ -24,6 +25,8 @@ export const RECONJURER_METAL_COOLDOWN = 10;
 export const RECONJURER_REBUILD_RADIUS = 150;
 /** World radius for conjure placement when no debris is near. */
 export const RECONJURER_PLACE_RADIUS = 140;
+/** How close an intact breakable must be to Patch / Brace. */
+export const RECONJURER_BRACE_RADIUS = 150;
 /** @deprecated Selection replaces random metal rolls; kept for save/FAQ compat. */
 export const RECONJURER_METAL_CRATE_CHANCE = 0.08;
 /** Ejection-tank scraps granted after a successful rebuild or conjure. */
@@ -32,6 +35,10 @@ export const RECONJURER_SCRAP_REWARD = 2;
 export const RECONJURER_BOT_COST = MATERIAL_CONSUMER_BOTS_PER_PIECE;
 /** Free nanobots charged for a metal power-crate conjure. */
 export const RECONJURER_METAL_BOT_COST = MATERIAL_CONSUMER_BOTS_PER_PIECE * 2;
+/** Nanobots to weld a Patching / Bracing metal casing onto intact cover. */
+export const RECONJURER_BRACE_BOT_COST = MATERIAL_CONSUMER_BOTS_PER_PIECE;
+/** Extra HP shell on a braced breakable (absorbs hits before wood). */
+export const RECONJURER_BRACE_HP = 48;
 
 /** Selection id for a metal power crate. */
 export const RECONJURER_METAL_TYPE = "metal";
@@ -132,18 +139,20 @@ function placePoint(fighter, random) {
   };
 }
 
-function finishBuild(fighter, game, target, isMetal) {
+function finishBuild(fighter, game, target, isMetal, opts = {}) {
   grantRebuildScraps(fighter, RECONJURER_SCRAP_REWARD);
   fighter.reconjurerCd = RECONJURER_COOLDOWN;
   fighter.reconjurerFlash = 0.22;
-  if (isMetal) fighter.reconjurerMetalCd = RECONJURER_METAL_COOLDOWN;
+  if (isMetal && !opts.skipMetalCd) {
+    fighter.reconjurerMetalCd = RECONJURER_METAL_COOLDOWN;
+  }
   if (game.effects) {
     game.effects.push({
       type: "crateBreak",
       x: target.x + target.w * 0.5,
       y: target.y + target.h * 0.5,
       life: 0.35,
-      color: isMetal ? "#d8e0ea" : "#8ec4d0"
+      color: isMetal || opts.brace ? "#d8e0ea" : "#8ec4d0"
     });
     game.effects.push({
       type: "propHit",
@@ -153,6 +162,66 @@ function finishBuild(fighter, game, target, isMetal) {
     });
   }
   return target;
+}
+
+/** Whether a map prop can receive Patching / Bracing. */
+export function canBraceBreakable(prop) {
+  if (!prop || prop.destroyed || !prop.breakable) return false;
+  if (prop.braced && (prop.braceHp || 0) > 0) return false;
+  if (prop.powerCrate || prop.kind === "powerCrate") return false;
+  if (prop.armorDummy || prop.forgeHidden || prop.illusionGhosted) return false;
+  if (prop.lightCondensation || prop.kind === "lightCondensation") return false;
+  if (prop.heldBy || prop.thrownInFlight) return false;
+  if (prop.illusionObject || prop.illusionHeldProp) return false;
+  if (prop.hp != null && !(prop.hp > 0)) return false;
+  return true;
+}
+
+/** Nearest intact breakable in brace range, or null. */
+export function findBraceTarget(game, fighter, maxRange = RECONJURER_BRACE_RADIUS) {
+  if (!game || !fighter || !(maxRange > 0)) return null;
+  const cx = fighter.x + SIZE / 2;
+  const cy = fighter.y + SIZE / 2;
+  let best = null;
+  let bestD = maxRange;
+  for (const prop of game.props || []) {
+    if (!canBraceBreakable(prop)) continue;
+    const px = prop.x + (prop.w || 0) / 2;
+    const py = prop.y + (prop.h || 0) / 2;
+    const d = Math.hypot(px - cx, py - cy);
+    if (d <= bestD) {
+      best = prop;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/** Apply a metal casing shell to an intact breakable. */
+export function applyBraceCasing(prop, hp = RECONJURER_BRACE_HP) {
+  if (!prop) return null;
+  const shell = Math.max(1, hp | 0);
+  prop.braced = true;
+  prop.braceHp = shell;
+  prop.braceMaxHp = shell;
+  prop.hitFlash = Math.max(prop.hitFlash || 0, 0.18);
+  return prop;
+}
+
+/**
+ * Press 3 near intact cover: spend bots to weld a metal casing (Patching / Bracing).
+ * @returns {object|null}
+ */
+export function tryBraceNearIntact(fighter, game) {
+  if (!fighter || fighter.dead || !game) return null;
+  if (!isReconjurerBuilder(fighter)) return null;
+  if ((fighter.reconjurerCd || 0) > 0) return null;
+  const target = findBraceTarget(game, fighter, RECONJURER_BRACE_RADIUS);
+  if (!target) return null;
+  if (!affordBots(fighter, RECONJURER_BRACE_BOT_COST)) return null;
+  if (!spendBots(fighter, RECONJURER_BRACE_BOT_COST)) return null;
+  applyBraceCasing(target, RECONJURER_BRACE_HP);
+  return finishBuild(fighter, game, target, true, { skipMetalCd: true, brace: true });
 }
 
 /**
@@ -202,8 +271,9 @@ function conjureSelectedBreakable(fighter, game, random) {
 
 /**
  * Press 3 near debris: free rebuild (+2 scraps).
+ * Else near intact cover: Patching / Bracing metal casing (bots).
  * Otherwise: paid conjure of the selected type (T cycles).
- * @returns {object|null} restored or spawned prop / power crate
+ * @returns {object|null} restored, braced, or spawned prop / power crate
  */
 export function tryReconjurerBuild(fighter, game, random = Math.random) {
   if (!fighter || fighter.dead || !game) return null;
@@ -219,6 +289,8 @@ export function tryReconjurerBuild(fighter, game, random = Math.random) {
     createPowerCrate
   });
   if (rebuilt?.target) {
+    // Fresh rebuild starts without leftover casing.
+    clearBraceCasing(rebuilt.target);
     return finishBuild(
       fighter,
       game,
@@ -227,7 +299,19 @@ export function tryReconjurerBuild(fighter, game, random = Math.random) {
     );
   }
 
+  const braced = tryBraceNearIntact(fighter, game);
+  if (braced) return braced;
+
   return conjureSelectedBreakable(fighter, game, random);
+}
+
+/** Strip Patching / Bracing casing from a prop. */
+export function clearBraceCasing(prop) {
+  if (!prop) return prop;
+  prop.braced = false;
+  prop.braceHp = 0;
+  prop.braceMaxHp = 0;
+  return prop;
 }
 
 export function tickReconjurerBuilder(fighter, dt) {

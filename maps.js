@@ -693,26 +693,61 @@ export function sightBlockers(game) {
 /**
  * Apply damage to a breakable prop. Returns true if the prop absorbed the hit
  * (projectile should stop). Emits crack/debris effects on the game.
+ * Braced props spend metal casing HP before the wood core.
  */
 export function damageProp(prop, amount, game, impactX, impactY) {
   if (!prop || prop.destroyed || !prop.breakable) return false;
-  prop.hp = Math.max(0, (prop.hp ?? prop.maxHp ?? 1) - amount);
+  let left = Math.max(0, amount);
+  const ix = impactX ?? prop.x + prop.w / 2;
+  const iy = impactY ?? prop.y + prop.h / 2;
+  if (prop.braced && (prop.braceHp || 0) > 0 && left > 0) {
+    const absorbed = Math.min(prop.braceHp, left);
+    prop.braceHp -= absorbed;
+    left -= absorbed;
+    prop.hitFlash = 0.14;
+    if (game?.effects) {
+      game.effects.push({
+        type: "propHit",
+        x: ix,
+        y: iy,
+        life: 0.1
+      });
+    }
+    if (prop.braceHp <= 0) {
+      prop.braced = false;
+      prop.braceHp = 0;
+      if (game?.effects) {
+        game.effects.push({
+          type: "crateBreak",
+          x: ix,
+          y: iy,
+          life: 0.22,
+          color: "#d8e0ea"
+        });
+      }
+    }
+    if (left <= 0) {
+      playBreakableHitSfx();
+      return true;
+    }
+  }
+  prop.hp = Math.max(0, (prop.hp ?? prop.maxHp ?? 1) - left);
   prop.hitFlash = .14;
   if (game?.effects) {
     game.effects.push({
       type: "propHit",
-      x: impactX ?? prop.x + prop.w / 2,
-      y: impactY ?? prop.y + prop.h / 2,
+      x: ix,
+      y: iy,
       life: .12
     });
   }
   if (prop.hp <= 0) {
     prop.destroyed = true;
+    prop.braced = false;
+    prop.braceHp = 0;
     prop.solid = false;
     prop.blocksProjectiles = false;
     prop.blocksSight = false;
-    const ix = impactX ?? prop.x + prop.w / 2;
-    const iy = impactY ?? prop.y + prop.h / 2;
     if (game?.effects) {
       game.effects.push({
         type: "debris",

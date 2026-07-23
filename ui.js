@@ -24,8 +24,8 @@ import {
 } from "./perks.js";
 import { escapeHtml, formatTime } from "./utils.js";
 import {
-  normalizeReconjurerType, paintReconjurerPreview, reconjurerTypeLabel,
-  RECONJURER_METAL_TYPE
+  findBraceTarget, normalizeReconjurerType, paintReconjurerPreview,
+  reconjurerTypeLabel, RECONJURER_METAL_TYPE
 } from "./reconjurer-builder.js";
 import {
   illusionPropKindLabel, normalizeIllusionPropKind
@@ -368,11 +368,16 @@ export function updateHud(game) {
         ui.reconjurerPreviewLabel.textContent = reconjurerTypeLabel(type);
       }
       if (ui.reconjurerPreviewHint) {
+        const braceTarget = cd <= 0 && !metalLocked
+          ? findBraceTarget(game, player)
+          : null;
         ui.reconjurerPreviewHint.textContent = metalLocked
           ? `metal cd ${Math.ceil(player.reconjurerMetalCd)}s`
           : cd > 0
             ? `ready in ${Math.ceil(cd)}s`
-            : "3 place · near debris = rebuild";
+            : braceTarget
+              ? "3 brace · metal casing"
+              : "3 place · debris rebuild · brace cover";
       }
       if (ui.reconjurerPreviewCanvas) {
         paintReconjurerPreview(ui.reconjurerPreviewCanvas, type, game);
@@ -1038,7 +1043,9 @@ function modifierMarkup(gear) {
         "<span>Extension · T cycle · 3 place</span>",
         "<span class=\"stat-up\">Left preview · see the breakable look</span>",
         "<span class=\"stat-up\">Near debris · free rebuild +2 scraps</span>",
-        "<span class=\"stat-up\">No debris · conjure selected type</span>",
+        "<span class=\"stat-up\">Near cover · Patching / Bracing metal casing</span>",
+        "<span class=\"stat-up\">Casing absorbs hits before the wood</span>",
+        "<span class=\"stat-up\">No target · conjure selected type</span>",
         "<span>Metal box · select · 10s user CD</span>",
         "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"
       ].join("");
