@@ -490,4 +490,80 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.ok(game.effects.some((e) => e.type === "illusionBreak"), "swirl reveal on impact");
 }
 
+
+// Anyone (any team) can grab planted bait; metal crate illusions ignore the 50% HP gate.
+{
+  const enemy = applyLoadout(new Fighter({
+    x: 400, y: 700, team: 1, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  selectWeaponSlot(enemy, "secondaryWeapon");
+  const ownerBait = {
+    illusionObject: true,
+    illusionType: "prop",
+    kind: "crate",
+    x: 430,
+    y: 700,
+    w: 44,
+    h: 44,
+    life: 28,
+    destroyed: false,
+    solid: false,
+    blocksSight: false,
+    blocksProjectiles: false,
+    owner: { team: 0 },
+    team: 0
+  };
+  const metalBait = {
+    illusionObject: true,
+    illusionType: "prop",
+    illusionPropKind: "metal",
+    kind: "powerCrate",
+    powerCrate: true,
+    x: 430,
+    y: 700,
+    w: 48,
+    h: 48,
+    // Even if filled like a full real crate, bait stays grabable.
+    hp: POWER_CRATE_HP,
+    maxHp: POWER_CRATE_HP,
+    life: 28,
+    destroyed: false,
+    solid: false,
+    blocksSight: false,
+    blocksProjectiles: false,
+    owner: { team: 0 },
+    team: 0
+  };
+  assert.ok(canGrabIllusionProp(ownerBait), "enemy may grab other team's crate bait");
+  assert.ok(canGrabBreakable(ownerBait));
+  assert.ok(canGrabIllusionProp(metalBait), "metal illusion always grabable");
+  assert.ok(canGrabBreakable(metalBait), "metal illusion bypasses 50% HP gate");
+  assert.equal(canGrabBreakable({
+    kind: "powerCrate",
+    powerCrate: true,
+    breakable: true,
+    destroyed: false,
+    hp: POWER_CRATE_HP,
+    maxHp: POWER_CRATE_HP,
+    x: 0, y: 0, w: 48, h: 48
+  }), false, "real full metal crate still gated");
+
+  const game = {
+    props: [],
+    powerCrates: [],
+    illusions: [metalBait],
+    platforms: [],
+    fighters: [enemy],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: []
+  };
+  assert.ok(tryGrabBreakable(enemy, game), "enemy grabs rival metal bait");
+  assert.equal(enemy.heldProp, metalBait);
+  assert.equal(metalBait.heldBy, enemy);
+}
+
 console.log("throw-breakable.test.js passed.");

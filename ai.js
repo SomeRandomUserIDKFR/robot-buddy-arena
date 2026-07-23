@@ -593,14 +593,21 @@ export function debrisNearFighter(game, fighter, radius = MATERIAL_CONSUMER_VACU
   return false;
 }
 
-/** Nearest grabbable map prop / damaged power crate within `maxRange`. */
+/**
+ * Nearest grabbable map prop, damaged power crate, or planted Illusionist prop
+ * bait within `maxRange`. Illusion bait is fair game for any fighter / team.
+ */
 export function pickNearestGrabbable(game, fighter, maxRange = AI_THROW_SEEK_RANGE) {
   if (!game || !fighter || !(maxRange > 0)) return null;
   const cx = fighter.x + SIZE / 2;
   const cy = fighter.y + SIZE / 2;
   let best = null;
   let bestD = maxRange;
-  const candidates = [...(game.props || []), ...(game.powerCrates || [])];
+  const candidates = [
+    ...(game.props || []),
+    ...(game.powerCrates || []),
+    ...(game.illusions || [])
+  ];
   for (const prop of candidates) {
     if (!canGrabBreakable(prop)) continue;
     const px = prop.x + (prop.w || 0) / 2;

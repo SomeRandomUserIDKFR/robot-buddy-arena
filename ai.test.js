@@ -1223,6 +1223,40 @@ console.log("Retractable armor AI suite passed.");
 }
 
 {
+  // AI can seek rival Illusionist prop bait (incl. full-"HP" metal looks).
+  const buddy = applyLoadout(new Fighter({
+    x: 400, y: 700, team: 1, buddy: true, ai: "balanced", grounded: true, aim: 0
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  const metalBait = {
+    illusionObject: true,
+    illusionType: "prop",
+    illusionPropKind: "metal",
+    kind: "powerCrate",
+    powerCrate: true,
+    x: 430,
+    y: 700,
+    w: 48,
+    h: 48,
+    hp: 999,
+    maxHp: 999,
+    life: 28,
+    destroyed: false,
+    team: 0
+  };
+  const game = {
+    props: [],
+    powerCrates: [],
+    illusions: [metalBait],
+    platforms: [],
+    fighters: [buddy]
+  };
+  assert.equal(pickNearestGrabbable(game, buddy), metalBait);
+}
+
+{
   // Holding a prop → throw at foe.
   const buddy = applyLoadout(new Fighter({
     x: 500, y: 700, team: 0, buddy: true, ai: "balanced", grounded: true, aim: 0

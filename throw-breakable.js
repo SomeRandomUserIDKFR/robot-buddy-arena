@@ -57,11 +57,16 @@ export function isIllusionGhostedProp(prop) {
   return !!prop?.illusionGhosted;
 }
 
-/** Whether Throw Breakable may pick up a planted illusion prop. */
+/**
+ * Whether Throw Breakable may pick up a planted illusion prop.
+ * Anyone may grab any team's bait — no owner / team gate.
+ * Metal crate illusions are always grabable (no real-crate 50% HP rule).
+ */
 export function canGrabIllusionProp(prop) {
   if (!isPlantedIllusionProp(prop)) return false;
   if (prop.destroyed || !(prop.life == null || prop.life > 0)) return false;
   if (prop.heldBy || prop.thrownInFlight) return false;
+  // Metal / power-crate looks are still bait — never apply the ≤50% HP gate.
   return true;
 }
 
@@ -71,7 +76,8 @@ export function canGrabBreakable(prop) {
   if (prop.heldBy || prop.thrownInFlight) return false;
   if (prop.armorDummy || prop.forgeHidden || prop.illusionGhosted) return false;
   if (prop.illusionHeldProp) return false;
-  // Planted illusion props are grabable via canGrabIllusionProp / tryGrab.
+  // Planted illusion bait (any owner/team, including metal crate looks) first —
+  // never fall through to the real power-crate HP gate.
   if (prop.illusionObject) return canGrabIllusionProp(prop);
   if (!prop.breakable) return false;
   // Glare nodes are shot, not handheld.
