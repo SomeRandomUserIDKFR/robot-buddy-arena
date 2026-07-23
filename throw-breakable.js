@@ -603,10 +603,21 @@ export function tryGrabBreakable(fighter, game) {
   return true;
 }
 
+/** Re-seat a surviving thrown breakable as solid cover after impact. */
+function restoreThrownCoverSolid(prop) {
+  if (!prop || prop.destroyed) return;
+  prop.solid = prop.baseSolid ?? true;
+  prop.blocksProjectiles = prop.baseBlocksProjectiles ?? true;
+  prop.blocksSight = prop.baseBlocksSight ?? false;
+}
+
 /**
  * Shatter a prop at a world point and leave debris for reconquer-at-hit.
  * Snaps the prop slot onto a valid stand surface (same checks as armor dummies)
  * near the impact so rebuild doesn't float mid-air.
+ *
+ * Braced props take throw impact damage through the casing first and reseat as
+ * pickable cover when they survive (instead of a ghost hp=0 / solid=false slot).
  * @param {*} attacker fighter credited for power-crate loot on kill
  */
 export function shatterBreakableAt(prop, game, impactX, impactY, attacker = null) {
@@ -620,9 +631,6 @@ export function shatterBreakableAt(prop, game, impactX, impactY, attacker = null
   restoreFullDimensions(prop);
   prop.thrownInFlight = false;
   prop.heldBy = null;
-  prop.solid = false;
-  prop.blocksProjectiles = false;
-  prop.blocksSight = false;
 
   // Same floor-pick as armor dummies: vote scraps (none here) else first
   // surface at/below the impact so rebuild never floats between platforms.
@@ -639,7 +647,39 @@ export function shatterBreakableAt(prop, game, impactX, impactY, attacker = null
   prop.y = targetY - prop.h / 2;
   syncCanopy(prop);
 
-  if (prop.powerCrate || prop.kind === "powerCrate") {
+  const isMetal = !!(prop.powerCrate || prop.kind === "powerCrate");
+  const braceAlive = !!(prop.braced && (prop.braceHp || 0) > 0);
+  const coreAlive = !prop.destroyed && (prop.hp == null || prop.hp > 0);
+
+  // Braced throw: chip the casing (overflow into core), then keep it as cover
+  // if anything remains — never leave an hp=0 ghost that can't be grabbed.
+  if (braceAlive && coreAlive) {
+    if (isMetal) {
+      if (!damagePowerCrateFn) return false;
+      damagePowerCrateFn(
+        prop, THROW_BREAKABLE_DAMAGE, attacker, game, impactX, impactY
+      );
+    } else {
+      damageProp(
+        prop, THROW_BREAKABLE_DAMAGE, game, impactX, impactY, { fromImpact: true }
+      );
+    }
+    if (!prop.destroyed && (prop.hp ?? 0) > 0) {
+      restoreThrownCoverSolid(prop);
+      return true;
+    }
+    // Overflow killed the core — debris / loot already handled by damagers.
+    prop.solid = false;
+    prop.blocksProjectiles = false;
+    prop.blocksSight = false;
+    return true;
+  }
+
+  prop.solid = false;
+  prop.blocksProjectiles = false;
+  prop.blocksSight = false;
+
+  if (isMetal) {
     if (prop.destroyed || prop.hp <= 0) {
       prop.destroyed = false;
       prop.hp = 1;
