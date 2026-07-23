@@ -115,6 +115,8 @@ export function canGrabBreakable(prop) {
   // Glare nodes are shot, not handheld.
   if (prop.lightCondensation || prop.kind === "lightCondensation") return false;
   if (prop.powerCrate || prop.kind === "powerCrate") {
+    // Wood bracing unlocks a full-HP metal box for Throw Breakable.
+    if (prop.braced && (prop.braceHp || 0) > 0) return true;
     const maxHp = Math.max(1, prop.maxHp ?? prop.hp ?? 1);
     return (prop.hp ?? maxHp) <= maxHp * THROW_POWER_CRATE_GRAB_HP_FRAC;
   }
