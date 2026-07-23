@@ -813,6 +813,9 @@ function drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp) {
         context.rotate(u * 4 + i);
         context.scale(0.45, 0.45);
         if (scrap && Array.isArray(scrap.verts) && scrap.verts.length >= 3) {
+          context.lineCap = "butt";
+          context.lineJoin = "miter";
+          context.miterLimit = 8;
           context.fillStyle = scrap.color || (i % 2 ? "#d8c4a0" : "#9a8a78");
           context.beginPath();
           context.moveTo(scrap.verts[0][0], scrap.verts[0][1]);
@@ -1892,8 +1895,11 @@ export function createRenderer(canvas) {
     context.globalAlpha = settle * fogAlpha * pieceAlpha;
     context.fillStyle = color;
 
-    // Jagged prop shards — solid filled polygons first; short clipped marks only.
+    // Sharp prop shards — filled polygons with pointed miter corners only.
     if (piece.material !== "armor" && (piece.kind === "tile" || piece.homeLx != null)) {
+      context.lineCap = "butt";
+      context.lineJoin = "miter";
+      context.miterLimit = 8;
       if (Array.isArray(piece.verts) && piece.verts.length >= 3) {
         context.beginPath();
         context.moveTo(piece.verts[0][0], piece.verts[0][1]);
@@ -1902,36 +1908,18 @@ export function createRenderer(canvas) {
         }
         context.closePath();
         context.fill();
-        // Soft rim so the chunk reads as a solid, not a wireframe.
         context.strokeStyle = edge;
-        context.lineWidth = 1.25;
-        context.stroke();
-        context.fillStyle = highlight;
-        context.globalAlpha = settle * fogAlpha * pieceAlpha * 0.22;
-        context.beginPath();
-        context.moveTo(piece.verts[0][0] * 0.55, piece.verts[0][1] * 0.55);
-        for (let i = 1; i < Math.min(4, piece.verts.length); i++) {
-          context.lineTo(piece.verts[i][0] * 0.55, piece.verts[i][1] * 0.55);
-        }
-        context.closePath();
-        context.fill();
-        context.globalAlpha = settle * fogAlpha * pieceAlpha;
-      } else if (piece.shape === "ellipse") {
-        context.beginPath();
-        context.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2);
-        context.fill();
-        context.strokeStyle = edge;
-        context.lineWidth = 1.25;
+        context.lineWidth = 1.15;
         context.stroke();
       } else {
+        // Fallback stays rectangular (straight edges) — never ellipses.
         context.fillRect(-hw, -hh, piece.w, piece.h);
         context.strokeStyle = edge;
-        context.lineWidth = 1.25;
+        context.lineWidth = 1.15;
         context.strokeRect(-hw + 0.5, -hh + 0.5, piece.w - 1, piece.h - 1);
       }
       if (Array.isArray(piece.marks)) {
-        context.lineWidth = 1.4;
-        context.lineCap = "butt";
+        context.lineWidth = 1.3;
         for (const mark of piece.marks) {
           const len = Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1);
           // Guard: never draw prop-length streaks on a small shard.
@@ -2053,6 +2041,9 @@ export function createRenderer(canvas) {
         context.globalAlpha = ghosted ? 0.55 : 1;
         context.fillStyle = ghosted ? "#c8b0ff" : (bullet.color || "#8a7a68");
         if (Array.isArray(bullet.scrapVerts) && bullet.scrapVerts.length >= 3) {
+          context.lineCap = "butt";
+          context.lineJoin = "miter";
+          context.miterLimit = 8;
           context.beginPath();
           context.moveTo(bullet.scrapVerts[0][0], bullet.scrapVerts[0][1]);
           for (let i = 1; i < bullet.scrapVerts.length; i++) {

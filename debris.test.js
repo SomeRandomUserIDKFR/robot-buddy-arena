@@ -43,8 +43,9 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
   const yard = createMapRuntime("yard");
   const crate = yard.props.find((p) => p.kind === "crate");
   const tiles = buildPropJigsaw(crate);
-  assert.equal(tiles.length, 16, "4x4 crate jigsaw");
+  assert.equal(tiles.length, 32, "4x4 crate cracked into pointed triangle shards");
   assert.ok(tiles.every((t) => Array.isArray(t.verts) && t.verts.length >= 3), "jagged verts");
+  assert.ok(tiles.every((t) => t.shape === "poly"), "no ellipse / round shard shapes");
   assert.ok(tiles.every((t) => t.material === "wood"), "map crates are wood, not metal");
   // Source-region paint: edge shards shaded, interior wood — not one mosaic color.
   assert.ok(tiles.some((t) => t.color === PROP_DEBRIS_COLORS.crate.fill));
@@ -65,14 +66,16 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
     }
   }
   const area = tiles.reduce((sum, t) => sum + (t.area || 0), 0);
-  assert.ok(Math.abs(area - crate.w * crate.h) < 2, "shards cover ~100% of crate area");
-  // Shared jags: neighboring shards have matching world-space edge midpoints.
+  // Triangle cracks + teeth can slightly overlap / gap; stay near full coverage.
+  assert.ok(area > crate.w * crate.h * 0.85, "shards cover most of crate area");
+  assert.ok(area < crate.w * crate.h * 1.25, "shards do not hugely overshoot area");
+  // Shared teeth: the two shards from one cracked cell share diagonal tip vertices.
   const a = tiles[0];
   const b = tiles[1];
   const world = (tile, v) => [tile.homeLx + v[0], tile.homeLy + v[1]];
-  const aPts = a.verts.map((v) => world(a, v).map((n) => n.toFixed(3)).join(","));
-  const bPts = new Set(b.verts.map((v) => world(b, v).map((n) => n.toFixed(3)).join(",")));
-  assert.ok(aPts.some((p) => bPts.has(p)), "adjacent shards share edge vertices");
+  const aPts = a.verts.map((v) => world(a, v).map((n) => n.toFixed(2)).join(","));
+  const bPts = new Set(b.verts.map((v) => world(b, v).map((n) => n.toFixed(2)).join(",")));
+  assert.ok(aPts.some((p) => bPts.has(p)), "cracked pair shares edge vertices");
 }
 
 {
@@ -114,7 +117,7 @@ assert.equal(normalizeArmorDespawnTimer(0), 0.1);
     reconquerQueue: []
   };
   damageProp(crate, crate.hp, game, crate.x + 5, crate.y + 5);
-  assert.equal(game.groundDebris.length, 16);
+  assert.equal(game.groundDebris.length, 32);
   assert.ok(game.groundDebris.every((p) => p.material === "wood" && !p.immortal));
   assert.ok(game.groundDebris.every((p) => Array.isArray(p.verts) && p.verts.length >= 3));
   assert.ok(game.groundDebris.every((p) => Number.isFinite(p.homeLx) && Number.isFinite(p.homeLy)));

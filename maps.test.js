@@ -70,9 +70,10 @@ import { generateEncounter, resetConquestSelectSession } from "./conquest.js";
   damageProp(crate, crate.hp, crateGame, crate.x + 10, crate.y + 10);
   assert.equal(crate.destroyed, true);
   const wood = crateGame.groundDebris.filter((p) => p.material === "wood");
-  assert.equal(wood.length, 16, "full 4x4 wood crate jigsaw");
+  assert.equal(wood.length, 32, "full 4x4 wood crate cracked into pointed shards");
   assert.ok(wood.every((p) => p.kind === "tile"));
   assert.ok(wood.every((p) => Array.isArray(p.verts) && p.verts.length >= 3));
+  assert.ok(wood.every((p) => p.shape === "poly"));
 
   const pipe = yard.props.find((p) => p.kind === "pipe")
     || createMapRuntime("battlefield").props.find((p) => p.kind === "pipe");

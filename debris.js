@@ -383,89 +383,146 @@ function clipMarkToShard(x1, y1, x2, y2, homeLx, homeLy, hw, hh, color) {
 }
 
 /**
- * Jagged rectangular jigsaw. Internal edges share mid-point jags so shards
- * reassemble into the original silhouette. Colors come from `colorAt(lx, ly)`.
+ * Push one sharp polygonal shard (straight edges only — no curves).
+ */
+function pushSharpShard(tiles, vertsWorld, paint, colorAt, markLines, c, r) {
+  if (!vertsWorld || vertsWorld.length < 3) return;
+  // Drop near-duplicates that can collapse an edge into a soft look.
+  const cleaned = [];
+  for (const p of vertsWorld) {
+    const prev = cleaned[cleaned.length - 1];
+    if (prev && Math.hypot(p[0] - prev[0], p[1] - prev[1]) < 0.35) continue;
+    cleaned.push([p[0], p[1]]);
+  }
+  if (cleaned.length >= 3) {
+    const first = cleaned[0];
+    const last = cleaned[cleaned.length - 1];
+    if (Math.hypot(first[0] - last[0], first[1] - last[1]) < 0.35) cleaned.pop();
+  }
+  if (cleaned.length < 3) return;
+
+  const center = polygonCentroid(cleaned);
+  const verts = cleaned.map((p) => [p[0] - center.x, p[1] - center.y]);
+  const box = aabbOfVerts(verts);
+  if (box.w < 1.5 || box.h < 1.5) return;
+  const color = typeof colorAt === "function"
+    ? colorAt(center.x, center.y, c, r)
+    : paint.fill;
+  const marks = [];
+  if (Array.isArray(markLines)) {
+    for (const line of markLines) {
+      const clipped = clipMarkToShard(
+        line.x1, line.y1, line.x2, line.y2,
+        center.x, center.y, box.w / 2, box.h / 2, line.color
+      );
+      if (clipped) marks.push(clipped);
+    }
+  }
+  tiles.push({
+    kind: "tile",
+    homeLx: center.x,
+    homeLy: center.y,
+    w: box.w,
+    h: box.h,
+    color,
+    edge: paint.edge,
+    shape: "poly",
+    detail: paint.detail || null,
+    material: paint.material,
+    verts,
+    marks: marks.length ? marks : null,
+    area: shoelaceArea(cleaned)
+  });
+}
+
+/**
+ * Shared pointed tooth on segment A→B. Order-independent so neighboring cells
+ * that traverse the edge opposite ways still get the same tip.
+ */
+function pointedEdge(a, b, salt, jag) {
+  const swap = a[0] > b[0] || (Math.abs(a[0] - b[0]) < 1e-9 && a[1] > b[1]);
+  const p0 = swap ? b : a;
+  const p1 = swap ? a : b;
+  const dx = p1[0] - p0[0];
+  const dy = p1[1] - p0[1];
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const mx = (p0[0] + p1[0]) * 0.5;
+  const my = (p0[1] + p1[1]) * 0.5;
+  const amp = (0.55 + shardJitter(mx, my, salt) * 0.7) * jag;
+  const sign = shardJitter(mx, my, salt + 9) >= 0.5 ? 1 : -1;
+  return [mx + nx * amp * sign, my + ny * amp * sign];
+}
+
+/**
+ * Sharp rectangular jigsaw: jittered corners + triangle cracks + pointed teeth.
+ * Every edge is a straight segment into a corner — no rounded mids / arcs.
  */
 function jaggedRectShards(localX, localY, w, h, cols, rows, paint, colorAt, markLines) {
   const tiles = [];
   const tw = w / cols;
   const th = h / rows;
-  const jag = Math.min(tw, th) * 0.28;
+  const jag = Math.min(tw, th) * 0.36;
 
-  // Shared horizontal / vertical edge mid jags (null on outer boundary).
-  const hJag = [];
+  // Shared corner grid. Interior corners get sharp 2D offsets; boundary stays
+  // on the outer rectangle so the assembled silhouette matches the prop.
+  const corners = [];
   for (let r = 0; r <= rows; r++) {
-    hJag[r] = [];
-    for (let c = 0; c < cols; c++) {
-      if (r === 0 || r === rows) {
-        hJag[r][c] = 0;
-      } else {
-        hJag[r][c] = (shardJitter(localX + c * tw, localY + r * th, 1) - 0.5) * 2 * jag;
-      }
-    }
-  }
-  const vJag = [];
-  for (let r = 0; r < rows; r++) {
-    vJag[r] = [];
+    corners[r] = [];
     for (let c = 0; c <= cols; c++) {
-      if (c === 0 || c === cols) {
-        vJag[r][c] = 0;
+      const onEdge = r === 0 || r === rows || c === 0 || c === cols;
+      const bx = localX + c * tw;
+      const by = localY + r * th;
+      if (onEdge) {
+        corners[r][c] = [bx, by];
       } else {
-        vJag[r][c] = (shardJitter(localX + c * tw, localY + r * th, 2) - 0.5) * 2 * jag;
+        const jx = (shardJitter(bx, by, 11) - 0.5) * 2 * jag;
+        const jy = (shardJitter(bx, by, 17) - 0.5) * 2 * jag;
+        corners[r][c] = [bx + jx, by + jy];
       }
     }
   }
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const x0 = localX + c * tw;
-      const y0 = localY + r * th;
-      const x1 = x0 + tw;
-      const y1 = y0 + th;
-      const mx = (x0 + x1) / 2;
-      const my = (y0 + y1) / 2;
-      // Octagon-ish jagged cell: corners + shared edge mid jags.
-      const vertsWorld = [
-        [x0, y0],
-        [mx, y0 + hJag[r][c]],
-        [x1, y0],
-        [x1 + vJag[r][c + 1], my],
-        [x1, y1],
-        [mx, y1 + hJag[r + 1][c]],
-        [x0, y1],
-        [x0 + vJag[r][c], my]
-      ];
-      const center = polygonCentroid(vertsWorld);
-      const verts = vertsWorld.map((p) => [p[0] - center.x, p[1] - center.y]);
-      const box = aabbOfVerts(verts);
-      const color = typeof colorAt === "function"
-        ? colorAt(center.x, center.y, c, r)
-        : paint.fill;
-      const marks = [];
-      if (Array.isArray(markLines)) {
-        for (const line of markLines) {
-          const clipped = clipMarkToShard(
-            line.x1, line.y1, line.x2, line.y2,
-            center.x, center.y, box.w / 2, box.h / 2, line.color
-          );
-          if (clipped) marks.push(clipped);
-        }
+      const tl = corners[r][c];
+      const tr = corners[r][c + 1];
+      const br = corners[r + 1][c + 1];
+      const bl = corners[r + 1][c];
+
+      // Shared salts on grid edges so adjacent cells share the same tooth tip.
+      const topTooth = pointedEdge(tl, tr, 1000 + r * 40 + c, jag);
+      const bottomTooth = pointedEdge(bl, br, 1000 + (r + 1) * 40 + c, jag);
+      const leftTooth = pointedEdge(tl, bl, 2000 + r * 40 + c, jag);
+      const rightTooth = pointedEdge(tr, br, 2000 + r * 40 + (c + 1), jag);
+
+      // Crack into two pointed triangles (hashed diagonal).
+      if (shardJitter(tl[0], tl[1], 3) >= 0.5) {
+        const diagTooth = pointedEdge(tl, br, 3000 + r * 40 + c, jag * 0.85);
+        pushSharpShard(
+          tiles,
+          [tl, topTooth, tr, rightTooth, br, diagTooth],
+          paint, colorAt, markLines, c, r
+        );
+        pushSharpShard(
+          tiles,
+          [tl, diagTooth, br, bottomTooth, bl, leftTooth],
+          paint, colorAt, markLines, c, r
+        );
+      } else {
+        const diagTooth = pointedEdge(tr, bl, 3000 + r * 40 + c, jag * 0.85);
+        pushSharpShard(
+          tiles,
+          [tl, topTooth, tr, diagTooth, bl, leftTooth],
+          paint, colorAt, markLines, c, r
+        );
+        pushSharpShard(
+          tiles,
+          [tr, rightTooth, br, bottomTooth, bl, diagTooth],
+          paint, colorAt, markLines, c, r
+        );
       }
-      tiles.push({
-        kind: "tile",
-        homeLx: center.x,
-        homeLy: center.y,
-        w: box.w,
-        h: box.h,
-        color,
-        edge: paint.edge,
-        shape: "poly",
-        detail: paint.detail || null,
-        material: paint.material,
-        verts,
-        marks: marks.length ? marks : null,
-        area: shoelaceArea(vertsWorld)
-      });
     }
   }
   return tiles;
