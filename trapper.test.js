@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { Fighter } from "./combat.js";
 import {
-  applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID, TRAPPER_ID
+  applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID, ILLUSIONIST_ID, TRAPPER_ID
 } from "./equipment.js";
+import {
+  createFighterIllusion, isIllusionFighter, tryIllusionistPlant
+} from "./illusionist.js";
 import {
   applyTrapLockToIntent, BEAR_TRAP_DAMAGE, BEAR_TRAP_LOCK, cycleTrapperType,
   FAKE_PLATFORM_DAMAGE, isTrapLocked, isTrapper, listTrapperTraps,
@@ -120,6 +123,53 @@ assert.equal(FAKE_PLATFORM_DAMAGE, 10);
   assert.equal(intent.dodge, false);
   assert.ok(Math.abs(intent.mx) < 1);
   assert.equal(intent.attack, true);
+}
+
+{
+  // Bear trap instantly kills fighter decoys (no chip / lock).
+  const trapper = applyLoadout(new Fighter({
+    x: 100, y: 700, team: 0, aim: 0
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: TRAPPER_ID });
+  const illu = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 1, aim: 0, hp: 500, maxHp: 500
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: ILLUSIONIST_ID });
+  const decoy = createFighterIllusion(illu, Fighter);
+  decoy.x = 200;
+  decoy.y = 700;
+  const game = {
+    traps: [], effects: [], fighters: [trapper, illu, decoy], illusions: []
+  };
+  const trap = tryTrapperPlant(trapper, game);
+  trap.x = decoy.x + 4;
+  trap.y = decoy.y + 36;
+  tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
+  assert.equal(decoy.dead, true, "decoy popped by bear trap");
+  assert.ok(isIllusionFighter(decoy));
+  assert.ok(game.effects.some((e) => e.type === "illusionBreak"));
+  assert.equal(trap.destroyed, true, "bear trap spent on illusion");
+}
+
+{
+  // Fake platform instantly kills prop illusions on contact.
+  const trapper = applyLoadout(new Fighter({
+    x: 100, y: 700, team: 0, aim: 0
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: TRAPPER_ID });
+  trapper.trapperType = "fakePlatform";
+  const illu = applyLoadout(new Fighter({
+    x: 500, y: 700, team: 1, aim: 0
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: ILLUSIONIST_ID });
+  illu.illusionistType = "prop";
+  const game = {
+    traps: [], effects: [], fighters: [trapper, illu], illusions: [], theme: "yard"
+  };
+  const prop = tryIllusionistPlant(illu, game, Fighter);
+  assert.ok(prop);
+  const trap = tryTrapperPlant(trapper, game);
+  trap.x = prop.x;
+  trap.y = prop.y + prop.h - 8;
+  tickTrapperWorld(game, TRAPPER_ARM_TIME + 0.01);
+  assert.equal(prop.destroyed, true, "prop illusion popped by fake platform");
+  assert.ok(game.effects.some((e) => e.type === "illusionBreak"));
 }
 
 {

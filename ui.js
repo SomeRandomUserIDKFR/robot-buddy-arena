@@ -1004,6 +1004,7 @@ function modifierMarkup(gear) {
         "<span>Extension · T cycle · 3 plant</span>",
         "<span class=\"stat-up\">Bear · 25 dmg + 5s no mobility</span>",
         "<span class=\"stat-up\">Fake plat · looks almost real, 10 dmg fall</span>",
+        "<span class=\"stat-up\">Instantly pops illusions on contact</span>",
         "<span>Short arm time before triggers</span>",
         "<span>Ally outline · faint enemy cue</span>",
         "<span class=\"stat-down\">Owner immune · max 3 active</span>"

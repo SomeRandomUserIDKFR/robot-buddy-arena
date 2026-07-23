@@ -3,9 +3,13 @@
  * Cycle trap type with T; plant with 3. Traps arm before they can trigger.
  * Bear: small cue, 25 dmg + 5s mobility lock. Fake platform: looks almost
  * real but off — no collision, 10 dmg on phase-through. Owner immune.
+ * Any illusion (fighter decoy or prop/platform) is destroyed instantly on contact.
  */
 import { SIZE, WORLD } from "./config.js";
 import { applyHpDamage, GEAR_BY_ID } from "./equipment.js";
+import {
+  fadeIllusionFighter, isIllusionFighter, registerIllusionObjectHit
+} from "./illusionist.js";
 import { clamp } from "./utils.js";
 
 export const TRAPPER_ID = "trapper";
@@ -153,6 +157,14 @@ function overlapsTrap(fighter, trap, pad = 2) {
     && fighter.y < trap.y + trap.h + pad;
 }
 
+function overlapsIllusionObject(ill, trap, pad = 2) {
+  if (!ill || !trap) return false;
+  return ill.x + (ill.w || 0) > trap.x - pad
+    && ill.x < trap.x + trap.w + pad
+    && ill.y + (ill.h || 0) > trap.y - pad
+    && ill.y < trap.y + trap.h + pad;
+}
+
 function feetCrossFake(fighter, oldY, trap) {
   // Falling through the fake top edge.
   if (!(fighter.vy >= 0)) return false;
@@ -164,13 +176,7 @@ function feetCrossFake(fighter, oldY, trap) {
   return wasAbove && nowThrough && overX;
 }
 
-function applyBearTrap(trap, victim, game) {
-  if (!victim || victim.dead) return false;
-  if (victim === trap.owner) return false;
-  applyHpDamage(victim, BEAR_TRAP_DAMAGE, game);
-  victim.trapLockT = BEAR_TRAP_LOCK;
-  victim.trapLockKind = "bear";
-  victim.hitFlash = Math.max(victim.hitFlash || 0, 0.2);
+function spendBearTrap(trap, game) {
   trap.triggered = true;
   trap.destroyed = true;
   trap.life = 0;
@@ -191,6 +197,21 @@ function applyBearTrap(trap, victim, game) {
       h: trap.h
     });
   }
+}
+
+function applyBearTrap(trap, victim, game) {
+  if (!victim || victim.dead) return false;
+  if (victim === trap.owner) return false;
+  if (isIllusionFighter(victim)) {
+    // Decoys pop instantly — no chip / lock.
+    fadeIllusionFighter(victim, game);
+  } else {
+    applyHpDamage(victim, BEAR_TRAP_DAMAGE, game);
+    victim.trapLockT = BEAR_TRAP_LOCK;
+    victim.trapLockKind = "bear";
+    victim.hitFlash = Math.max(victim.hitFlash || 0, 0.2);
+  }
+  spendBearTrap(trap, game);
   return true;
 }
 
@@ -200,8 +221,12 @@ function applyFakePlatform(trap, victim, game) {
   trap.victims ||= new Set();
   if (trap.victims.has(victim)) return false;
   trap.victims.add(victim);
-  applyHpDamage(victim, FAKE_PLATFORM_DAMAGE, game);
-  victim.hitFlash = Math.max(victim.hitFlash || 0, 0.14);
+  if (isIllusionFighter(victim)) {
+    fadeIllusionFighter(victim, game);
+  } else {
+    applyHpDamage(victim, FAKE_PLATFORM_DAMAGE, game);
+    victim.hitFlash = Math.max(victim.hitFlash || 0, 0.14);
+  }
   if (game?.effects) {
     game.effects.push({
       type: "propHit",
@@ -211,6 +236,36 @@ function applyFakePlatform(trap, victim, game) {
     });
   }
   return true;
+}
+
+/** Prop / platform illusions die on contact with an armed enemy trap. */
+function applyTrapToIllusionObject(trap, ill, game) {
+  if (!ill || ill.destroyed) return false;
+  if (ill.owner === trap.owner) return false;
+  if (ill.team === trap.team) return false;
+  if (trap.trapType === "bear") {
+    if (trap.triggered || !overlapsIllusionObject(ill, trap)) return false;
+    registerIllusionObjectHit(ill, game);
+    spendBearTrap(trap, game);
+    return true;
+  }
+  if (trap.trapType === "fakePlatform") {
+    if (!overlapsIllusionObject(ill, trap)) return false;
+    trap.victims ||= new Set();
+    if (trap.victims.has(ill)) return false;
+    trap.victims.add(ill);
+    registerIllusionObjectHit(ill, game);
+    if (game?.effects) {
+      game.effects.push({
+        type: "propHit",
+        x: ill.x + (ill.w || 0) / 2,
+        y: trap.y,
+        life: 0.14
+      });
+    }
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -249,9 +304,19 @@ export function tickTrapperWorld(game, dt, oldYByFighter = null) {
         }
       } else if (trap.trapType === "fakePlatform") {
         const oldY = oldYByFighter?.get?.(fighter) ?? fighter.y;
-        if (feetCrossFake(fighter, oldY, trap)) {
+        // Decoys die on overlap; real fighters still need a fall-through.
+        if (isIllusionFighter(fighter)) {
+          if (overlapsTrap(fighter, trap)) applyFakePlatform(trap, fighter, game);
+        } else if (feetCrossFake(fighter, oldY, trap)) {
           applyFakePlatform(trap, fighter, game);
         }
+      }
+    }
+
+    // Visual prop/platform illusions — same team rules, instant pop.
+    if (!trap.destroyed) {
+      for (const ill of game.illusions || []) {
+        if (applyTrapToIllusionObject(trap, ill, game) && trap.destroyed) break;
       }
     }
 
