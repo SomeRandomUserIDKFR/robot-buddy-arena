@@ -153,7 +153,8 @@ function burstPiece(game, {
   material, kind, x, y, w, h, color, vx = 0, vy = 0, facing = 0, index = 0,
   sourceType = null, sourceKind = null, sourceId = null, sourceProp = null,
   originX = null, originY = null, armorMaxHp = null,
-  homeLx = 0, homeLy = 0, shape = "rect", detail = null, edge = null
+  homeLx = 0, homeLy = 0, shape = "rect", detail = null, edge = null,
+  verts = null, marks = null
 }) {
   const burst = 100 + (index % 5) * 28;
   const ang = (-Math.PI / 2) + (Math.random() - 0.5) * 1.5 + facing * 0.12;
@@ -176,7 +177,16 @@ function burstPiece(game, {
     edge: edge || null,
     shape: shape || "rect",
     detail: detail || null,
-    // Jigsaw slot relative to object center — reconquer flies each tile home.
+    // Jagged polygon relative to piece centroid — shared edges reassemble cleanly.
+    verts: Array.isArray(verts) && verts.length >= 3
+      ? verts.map((p) => [p[0], p[1]])
+      : null,
+    marks: Array.isArray(marks) && marks.length
+      ? marks.map((m) => ({
+        x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2, color: m.color || null
+      }))
+      : null,
+    // Jigsaw slot relative to object center — reconquer flies each shard home.
     homeLx,
     homeLy,
     grounded: false,
@@ -259,57 +269,185 @@ export const PROP_DEBRIS_COLORS = Object.freeze({
   crate: { fill: "#8a6a3a", edge: "#4a3818", material: "wood" },
   pipe: { fill: "#6a7888", fill2: "#3a4858", edge: "#2a343e", material: "metal" },
   pillar: { fill: "#7a6a72", fill2: "#4a3e48", edge: "#2e262c", material: "stone" },
-  barrel: { fill: "#8a5030", edge: "#3a2010", material: "metal" },
-  redBarrel: { fill: "#c62828", fill2: "#f0c020", edge: "#4a1010", material: "metal" },
+  barrel: { fill: "#8a5030", hoop: "#3a2010", edge: "#3a2010", material: "metal" },
+  redBarrel: {
+    fill: "#c62828", fill2: "#f0c020", hoop: "#4a1010", edge: "#4a1010", material: "metal"
+  },
   powerCrate: { fill: "#6a7078", rim: "#2a3038", edge: "#1a2028", material: "metal" }
 });
 
-function gridRect(localX, localY, w, h, cols, rows, paint) {
+/** Deterministic 0..1 hash — jagged edges stay stable across break/rebuild. */
+function shardJitter(x, y, salt = 0) {
+  const n = Math.sin(x * 12.9898 + y * 78.233 + salt * 45.164) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+function shoelaceArea(verts) {
+  let area = 0;
+  for (let i = 0; i < verts.length; i++) {
+    const a = verts[i];
+    const b = verts[(i + 1) % verts.length];
+    area += a[0] * b[1] - b[0] * a[1];
+  }
+  return Math.abs(area) * 0.5;
+}
+
+function polygonCentroid(verts) {
+  let cx = 0;
+  let cy = 0;
+  let area = 0;
+  for (let i = 0; i < verts.length; i++) {
+    const a = verts[i];
+    const b = verts[(i + 1) % verts.length];
+    const cross = a[0] * b[1] - b[0] * a[1];
+    area += cross;
+    cx += (a[0] + b[0]) * cross;
+    cy += (a[1] + b[1]) * cross;
+  }
+  if (Math.abs(area) < 1e-6) {
+    let sx = 0;
+    let sy = 0;
+    for (const v of verts) {
+      sx += v[0];
+      sy += v[1];
+    }
+    return { x: sx / verts.length, y: sy / verts.length };
+  }
+  area *= 0.5;
+  return { x: cx / (6 * area), y: cy / (6 * area) };
+}
+
+function aabbOfVerts(verts) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const v of verts) {
+    if (v[0] < minX) minX = v[0];
+    if (v[1] < minY) minY = v[1];
+    if (v[0] > maxX) maxX = v[0];
+    if (v[1] > maxY) maxY = v[1];
+  }
+  return {
+    w: Math.max(2, maxX - minX),
+    h: Math.max(2, maxY - minY)
+  };
+}
+
+/**
+ * Clip a world-local mark line into a shard's local space if it crosses the AABB.
+ * @returns {{x1:number,y1:number,x2:number,y2:number,color?:string}|null}
+ */
+function clipMarkToShard(x1, y1, x2, y2, homeLx, homeLy, hw, hh, color) {
+  // Cohen–Sutherland-ish: accept if either endpoint is near the shard or the
+  // segment crosses the AABB expanded slightly.
+  const pad = 1.5;
+  const minX = homeLx - hw - pad;
+  const maxX = homeLx + hw + pad;
+  const minY = homeLy - hh - pad;
+  const maxY = homeLy + hh + pad;
+  const inside = (x, y) => x >= minX && x <= maxX && y >= minY && y <= maxY;
+  if (!inside(x1, y1) && !inside(x2, y2)) {
+    // Quick reject if both ends are on the same outside half-plane.
+    if (
+      (x1 < minX && x2 < minX) || (x1 > maxX && x2 > maxX)
+      || (y1 < minY && y2 < minY) || (y1 > maxY && y2 > maxY)
+    ) {
+      return null;
+    }
+  }
+  return {
+    x1: x1 - homeLx,
+    y1: y1 - homeLy,
+    x2: x2 - homeLx,
+    y2: y2 - homeLy,
+    color: color || null
+  };
+}
+
+/**
+ * Jagged rectangular jigsaw. Internal edges share mid-point jags so shards
+ * reassemble into the original silhouette. Colors come from `colorAt(lx, ly)`.
+ */
+function jaggedRectShards(localX, localY, w, h, cols, rows, paint, colorAt, markLines) {
   const tiles = [];
   const tw = w / cols;
   const th = h / rows;
-  for (let r = 0; r < rows; r++) {
+  const jag = Math.min(tw, th) * 0.28;
+
+  // Shared horizontal / vertical edge mid jags (null on outer boundary).
+  const hJag = [];
+  for (let r = 0; r <= rows; r++) {
+    hJag[r] = [];
     for (let c = 0; c < cols; c++) {
-      const useAlt = paint.fill2 && ((c + r) % 2 === 1);
-      tiles.push({
-        kind: "tile",
-        homeLx: localX + tw * (c + 0.5),
-        homeLy: localY + th * (r + 0.5),
-        w: tw,
-        h: th,
-        color: useAlt ? paint.fill2 : paint.fill,
-        edge: paint.edge,
-        shape: "rect",
-        detail: paint.detail || null,
-        material: paint.material
-      });
+      if (r === 0 || r === rows) {
+        hJag[r][c] = 0;
+      } else {
+        hJag[r][c] = (shardJitter(localX + c * tw, localY + r * th, 1) - 0.5) * 2 * jag;
+      }
     }
   }
-  return tiles;
-}
+  const vJag = [];
+  for (let r = 0; r < rows; r++) {
+    vJag[r] = [];
+    for (let c = 0; c <= cols; c++) {
+      if (c === 0 || c === cols) {
+        vJag[r][c] = 0;
+      } else {
+        vJag[r][c] = (shardJitter(localX + c * tw, localY + r * th, 2) - 0.5) * 2 * jag;
+      }
+    }
+  }
 
-function ellipseTiles(cx, cy, rw, rh, cols, rows, paint) {
-  const tiles = [];
-  const tw = (rw * 2) / cols;
-  const th = (rh * 2) / rows;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      // Offset from ellipse center (not prop center) for the containment test.
-      const ox = -rw + tw * (c + 0.5);
-      const oy = -rh + th * (r + 0.5);
-      if ((ox * ox) / (rw * rw) + (oy * oy) / (rh * rh) > 1.08) continue;
-      const useAlt = paint.fill2 && ((c + r) % 2 === 1);
+      const x0 = localX + c * tw;
+      const y0 = localY + r * th;
+      const x1 = x0 + tw;
+      const y1 = y0 + th;
+      const mx = (x0 + x1) / 2;
+      const my = (y0 + y1) / 2;
+      // Octagon-ish jagged cell: corners + shared edge mid jags.
+      const vertsWorld = [
+        [x0, y0],
+        [mx, y0 + hJag[r][c]],
+        [x1, y0],
+        [x1 + vJag[r][c + 1], my],
+        [x1, y1],
+        [mx, y1 + hJag[r + 1][c]],
+        [x0, y1],
+        [x0 + vJag[r][c], my]
+      ];
+      const center = polygonCentroid(vertsWorld);
+      const verts = vertsWorld.map((p) => [p[0] - center.x, p[1] - center.y]);
+      const box = aabbOfVerts(verts);
+      const color = typeof colorAt === "function"
+        ? colorAt(center.x, center.y, c, r)
+        : paint.fill;
+      const marks = [];
+      if (Array.isArray(markLines)) {
+        for (const line of markLines) {
+          const clipped = clipMarkToShard(
+            line.x1, line.y1, line.x2, line.y2,
+            center.x, center.y, box.w / 2, box.h / 2, line.color
+          );
+          if (clipped) marks.push(clipped);
+        }
+      }
       tiles.push({
         kind: "tile",
-        homeLx: cx + ox,
-        homeLy: cy + oy,
-        w: tw,
-        h: th,
-        color: useAlt ? paint.fill2 : paint.fill,
+        homeLx: center.x,
+        homeLy: center.y,
+        w: box.w,
+        h: box.h,
+        color,
         edge: paint.edge,
-        shape: "rect",
-        detail: null,
-        material: paint.material
+        shape: "poly",
+        detail: paint.detail || null,
+        material: paint.material,
+        verts,
+        marks: marks.length ? marks : null,
+        area: shoelaceArea(vertsWorld)
       });
     }
   }
@@ -317,7 +455,69 @@ function ellipseTiles(cx, cy, rw, rh, cols, rows, paint) {
 }
 
 /**
- * Full jigsaw of a prop's drawn geometry — every fragment, accurate colors.
+ * Jagged shards clipped to an ellipse (bush / canopy). Shared jags still match.
+ */
+function jaggedEllipseShards(cx, cy, rw, rh, cols, rows, paint, colorAt) {
+  const localX = cx - rw;
+  const localY = cy - rh;
+  const raw = jaggedRectShards(
+    localX, localY, rw * 2, rh * 2, cols, rows, paint, colorAt, null
+  );
+  return raw.filter((tile) => {
+    const nx = (tile.homeLx - cx) / rw;
+    const ny = (tile.homeLy - cy) / rh;
+    return nx * nx + ny * ny <= 1.12;
+  });
+}
+
+function crateColorAt(lx, ly, propW, propH, paint) {
+  // Source-region: darker near the drawn border inset, base wood elsewhere.
+  const hw = propW / 2;
+  const hh = propH / 2;
+  const edgeBand = Math.min(hw, hh) * 0.32;
+  const nearEdge = Math.min(hw - Math.abs(lx), hh - Math.abs(ly)) < edgeBand;
+  return nearEdge ? paint.edge : paint.fill;
+}
+
+function pipeColorAt(lx, ly, propW, propH, paint) {
+  // Match drawPropBody: darker hollow band inset from the outer shell.
+  const hh = propH / 2;
+  const inner = Math.abs(ly) < hh * 0.55 && Math.abs(lx) < propW / 2 - 8;
+  return inner ? paint.fill2 : paint.fill;
+}
+
+function barrelColorAt(lx, ly, propW, propH, paint) {
+  // Hoop bands at 30% / 70% of height (prop-local, y from top).
+  const top = -propH / 2;
+  const t = (ly - top) / propH;
+  const onHoop = Math.abs(t - 0.3) < 0.06 || Math.abs(t - 0.7) < 0.06;
+  return onHoop ? (paint.hoop || paint.edge) : paint.fill;
+}
+
+function pillarColorAt(lx, ly, propW, propH, paint) {
+  const hh = propH / 2;
+  const onCap = ly < -hh + 14 || ly > hh - 14;
+  return onCap ? paint.fill2 : paint.fill;
+}
+
+function canopyColorAt(lx, ly, cx, cy, rw, rh, paint) {
+  // Lighter leaf patches toward the canopy's secondary blob, not a checkerboard.
+  const dx = (lx - (cx - rw * 0.1)) / (rw * 0.7);
+  const dy = (ly - (cy - rh * 0.05)) / (rh * 0.7);
+  const inLight = dx * dx + dy * dy < 1;
+  return inLight ? (paint.fill2 || paint.fill) : paint.fill;
+}
+
+function powerCrateColorAt(lx, ly, propW, propH, paint) {
+  const hw = propW / 2;
+  const hh = propH / 2;
+  const rimBand = Math.min(hw, hh) * 0.22;
+  const nearRim = Math.min(hw - Math.abs(lx), hh - Math.abs(ly)) < rimBand;
+  return nearRim ? (paint.rim || paint.fill2 || paint.fill) : paint.fill;
+}
+
+/**
+ * Full jagged jigsaw of a prop's drawn geometry — source-region colors + marks.
  * Coordinates are relative to the prop/crate center.
  */
 export function buildPropJigsaw(prop, kind = prop.kind) {
@@ -331,94 +531,191 @@ export function buildPropJigsaw(prop, kind = prop.kind) {
       { x: 4, y: prop.h * 0.55, w: 10, h: 28, cols: 1, rows: 2 }
     ];
     for (const part of parts) {
-      tiles.push(...gridRect(
+      tiles.push(...jaggedRectShards(
         part.x - prop.w / 2,
         part.y - prop.h / 2,
         part.w,
         part.h,
         part.cols,
         part.rows,
-        paint
+        paint,
+        () => paint.fill,
+        null
       ));
     }
     return tiles;
   }
   if (kind === "bush") {
-    return ellipseTiles(0, prop.h * 0.05, prop.w / 2, prop.h / 2, 4, 3, PROP_DEBRIS_COLORS.bush);
+    return jaggedEllipseShards(
+      0, prop.h * 0.05, prop.w / 2, prop.h / 2, 4, 3, PROP_DEBRIS_COLORS.bush,
+      () => PROP_DEBRIS_COLORS.bush.fill
+    );
   }
   if (kind === "tree") {
-    // Trunk (full drawn rect) + canopy jigsaw.
     const trunkW = prop.w * 0.44;
     const trunkX = prop.w * 0.28 - prop.w / 2;
-    tiles.push(...gridRect(
-      trunkX, -prop.h / 2, trunkW, prop.h, 2, 8, PROP_DEBRIS_COLORS.tree
+    tiles.push(...jaggedRectShards(
+      trunkX, -prop.h / 2, trunkW, prop.h, 2, 8, PROP_DEBRIS_COLORS.tree,
+      () => PROP_DEBRIS_COLORS.tree.fill,
+      null
     ));
     if (prop.canopy) {
       const c = prop.canopy;
       const cx = (c.x + c.w / 2) - (prop.x + prop.w / 2);
       const cy = (c.y + c.h / 2) - (prop.y + prop.h / 2);
-      tiles.push(...ellipseTiles(
-        cx, cy, c.w / 2, c.h / 2, 5, 4, PROP_DEBRIS_COLORS.treeCanopy
+      const paint = PROP_DEBRIS_COLORS.treeCanopy;
+      tiles.push(...jaggedEllipseShards(
+        cx, cy, c.w / 2, c.h / 2, 5, 4, paint,
+        (lx, ly) => canopyColorAt(lx, ly, cx, cy, c.w / 2, c.h / 2, paint)
       ));
     }
     return tiles;
   }
   if (kind === "crate") {
-    return gridRect(
-      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 4, 4,
-      { ...PROP_DEBRIS_COLORS.crate, detail: "crate" }
+    const paint = { ...PROP_DEBRIS_COLORS.crate, detail: "crate" };
+    const hw = prop.w / 2;
+    const hh = prop.h / 2;
+    const marks = [
+      // Inner border stroke (approx of strokeRect inset).
+      { x1: -hw + 2, y1: -hh + 2, x2: hw - 2, y2: -hh + 2, color: paint.edge },
+      { x1: hw - 2, y1: -hh + 2, x2: hw - 2, y2: hh - 2, color: paint.edge },
+      { x1: hw - 2, y1: hh - 2, x2: -hw + 2, y2: hh - 2, color: paint.edge },
+      { x1: -hw + 2, y1: hh - 2, x2: -hw + 2, y2: -hh + 2, color: paint.edge },
+      // Drawn X diagonal.
+      { x1: -hw, y1: -hh, x2: hw, y2: hh, color: paint.edge }
+    ];
+    return jaggedRectShards(
+      -hw, -hh, prop.w, prop.h, 4, 4, paint,
+      (lx, ly) => crateColorAt(lx, ly, prop.w, prop.h, paint),
+      marks
     );
   }
   if (kind === "pipe") {
-    const outer = gridRect(
-      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 5, 2, PROP_DEBRIS_COLORS.pipe
+    const paint = PROP_DEBRIS_COLORS.pipe;
+    return jaggedRectShards(
+      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 5, 2, paint,
+      (lx, ly) => pipeColorAt(lx, ly, prop.w, prop.h, paint),
+      null
     );
-    // Hollow look: mark center-row tiles with darker fill already via fill2 checker.
-    return outer;
   }
   if (kind === "pillar") {
-    const body = gridRect(
-      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 2, 6, PROP_DEBRIS_COLORS.pillar
+    const paint = PROP_DEBRIS_COLORS.pillar;
+    const body = jaggedRectShards(
+      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 2, 6, paint,
+      (lx, ly) => pillarColorAt(lx, ly, prop.w, prop.h, paint),
+      null
     );
-    const cap = PROP_DEBRIS_COLORS.pillar;
     tiles.push(...body);
-    // Cap fragments matching the wider top/bottom bands.
-    tiles.push(...gridRect(-prop.w / 2 - 4, -prop.h / 2, prop.w + 8, 14, 3, 1, {
-      fill: cap.fill2, edge: cap.edge, material: cap.material
-    }));
-    tiles.push(...gridRect(-prop.w / 2 - 4, prop.h / 2 - 14, prop.w + 8, 14, 3, 1, {
-      fill: cap.fill2, edge: cap.edge, material: cap.material
-    }));
+    // Wider top/bottom cap bands matching drawPropBody.
+    tiles.push(...jaggedRectShards(
+      -prop.w / 2 - 4, -prop.h / 2, prop.w + 8, 14, 3, 1,
+      { fill: paint.fill2, edge: paint.edge, material: paint.material },
+      () => paint.fill2,
+      null
+    ));
+    tiles.push(...jaggedRectShards(
+      -prop.w / 2 - 4, prop.h / 2 - 14, prop.w + 8, 14, 3, 1,
+      { fill: paint.fill2, edge: paint.edge, material: paint.material },
+      () => paint.fill2,
+      null
+    ));
     return tiles;
   }
   if (kind === "barrel") {
-    return gridRect(
-      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 3, 4,
-      { ...PROP_DEBRIS_COLORS.barrel, detail: "barrel" }
+    const paint = { ...PROP_DEBRIS_COLORS.barrel, detail: "barrel" };
+    const hw = prop.w / 2;
+    const hh = prop.h / 2;
+    const marks = [
+      {
+        x1: -hw, y1: -hh + prop.h * 0.3,
+        x2: hw, y2: -hh + prop.h * 0.3,
+        color: paint.hoop || paint.edge
+      },
+      {
+        x1: -hw, y1: -hh + prop.h * 0.7,
+        x2: hw, y2: -hh + prop.h * 0.7,
+        color: paint.hoop || paint.edge
+      }
+    ];
+    return jaggedRectShards(
+      -hw, -hh, prop.w, prop.h, 3, 4, paint,
+      (lx, ly) => barrelColorAt(lx, ly, prop.w, prop.h, paint),
+      marks
     );
   }
   if (kind === "redBarrel") {
-    return gridRect(
-      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 3, 4,
-      { ...PROP_DEBRIS_COLORS.redBarrel, detail: "barrel" }
+    const paint = { ...PROP_DEBRIS_COLORS.redBarrel, detail: "barrel" };
+    const hw = prop.w / 2;
+    const hh = prop.h / 2;
+    const marks = [
+      {
+        x1: -hw, y1: -hh + prop.h * 0.38,
+        x2: hw, y2: -hh + prop.h * 0.38,
+        color: paint.fill2
+      },
+      {
+        x1: -hw, y1: -hh + prop.h * 0.62,
+        x2: hw, y2: -hh + prop.h * 0.62,
+        color: paint.fill2
+      },
+      {
+        x1: -hw + 4, y1: -hh + prop.h * 0.2,
+        x2: hw - 4, y2: -hh + prop.h * 0.8,
+        color: paint.edge
+      },
+      {
+        x1: hw - 4, y1: -hh + prop.h * 0.2,
+        x2: -hw + 4, y2: -hh + prop.h * 0.8,
+        color: paint.edge
+      }
+    ];
+    return jaggedRectShards(
+      -hw, -hh, prop.w, prop.h, 3, 4, paint,
+      (lx, ly) => {
+        const top = -prop.h / 2;
+        const t = (ly - top) / prop.h;
+        if (t > 0.38 && t < 0.62) return paint.fill2;
+        return barrelColorAt(lx, ly, prop.w, prop.h, paint);
+      },
+      marks
     );
   }
   if (kind === "powerCrate") {
     const look = prop.look || PROP_DEBRIS_COLORS.powerCrate;
-    return gridRect(
-      -prop.w / 2, -prop.h / 2, prop.w, prop.h, 4, 4,
+    const paint = {
+      fill: look.metal || PROP_DEBRIS_COLORS.powerCrate.fill,
+      rim: look.rim || PROP_DEBRIS_COLORS.powerCrate.rim,
+      edge: PROP_DEBRIS_COLORS.powerCrate.edge,
+      material: "metal",
+      detail: "powerCrate"
+    };
+    const hw = prop.w / 2;
+    const hh = prop.h / 2;
+    const marks = [
       {
-        fill: look.metal || PROP_DEBRIS_COLORS.powerCrate.fill,
-        fill2: look.rim || PROP_DEBRIS_COLORS.powerCrate.rim,
-        edge: PROP_DEBRIS_COLORS.powerCrate.edge,
-        material: "metal",
-        detail: "powerCrate"
+        x1: -hw + 2, y1: -hh + 2, x2: hw - 2, y2: -hh + 2, color: paint.rim
+      },
+      {
+        x1: hw - 2, y1: -hh + 2, x2: hw - 2, y2: hh - 2, color: paint.rim
+      },
+      {
+        x1: hw - 2, y1: hh - 2, x2: -hw + 2, y2: hh - 2, color: paint.rim
+      },
+      {
+        x1: -hw + 2, y1: hh - 2, x2: -hw + 2, y2: -hh + 2, color: paint.rim
       }
+    ];
+    return jaggedRectShards(
+      -hw, -hh, prop.w, prop.h, 4, 4, paint,
+      (lx, ly) => powerCrateColorAt(lx, ly, prop.w, prop.h, paint),
+      marks
     );
   }
-  return gridRect(
+  return jaggedRectShards(
     -prop.w / 2, -prop.h / 2, prop.w, prop.h, 3, 3,
-    { fill: "#668", edge: "#334", material: "scrap" }
+    { fill: "#668", edge: "#334", material: "scrap" },
+    () => "#668",
+    null
   );
 }
 
@@ -545,7 +842,7 @@ export function spawnPropDebris(game, prop, impactX, impactY, options = {}) {
 
   for (let i = 0; i < tiles.length; i++) {
     const tile = tiles[i];
-    // Spawn from the tile's true place on the object, then burst outward.
+    // Spawn from the shard's true place on the object, then burst outward.
     burstPiece(game, {
       material: tile.material,
       kind: tile.kind,
@@ -557,6 +854,8 @@ export function spawnPropDebris(game, prop, impactX, impactY, options = {}) {
       edge: tile.edge,
       shape: tile.shape,
       detail: tile.detail,
+      verts: tile.verts,
+      marks: tile.marks,
       homeLx: tile.homeLx,
       homeLy: tile.homeLy,
       index: i,
@@ -1073,10 +1372,21 @@ function finishMaterialConsumePiece(game, piece) {
     x: tipX,
     y: tipY,
     color: piece.consumeBaseColor || piece.color || "#8a7a68",
+    edge: piece.edge || null,
     kind: piece.kind || null,
     material: piece.material || null,
     w: piece.w || 8,
-    h: piece.h || 8
+    h: piece.h || 8,
+    shape: piece.shape || null,
+    detail: piece.detail || null,
+    verts: Array.isArray(piece.verts)
+      ? piece.verts.map((p) => [p[0], p[1]])
+      : null,
+    marks: Array.isArray(piece.marks)
+      ? piece.marks.map((m) => ({
+        x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2, color: m.color || null
+      }))
+      : null
   });
 }
 
