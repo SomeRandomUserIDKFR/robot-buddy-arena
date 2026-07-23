@@ -13,6 +13,7 @@ import { armorDummyBlockers, damageArmorDummy } from "./debris.js";
 import {
   damageProp, platformsOf, projectileBlockers, solidProps
 } from "./maps.js";
+import { isPlatformLandable } from "./map-gimmicks.js";
 import {
   consumeOvercharge, damagePowerCrate, fireRateBuffMult, moveSpeedBuffMult,
   powerCrateBlockers, tryCounterSlash
@@ -49,7 +50,7 @@ bindExplosiveBarrelPowerCrateDamager(damagePowerCrate);
 function landableSurfaces(game) {
   if (game?._landables) return game._landables;
   const list = [
-    ...platformsOf(game),
+    ...platformsOf(game).filter(isPlatformLandable),
     ...solidProps(game),
     ...powerCrateBlockers(game).filter((c) => c.solid),
     ...armorDummyBlockers(game).filter((d) => d.solid)

@@ -182,7 +182,7 @@ export const MAPS = Object.freeze([
     id: "battlefield",
     name: "Battlefield",
     theme: "battlefield",
-    blurb: "Open combat platforms — the classic arena.",
+    blurb: "Open combat platforms — watch for crosswind gusts.",
     unlocked: true,
     platforms: BATTLEFIELD_PLATFORMS,
     props: [],
@@ -198,7 +198,7 @@ export const MAPS = Object.freeze([
     id: "city",
     name: "City",
     theme: "city",
-    blurb: "Rooftops and alley gaps — tall building stacks.",
+    blurb: "Rooftops and alley gaps — freight elevators shift mid-fight.",
     unlocked: true,
     platforms: [
       GROUND,
@@ -256,7 +256,7 @@ export const MAPS = Object.freeze([
     id: "desert",
     name: "Desert",
     theme: "desert",
-    blurb: "Hilled dunes with breakable cactus and bush cover.",
+    blurb: "Hilled dunes — sandstorms choke sight between fights.",
     unlocked: true,
     platforms: [
       GROUND,
@@ -308,7 +308,7 @@ export const MAPS = Object.freeze([
     id: "forest",
     name: "Forest",
     theme: "forest",
-    blurb: "Dark trees you can walk through — breakable trunks, canopy overhead.",
+    blurb: "Walk-through trees — canopy drops crash down without warning.",
     unlocked: true,
     platforms: [
       GROUND,
@@ -357,7 +357,7 @@ export const MAPS = Object.freeze([
     id: "yard",
     name: "Yard",
     theme: "industrial",
-    blurb: "Industrial yard — crates, pipes, and mid cover.",
+    blurb: "Industrial yard — steam vents blast fighters skyward.",
     unlocked: true,
     platforms: [
       GROUND,
@@ -405,7 +405,7 @@ export const MAPS = Object.freeze([
     id: "ruins",
     name: "Ruins",
     theme: "ruins",
-    blurb: "Broken pillars and asymmetric ledges.",
+    blurb: "Broken pillars — stand too long and ledges crumble away.",
     unlocked: true,
     platforms: [
       GROUND,
@@ -451,7 +451,7 @@ export const MAPS = Object.freeze([
     id: "docks",
     name: "Docks",
     theme: "docks",
-    blurb: "Long piers over a pit — watch your step.",
+    blurb: "Long piers — rising tide floods the gaps (and the edges).",
     unlocked: true,
     platforms: [
       // No continuous ground — pit hazard between piers (fall = death via WORLD.h)

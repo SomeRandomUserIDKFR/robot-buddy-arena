@@ -43,6 +43,9 @@ import {
   createMapRuntime, pickRandomMapId
 } from "./maps.js";
 import {
+  initMapGimmicks, tickGimmickEffects, tickMapGimmicks
+} from "./map-gimmicks.js";
+import {
   initPowerCrates, tickFighterPowerBuffs, tickPowerCrateSpawns
 } from "./powerups.js";
 import {
@@ -144,7 +147,7 @@ function makeGame(mode) {
     ? (getPendingEncounter()?.rewardTier || "veteran")
     : "veteran";
   ensureSettingsProfile(profile);
-  return {
+  const gameState = {
     id: `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`,
     mode,
     difficulty,
@@ -162,6 +165,7 @@ function makeGame(mode) {
     ceiling: map.ceiling,
     groundStyle: map.groundStyle,
     backdrop: map.backdrop,
+    gimmick: null,
     learningLocked: !!profile.learningLocked,
     settings: cloneSettings(profile.settings),
     fighters,
@@ -205,6 +209,8 @@ function makeGame(mode) {
       shieldRaiseLowHp: 0
     }
   };
+  initMapGimmicks(gameState);
+  return gameState;
 }
 
 function start(mode) {
@@ -329,6 +335,9 @@ function update(dt) {
   refreshCombatCaches(game);
   refreshIllusionCaches(game);
   refreshCombatCloneCaches(game);
+  // Map specials (elevators move before feet resolve this frame).
+  tickMapGimmicks(game, dt);
+  tickGimmickEffects(game, dt);
   const trapPrevY = new Map();
   for (const fighter of game.fighters) {
     stepFighter(fighter, dt, game, profile, keys, humanIntent);

@@ -10,6 +10,9 @@ import {
 } from "./illusionist.js";
 import { normalizeModularMorphStyle, optimizeIllusionsEnabled } from "./settings.js";
 import { platformsOf } from "./maps.js";
+import {
+  drawGimmickEffect, drawMapGimmicks, gimmickSightMult
+} from "./map-gimmicks.js";
 import { crateVisibleToTeam, listTimedBuffs } from "./powerups.js";
 import { clamp, dist } from "./utils.js";
 import { fighterVisibleToViewer, visibleToSelf, visibleToTeam } from "./vision.js";
@@ -887,6 +890,7 @@ export function createRenderer(canvas) {
     context.translate(-camera.x, -camera.y);
     drawBackdrop(game, .2);
     drawPlatforms(game, .28);
+    drawMapGimmicks(context, game, .28);
     drawIllusions(game, .35, game.fighters?.[0] ?? null);
     drawTraps(game, .35, game.fighters?.[0]?.team ?? 0);
     drawProps(game, .35, false);
@@ -915,15 +919,16 @@ export function createRenderer(canvas) {
     context.beginPath();
     for (const fighter of allies) {
       const center = fighter.center();
-      const sight = fighter.sight || SIGHT;
+      const sight = (fighter.sight || SIGHT) * gimmickSightMult(game);
       context.moveTo(center.x + sight, center.y);
       context.arc(center.x, center.y, sight, 0, Math.PI * 2);
-      if (fighter.directionalSightRange > sight && fighter.sightHalfAngle) {
+      const dirRange = (fighter.directionalSightRange || 0) * gimmickSightMult(game);
+      if (dirRange > sight && fighter.sightHalfAngle) {
         context.moveTo(center.x, center.y);
         context.arc(
           center.x,
           center.y,
-          fighter.directionalSightRange,
+          dirRange,
           fighter.aim - fighter.sightHalfAngle,
           fighter.aim + fighter.sightHalfAngle
         );
@@ -954,6 +959,7 @@ export function createRenderer(canvas) {
     context.clip();
     drawBackdrop(game, .9);
     drawPlatforms(game, 1);
+    drawMapGimmicks(context, game, 1);
     drawIllusions(game, 1, player);
     drawTraps(game, 1, player.team);
     drawProps(game, 1, false);
@@ -1156,6 +1162,8 @@ export function createRenderer(canvas) {
     const colors = platformColors(game);
     context.globalAlpha = alpha;
     for (const platform of platformsOf(game)) {
+      // Crumbled ruins ledges are drawn by the gimmick overlay as ghosts.
+      if (platform.crumbled) continue;
       context.fillStyle = platform.blocksSight ? "#2a3038" : colors.fill;
       context.fillRect(platform.x, platform.y, platform.w, platform.h);
       context.fillStyle = colors.top;
@@ -2364,6 +2372,10 @@ export function createRenderer(canvas) {
   function drawEffects(game) {
     for (const effect of game.effects) {
       context.save();
+      if (drawGimmickEffect(context, effect, 1)) {
+        context.restore();
+        continue;
+      }
       context.globalAlpha = clamp(effect.life * 6, 0, 1);
       if (effect.type === "dash") {
         context.strokeStyle = effect.color;

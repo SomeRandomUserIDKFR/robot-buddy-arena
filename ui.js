@@ -36,6 +36,7 @@ import {
 } from "./settings.js";
 import { applySfxSettings } from "./sfx.js";
 import { normalizeTrapType, trapTypeLabel } from "./trapper.js";
+import { gimmickLabel } from "./map-gimmicks.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -573,12 +574,16 @@ export function updateHud(game) {
     }).join("");
   }
   const sparLocked = game.mode === "training" && !!game.learningLocked;
+  const mapBit = game.mapName ? ` · ${String(game.mapName).toUpperCase()}` : "";
+  const gimmickBit = game.gimmick?.label
+    ? ` · ${gimmickLabel(game.gimmick.kind) || game.gimmick.label}`
+    : "";
   ui.announcement.textContent = game.announcement > 0
     ? (sparLocked
-      ? `SPAR — LEARNING LOCKED${game.mapName ? ` · ${String(game.mapName).toUpperCase()}` : ""}`
+      ? `SPAR — LEARNING LOCKED${mapBit}${gimmickBit}`
       : game.mode === "training"
-        ? `TRAIN YOUR BUDDY${game.mapName ? ` · ${String(game.mapName).toUpperCase()}` : ""}`
-        : `PROTECT YOUR TEAM${game.mapName ? ` · ${String(game.mapName).toUpperCase()}` : ""}`)
+        ? `TRAIN YOUR BUDDY${mapBit}${gimmickBit}`
+        : `PROTECT YOUR TEAM${mapBit}${gimmickBit}`)
     : "";
 }
 

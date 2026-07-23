@@ -4,6 +4,7 @@ import { isIllusionFighter } from "./illusionist.js";
 import { inLightCondensationReveal } from "./light-condensation.js";
 import { sightBlockers } from "./maps.js";
 import { optimizeIllusionsEnabled } from "./settings.js";
+import { gimmickSightMult } from "./map-gimmicks.js";
 import { inSignalTripwireReveal } from "./trapper.js";
 import { angleDiff, dist, segmentHitsBox } from "./utils.js";
 
@@ -14,8 +15,8 @@ function cachedSightBlockers(game) {
   return blockers;
 }
 
-export function inDirectionalSight(observer, target) {
-  const range = observer.directionalSightRange || 0;
+export function inDirectionalSight(observer, target, game = null) {
+  const range = (observer.directionalSightRange || 0) * gimmickSightMult(game);
   const halfAngle = observer.sightHalfAngle || 0;
   if (!range || !halfAngle || dist(observer, target) > range) return false;
   const angle = Math.atan2(target.y - observer.y, target.x - observer.x);
@@ -52,8 +53,9 @@ export function hasLineOfSight(game, from, to) {
 }
 
 function canSeeTarget(game, observer, target) {
-  const inRange = dist(observer, target) <= (observer.sight || SIGHT)
-    || inDirectionalSight(observer, target);
+  const sight = (observer.sight || SIGHT) * gimmickSightMult(game);
+  const inRange = dist(observer, target) <= sight
+    || inDirectionalSight(observer, target, game);
   if (!inRange) return false;
   return hasLineOfSight(game, observer, target);
 }
@@ -76,8 +78,9 @@ export function visibleToTeam(game, observer, target) {
 }
 
 export function visibleToSelf(observer, target, game = null) {
-  const inRange = dist(observer, target) <= (observer.sight || SIGHT)
-    || inDirectionalSight(observer, target);
+  const sight = (observer.sight || SIGHT) * gimmickSightMult(game);
+  const inRange = dist(observer, target) <= sight
+    || inDirectionalSight(observer, target, game);
   if (!inRange) return false;
   if (!game) return true;
   return hasLineOfSight(game, observer, target);
