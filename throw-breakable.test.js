@@ -10,6 +10,9 @@ import {
   createPowerCrate, damagePowerCrate, POWER_CRATE_HP
 } from "./powerups.js";
 import {
+  applyBraceCasing, RECONJURER_BRACE_HP
+} from "./reconjurer-builder.js";
+import {
   createToolPickup, FRAG_GRENADE_ID, tickToolPickups, THROWING_SPEAR_ID
 } from "./tool-secondaries.js";
 import {
@@ -760,6 +763,107 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.ok(tryGrabBreakable(fighter, game));
   assert.equal(fighter.heldToolPickup, FRAG_GRENADE_ID);
   assert.equal(fighter.heldProp, null);
+}
+
+// Braced throw: casing takes impact damage, prop reseats as solid pickable cover.
+{
+  const fighter = applyLoadout(new Fighter({
+    x: 100, y: 200, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  selectWeaponSlot(fighter, "secondaryWeapon");
+  const crate = {
+    kind: "crate",
+    breakable: true,
+    destroyed: false,
+    solid: true,
+    baseSolid: true,
+    baseBlocksProjectiles: true,
+    baseBlocksSight: false,
+    blocksProjectiles: true,
+    blocksSight: false,
+    x: 120,
+    y: 200,
+    w: 44,
+    h: 44,
+    hp: 55,
+    maxHp: 55,
+    groundDebrisDropped: false
+  };
+  applyBraceCasing(crate, RECONJURER_BRACE_HP);
+  const coreHp = crate.hp;
+  const game = {
+    props: [crate],
+    platforms: [{ x: 0, y: 400, w: 800, h: 40 }],
+    fighters: [fighter],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: [],
+    powerCrates: []
+  };
+
+  assert.ok(tryGrabBreakable(fighter, game));
+  assert.ok(throwHeldBreakable(fighter, game));
+  assert.equal(crate.thrownInFlight, true);
+  // Drive into the floor so stepThrownBreakables finishes the throw.
+  const thrown = game.thrownBreakables[0];
+  thrown.x = 200;
+  thrown.y = 360;
+  thrown.vy = 400;
+  stepThrownBreakables(game, 0.05);
+  assert.equal(game.thrownBreakables.length, 0);
+  assert.equal(crate.destroyed, false, "brace lets the prop survive impact");
+  assert.equal(crate.hp, coreHp, "core HP untouched while casing absorbs throw");
+  assert.ok((crate.braceHp || 0) < RECONJURER_BRACE_HP, "casing took impact damage");
+  assert.equal(crate.solid, true, "surviving cover reseats solid");
+  assert.equal(crate.blocksProjectiles, true);
+  assert.equal(crate.thrownInFlight, false);
+  assert.equal(crate.heldBy, null);
+  assert.ok(canGrabBreakable(crate), "surviving braced cover is pickable again");
+
+  fighter.x = crate.x;
+  fighter.y = crate.y;
+  assert.ok(tryGrabBreakable(fighter, game), "can re-grab after braced impact");
+  assert.equal(fighter.heldProp, crate);
+  tickThrowBreakable(fighter, game, 0.016);
+  assert.equal(fighter.heldProp, crate, "hp>0 so hold is not auto-dropped");
+}
+
+// Braced metal box throw also reseats pickable (wood casing absorbs).
+{
+  const fighter = applyLoadout(new Fighter({
+    x: 300, y: 300, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  selectWeaponSlot(fighter, "secondaryWeapon");
+  const metal = createPowerCrate({ x: 320, y: 340 }, "yard", "industrial", "brace-throw");
+  metal.hp = POWER_CRATE_HP * 0.5;
+  applyBraceCasing(metal, RECONJURER_BRACE_HP);
+  const coreHp = metal.hp;
+  const game = {
+    props: [],
+    powerCrates: [metal],
+    platforms: [{ x: 0, y: 500, w: 800, h: 40 }],
+    fighters: [fighter],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: [],
+    powerCrateState: { pending: [] }
+  };
+  shatterBreakableAt(metal, game, 340, 480, fighter);
+  assert.equal(metal.destroyed, false);
+  assert.equal(metal.hp, coreHp);
+  assert.ok((metal.braceHp || 0) < RECONJURER_BRACE_HP);
+  assert.equal(metal.solid, true);
+  assert.ok(canGrabBreakable(metal));
+  fighter.x = metal.x;
+  fighter.y = metal.y;
+  assert.ok(tryGrabBreakable(fighter, game));
+  assert.equal(fighter.heldProp, metal);
 }
 
 console.log("throw-breakable.test.js passed.");
