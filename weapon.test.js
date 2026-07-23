@@ -8,7 +8,9 @@ import {
   suggestBuddyLoadout, theoreticalDps, weaponStats
 } from "./equipment.js";
 import { weaponVisual } from "./rendering.js";
-import { fighterVisibleToViewer, inDirectionalSight, visibleToTeam } from "./vision.js";
+import {
+  fighterVisibleToViewer, inDirectionalSight, isConquestDuo, visibleToTeam
+} from "./vision.js";
 
 const loadout = (weapon, body = "field-frame") => ({
   ...DEFAULT_LOADOUT, body, weapon
@@ -132,11 +134,26 @@ const loadout = (weapon, body = "field-frame") => ({
     false,
     "far training buddy stays hidden out of sight"
   );
-  // Conquest ally buddy remains always visible (same team).
+  // Conquest: player ↔ buddy always see each other (even far / through walls).
   const allyBuddy = new Fighter({ x: 2000, y: 700, team: 0, buddy: true });
+  const wallGame = {
+    fighters: [you, allyBuddy],
+    mode: "conquest",
+    props: [{
+      x: 400, y: 600, w: 80, h: 200,
+      solid: true, blocksSight: true, destroyed: false
+    }]
+  };
+  assert.ok(isConquestDuo(wallGame, you, allyBuddy));
   assert.equal(
-    fighterVisibleToViewer({ fighters: [you, allyBuddy], mode: "conquest" }, you, allyBuddy),
-    true
+    fighterVisibleToViewer(wallGame, you, allyBuddy),
+    true,
+    "conquest player always sees buddy"
+  );
+  assert.equal(
+    fighterVisibleToViewer(wallGame, allyBuddy, you),
+    true,
+    "conquest buddy always sees player"
   );
 
   const player = new Fighter({ x: 1000, y: 700, team: 0, human: true });

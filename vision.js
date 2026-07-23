@@ -83,11 +83,21 @@ export function visibleToSelf(observer, target, game = null) {
 
 /**
  * Whether the viewer should render `fighter`.
- * Allies (same team) are always drawn; enemies — including the training buddy
- * spar partner — only when in team sight / LOS.
+ * - Conquest (and any ally): same-team fighters always see each other — the
+ *   player and buddy stay visible with no sight / wall check.
+ * - Training / spar: the buddy is on the enemy team, so he only appears when
+ *   in team sight + LOS like any other foe.
  */
 export function fighterVisibleToViewer(game, viewer, fighter) {
   if (!game || !viewer || !fighter) return false;
+  // Shared faction — conquest duo always sees one another.
   if (fighter.team === viewer.team) return true;
   return visibleToTeam(game, viewer, fighter);
+}
+
+/** True when `a` and `b` are the conquest player↔buddy pair (same team). */
+export function isConquestDuo(game, a, b) {
+  if (!game || game.mode !== "conquest" || !a || !b) return false;
+  if (a.team !== b.team) return false;
+  return !!(a.buddy || b.buddy) && !!(a.human || b.human || a.buddy || b.buddy);
 }
