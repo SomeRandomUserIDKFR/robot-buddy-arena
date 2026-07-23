@@ -99,7 +99,7 @@ export const TOOL_DEFS = Object.freeze({
     cd: 7,
     damage: 12,
     color: "#5a8aaa",
-    blurb: "Latch to cover or yank a foe. Infinite while equipped (7s CD). Also drops from crates / breakables / maps as 1–10 use packs."
+    blurb: "Latch to cover/terrain and reel to the hit, or yank a foe. Infinite while equipped (7s CD). Also drops from crates / breakables / maps as 1–10 use packs."
   }
 });
 
@@ -118,7 +118,12 @@ export const STICKY_FUSE = 1.35;
 export const STICKY_RADIUS = 95;
 export const BOLAS_LOCK = 2.4;
 export const HOOK_RANGE = 420;
-export const HOOK_REEL_TIME = 0.28;
+/** @deprecated Prefer distance / HOOK_REEL_SPEED; kept for FAQ/tests. */
+export const HOOK_REEL_TIME = 0.55;
+/** World units/sec while hooked to cover / terrain. */
+export const HOOK_REEL_SPEED = 1150;
+/** Stop reeling once the fighter center is this close to the latch point. */
+export const HOOK_REEL_ARRIVE = 36;
 
 export function isToolSecondaryId(id) {
   return TOOL_SECONDARY_IDS.includes(id);
@@ -322,17 +327,27 @@ function fireBolas(fighter, game, fromPickup) {
 }
 
 function rayHit(game, owner, ox, oy, aim, range) {
-  const steps = Math.ceil(range / 12);
+  const steps = Math.ceil(range / 10);
   let bestFoe = null;
   let bestFoeD = range;
   let bestPoint = null;
   let bestPointD = range;
+  const solids = [
+    ...(game?.props || []),
+    ...(game?.powerCrates || [])
+  ];
   for (let i = 1; i <= steps; i++) {
     const d = (i / steps) * range;
     const x = ox + Math.cos(aim) * d;
     const y = oy + Math.sin(aim) * d;
     if (x < 0 || y < 0 || x > WORLD.w || y > WORLD.h) {
-      return { kind: "world", x, y, d };
+      // Latch on the world edge so a near-miss still reels somewhere.
+      return {
+        kind: "world",
+        x: Math.max(0, Math.min(WORLD.w, x)),
+        y: Math.max(0, Math.min(WORLD.h, y)),
+        d
+      };
     }
     for (const foe of livingFighters(game)) {
       if (foe === owner || foe.team === owner.team) continue;
@@ -346,8 +361,12 @@ function rayHit(game, owner, ox, oy, aim, range) {
         }
       }
     }
-    for (const prop of game?.props || []) {
-      if (!prop || prop.destroyed || !prop.solid) continue;
+    for (const prop of solids) {
+      if (!prop || prop.destroyed) continue;
+      if (!prop.solid && !prop.blocksProjectiles) continue;
+      if (prop.heldBy || prop.thrownInFlight || prop.forgeHidden || prop.illusionGhosted) {
+        continue;
+      }
       if (x >= prop.x && x <= prop.x + prop.w && y >= prop.y && y <= prop.y + prop.h) {
         if (d < bestPointD) {
           bestPointD = d;
@@ -389,7 +408,7 @@ function fireHook(fighter, game, fromPickup) {
     y1: y,
     x2: tx,
     y2: ty,
-    life: 0.22,
+    life: 0.28,
     color: TOOL_DEFS[HOOKSHOT_WINCH_ID].color
   });
   if (!hit) return null;
@@ -404,12 +423,17 @@ function fireHook(fighter, game, fromPickup) {
     hit.foe.vx = (hit.foe.vx || 0) + Math.cos(ang) * pull;
     hit.foe.vy = (hit.foe.vy || 0) + Math.sin(ang) * pull * 0.7;
   } else {
+    const cx = fighter.x + SIZE / 2;
+    const cy = fighter.y + SIZE / 2;
+    const dist = Math.hypot(hit.x - cx, hit.y - cy);
     fighter.hookReel = {
       x: hit.x,
       y: hit.y,
-      t: HOOK_REEL_TIME,
+      // Time budget = travel time + small slack so far latches still arrive.
+      t: Math.max(0.18, Math.min(1.1, dist / HOOK_REEL_SPEED + 0.08)),
       fromPickup: !!fromPickup
     };
+    fighter.grounded = false;
   }
   return hit;
 }
@@ -465,17 +489,29 @@ export function tickToolSecondary(fighter, dt) {
     fighter.toolFlash = Math.max(0, fighter.toolFlash - step);
   }
   if (fighter.hookReel) {
-    fighter.hookReel.t -= step;
     const reel = fighter.hookReel;
+    reel.t -= step;
     const cx = fighter.x + SIZE / 2;
     const cy = fighter.y + SIZE / 2;
-    const ang = Math.atan2(reel.y - cy, reel.x - cx);
-    fighter.vx = Math.cos(ang) * 780;
-    fighter.vy = Math.sin(ang) * 780;
-    if (reel.t <= 0 || Math.hypot(reel.x - cx, reel.y - cy) < 28) {
+    const dx = reel.x - cx;
+    const dy = reel.y - cy;
+    const dist = Math.hypot(dx, dy);
+    fighter.grounded = false;
+    if (dist <= HOOK_REEL_ARRIVE || reel.t <= 0) {
+      // Nudge onto the latch if we ran out of time while still close.
+      if (dist > 1 && dist < HOOK_REEL_ARRIVE * 2.5) {
+        const nx = dx / dist;
+        const ny = dy / dist;
+        fighter.x += nx * Math.min(dist - HOOK_REEL_ARRIVE * 0.35, HOOK_REEL_SPEED * step);
+        fighter.y += ny * Math.min(dist - HOOK_REEL_ARRIVE * 0.35, HOOK_REEL_SPEED * step);
+      }
       fighter.hookReel = null;
-      fighter.vx *= 0.35;
-      fighter.vy *= 0.35;
+      fighter.vx *= 0.2;
+      fighter.vy *= 0.2;
+    } else {
+      const ang = Math.atan2(dy, dx);
+      fighter.vx = Math.cos(ang) * HOOK_REEL_SPEED;
+      fighter.vy = Math.sin(ang) * HOOK_REEL_SPEED;
     }
   }
 }
