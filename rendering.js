@@ -1312,6 +1312,8 @@ export function createRenderer(canvas) {
     const truth = hasIllusionTruthSight(viewer);
     for (const ill of game.illusions || []) {
       if (!ill || ill.destroyed || !(ill.life > 0)) continue;
+      // Held / in-flight bait is drawn with the thrower / thrown pass.
+      if (ill.heldBy || ill.thrownInFlight) continue;
       context.globalAlpha = alpha;
       if (ill.illusionType === "platform") {
         context.fillStyle = colors.fill;

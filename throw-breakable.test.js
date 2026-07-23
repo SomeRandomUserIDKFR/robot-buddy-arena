@@ -11,10 +11,10 @@ import {
 } from "./powerups.js";
 import {
   attackThrowBreakable, bindThrowBreakablePowerCrateDamager, canGrabBreakable,
-  dropHeldBreakable, isIllusionGhostedProp, isIllusionHeldProp, isThrowBreakable,
-  releaseIllusionThrowBreakable, shatterBreakableAt, stepThrownBreakables,
-  THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID, throwHeldBreakable,
-  tickThrowBreakable, tryGrabBreakable
+  canGrabIllusionProp, dropHeldBreakable, isIllusionGhostedProp, isIllusionHeldProp,
+  isPlantedIllusionProp, isThrowBreakable, releaseIllusionThrowBreakable,
+  shatterBreakableAt, stepThrownBreakables, THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID,
+  throwHeldBreakable, tickThrowBreakable, tryGrabBreakable
 } from "./throw-breakable.js";
 
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
@@ -419,6 +419,75 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   assert.equal(barrel.destroyed, false);
   assert.equal(barrel.x, bx);
   assert.equal(barrel.y, by);
+}
+
+
+// Planted Illusionist props can be grabbed/thrown; impact swirls with no damage/debris.
+{
+  const fighter = applyLoadout(new Fighter({
+    x: 400, y: 700, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  selectWeaponSlot(fighter, "secondaryWeapon");
+  const bait = {
+    illusionObject: true,
+    illusionType: "prop",
+    kind: "crate",
+    x: 430,
+    y: 700,
+    w: 44,
+    h: 44,
+    life: 28,
+    destroyed: false,
+    solid: false,
+    blocksSight: false,
+    blocksProjectiles: false,
+    team: 0
+  };
+  assert.ok(canGrabIllusionProp(bait));
+  assert.ok(canGrabBreakable(bait));
+  assert.ok(isPlantedIllusionProp(bait));
+  assert.equal(canGrabIllusionProp({
+    illusionObject: true, illusionType: "platform", w: 160, h: 26, life: 10
+  }), false, "platforms are not handheld");
+
+  const victim = new Fighter({
+    x: 560, y: 700, team: 1, hp: 500, maxHp: 500
+  });
+  const game = {
+    props: [],
+    powerCrates: [],
+    illusions: [bait],
+    platforms: [{ x: 300, y: 780, w: 400, h: 20 }],
+    fighters: [fighter, victim],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: []
+  };
+
+  assert.ok(tryGrabBreakable(fighter, game));
+  assert.equal(fighter.heldProp, bait);
+  assert.equal(bait.heldBy, fighter);
+
+  assert.ok(throwHeldBreakable(fighter, game));
+  assert.equal(game.thrownBreakables.length, 1);
+  assert.equal(game.thrownBreakables[0].damage, 0);
+  const thrown = game.thrownBreakables[0];
+  thrown.x = victim.x + 23;
+  thrown.y = victim.y + 23;
+  thrown.vx = 0;
+  thrown.vy = 0;
+  stepThrownBreakables(game, 1 / 60, hit);
+
+  assert.equal(game.thrownBreakables.length, 0);
+  assert.equal(victim.hp, 500, "planted bait throw deals no real damage");
+  assert.equal(victim.phantomDamage || 0, 0, "planted bait throw deals no phantom either");
+  assert.equal(bait.destroyed, true);
+  assert.equal(bait.life, 0);
+  assert.equal(game.groundDebris.length, 0);
+  assert.ok(game.effects.some((e) => e.type === "illusionBreak"), "swirl reveal on impact");
 }
 
 console.log("throw-breakable.test.js passed.");
