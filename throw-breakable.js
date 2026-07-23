@@ -1,6 +1,9 @@
 /**
  * Throw Breakable secondary: grab any map breakable, hold it (still damageable),
  * throw for impact damage + debris. Reconquer rebuilds on a valid floor near impact.
+ *
+ * Illusion fighters never move real cover: grab ghosts the real prop in place,
+ * holds a fake copy, and throws only phantom damage + fake debris FX.
  */
 import { GRAVITY, SIZE, WORLD } from "./config.js";
 import { resolveStandTarget } from "./debris.js";
@@ -32,11 +35,27 @@ export function isThrowBreakable(fighterOrId) {
     || fighterOrId?.throwBreakable === true;
 }
 
+/** Fighter illusion (decoy) — avoid importing illusionist (cycle). */
+function isIllusionThrower(fighter) {
+  return !!fighter?.illusion;
+}
+
+/** Fake handheld / thrown clone created for illusion grab. */
+export function isIllusionHeldProp(prop) {
+  return !!prop?.illusionHeldProp;
+}
+
+/** Real map prop currently hidden while an illusion "holds" a copy. */
+export function isIllusionGhostedProp(prop) {
+  return !!prop?.illusionGhosted;
+}
+
 /** Whether Throw Breakable may pick up this prop / metal power crate. */
 export function canGrabBreakable(prop) {
   if (!prop || prop.destroyed || !prop.breakable) return false;
   if (prop.heldBy || prop.thrownInFlight) return false;
-  if (prop.armorDummy || prop.forgeHidden) return false;
+  if (prop.armorDummy || prop.forgeHidden || prop.illusionGhosted) return false;
+  if (prop.illusionHeldProp || prop.illusionObject) return false;
   // Glare nodes are shot, not handheld.
   if (prop.lightCondensation || prop.kind === "lightCondensation") return false;
   if (prop.powerCrate || prop.kind === "powerCrate") {
@@ -81,6 +100,171 @@ function restoreFullDimensions(prop) {
   if (prop._fullH) prop.h = prop._fullH;
 }
 
+/** Hide a real prop in place while an illusion uses a fake copy. */
+export function ghostPropForIllusion(prop, fighter) {
+  if (!prop || prop.illusionGhosted) return prop;
+  prop.illusionGhosted = true;
+  prop._illusionGhostX = prop.x;
+  prop._illusionGhostY = prop.y;
+  prop._illusionGhostSolid = prop.solid;
+  prop._illusionGhostBlocksProjectiles = prop.blocksProjectiles;
+  prop._illusionGhostBlocksSight = prop.blocksSight;
+  prop._illusionGhostHolder = fighter || null;
+  prop.solid = false;
+  prop.blocksProjectiles = false;
+  prop.blocksSight = false;
+  prop.heldBy = null;
+  prop.thrownInFlight = false;
+  return prop;
+}
+
+/** Reveal a previously ghosted real prop (same world slot). */
+export function unghostIllusionProp(prop) {
+  if (!prop || !prop.illusionGhosted) return prop;
+  prop.x = prop._illusionGhostX ?? prop.x;
+  prop.y = prop._illusionGhostY ?? prop.y;
+  prop.solid = prop._illusionGhostSolid ?? prop.baseSolid ?? false;
+  prop.blocksProjectiles = prop._illusionGhostBlocksProjectiles
+    ?? prop.baseBlocksProjectiles
+    ?? true;
+  prop.blocksSight = prop._illusionGhostBlocksSight ?? prop.baseBlocksSight ?? false;
+  prop.illusionGhosted = false;
+  prop._illusionGhostHolder = null;
+  prop.heldBy = null;
+  prop.thrownInFlight = false;
+  syncCanopy(prop);
+  return prop;
+}
+
+/** Visual-only clone the illusion holds / throws. */
+export function createIllusionHeldProp(real, fighter) {
+  const fake = {
+    illusionHeldProp: true,
+    illusionObject: true,
+    illusionSourceProp: real,
+    kind: real.kind,
+    powerCrate: !!(real.powerCrate || real.kind === "powerCrate"),
+    breakable: true,
+    destroyed: false,
+    hp: real.hp ?? real.maxHp ?? 1,
+    maxHp: real.maxHp ?? real.hp ?? 1,
+    x: real.x,
+    y: real.y,
+    w: real.w,
+    h: real.h,
+    _fullW: real.w,
+    _fullH: real.h,
+    solid: false,
+    blocksProjectiles: true,
+    blocksSight: false,
+    baseSolid: false,
+    baseBlocksProjectiles: true,
+    baseBlocksSight: false,
+    heldBy: fighter || null,
+    thrownInFlight: false,
+    look: real.look || null,
+    hitFlash: 0
+  };
+  if (real.canopy) {
+    fake.canopy = {
+      x: real.canopy.x,
+      y: real.canopy.y,
+      w: real.canopy.w,
+      h: real.canopy.h
+    };
+    fake._canopyOx = real.canopy.x - real.x;
+    fake._canopyOy = real.canopy.y - real.y;
+  }
+  return fake;
+}
+
+function spawnFakeThrowDebrisFx(game, prop, impactX, impactY) {
+  if (!game?.effects || !prop) return;
+  const x = impactX ?? prop.x + prop.w / 2;
+  const y = impactY ?? prop.y + prop.h / 2;
+  game.effects.push({
+    type: "debris",
+    x,
+    y,
+    life: 0.45,
+    kind: prop.kind || "crate"
+  });
+  game.effects.push({
+    type: "crateBreak",
+    x,
+    y,
+    life: 0.28,
+    color: prop.powerCrate ? "#9aa8b8" : "#d8e0ea"
+  });
+  // Same pale swirl as other illusion pops — reads as fake, not real rubble.
+  game.effects.push({
+    type: "illusionBreak",
+    x,
+    y,
+    life: 0.55,
+    maxLife: 0.55,
+    radius: Math.max(prop.w || 28, prop.h || 28) * 0.55,
+    seed: Math.random() * Math.PI * 2,
+    spin: Math.random() < 0.5 ? 1 : -1
+  });
+}
+
+/** Shatter a fake illusion throw: FX only, restore ghosted source. */
+export function shatterIllusionHeldProp(prop, game, impactX, impactY) {
+  if (!prop || !isIllusionHeldProp(prop)) return false;
+  prop.destroyed = true;
+  prop.thrownInFlight = false;
+  prop.heldBy = null;
+  prop.hp = 0;
+  spawnFakeThrowDebrisFx(game, prop, impactX, impactY);
+  const source = prop.illusionSourceProp;
+  if (source) unghostIllusionProp(source);
+  prop.illusionSourceProp = null;
+  return true;
+}
+
+/**
+ * Clear held / in-flight fake props for an illusion and restore ghosted cover.
+ * Safe to call on fade / death.
+ */
+export function releaseIllusionThrowBreakable(fighter, game = null) {
+  if (!fighter) return;
+  const held = fighter.heldProp;
+  if (held && isIllusionHeldProp(held)) {
+    fighter.heldProp = null;
+    held.heldBy = null;
+    held.destroyed = true;
+    held.thrownInFlight = false;
+    if (held.illusionSourceProp) unghostIllusionProp(held.illusionSourceProp);
+    held.illusionSourceProp = null;
+  } else if (held) {
+    // Shouldn't happen for decoys, but never leave a real prop stuck.
+    dropHeldBreakable(fighter, game);
+  } else {
+    fighter.heldProp = null;
+  }
+
+  if (!game?.thrownBreakables?.length) return;
+  const keep = [];
+  for (const thrown of game.thrownBreakables) {
+    if (!thrown) continue;
+    if (thrown.owner !== fighter) {
+      keep.push(thrown);
+      continue;
+    }
+    const prop = thrown.prop;
+    if (prop && isIllusionHeldProp(prop)) {
+      shatterIllusionHeldProp(prop, game, thrown.x, thrown.y);
+    } else if (prop && !prop.destroyed) {
+      // Unexpected real throw from this fighter — keep integrating.
+      keep.push(thrown);
+      continue;
+    }
+    thrown.life = 0;
+  }
+  game.thrownBreakables = keep;
+}
+
 /** World point where a held breakable sits (along aim). */
 export function heldBreakableAnchor(fighter) {
   const cx = fighter.x + SIZE / 2;
@@ -103,6 +287,28 @@ function positionHeldProp(fighter, prop) {
 export function dropHeldBreakable(fighter, game = null) {
   const prop = fighter?.heldProp;
   if (!prop) return null;
+  // Illusion fakes: dissolve the copy and restore the ghosted real prop in place.
+  if (isIllusionHeldProp(prop)) {
+    fighter.heldProp = null;
+    prop.heldBy = null;
+    prop.thrownInFlight = false;
+    prop.destroyed = true;
+    if (prop.illusionSourceProp) unghostIllusionProp(prop.illusionSourceProp);
+    prop.illusionSourceProp = null;
+    if (game?.effects) {
+      game.effects.push({
+        type: "illusionBreak",
+        x: (fighter.x || 0) + SIZE / 2,
+        y: (fighter.y || 0) + SIZE / 2,
+        life: 0.4,
+        maxLife: 0.4,
+        radius: 22,
+        seed: Math.random() * Math.PI * 2,
+        spin: 1
+      });
+    }
+    return prop;
+  }
   fighter.heldProp = null;
   prop.heldBy = null;
   prop.thrownInFlight = false;
@@ -159,6 +365,23 @@ export function tryGrabBreakable(fighter, game) {
   }
   if (!best) return false;
 
+  // Decoys: ghost the real cover in place and hold a visual-only clone.
+  if (isIllusionThrower(fighter)) {
+    ghostPropForIllusion(best, fighter);
+    const fake = createIllusionHeldProp(best, fighter);
+    fighter.heldProp = fake;
+    positionHeldProp(fighter, fake);
+    if (game.effects) {
+      game.effects.push({
+        type: "propHit",
+        x: fake.x + fake.w / 2,
+        y: fake.y + fake.h / 2,
+        life: 0.12
+      });
+    }
+    return true;
+  }
+
   saveCanopyOffset(best);
   best._fullW = best.w;
   best._fullH = best.h;
@@ -191,6 +414,9 @@ export function tryGrabBreakable(fighter, game) {
  */
 export function shatterBreakableAt(prop, game, impactX, impactY, attacker = null) {
   if (!prop || !game) return false;
+  if (isIllusionHeldProp(prop)) {
+    return shatterIllusionHeldProp(prop, game, impactX, impactY);
+  }
   restoreFullDimensions(prop);
   prop.thrownInFlight = false;
   prop.heldBy = null;
@@ -281,7 +507,8 @@ export function throwHeldBreakable(fighter, game) {
 export function tickThrowBreakable(fighter, game, dt) {
   if (!fighter) return;
   if (fighter.dead) {
-    dropHeldBreakable(fighter, game);
+    if (isIllusionThrower(fighter)) releaseIllusionThrowBreakable(fighter, game);
+    else dropHeldBreakable(fighter, game);
     return;
   }
   if (fighter.heldProp && (fighter.heldProp.destroyed || fighter.heldProp.hp <= 0)) {
@@ -317,6 +544,14 @@ export function stepThrownBreakables(game, dt, onFighterHit = null) {
     if (!thrown || thrown.life <= 0) continue;
     const prop = thrown.prop;
     if (!prop || prop.destroyed) continue;
+    const fakeThrow = isIllusionHeldProp(prop) || isIllusionThrower(thrown.owner);
+
+    // Owner faded mid-flight — pop the fake and restore cover.
+    if (fakeThrow && thrown.owner?.dead) {
+      shatterIllusionHeldProp(prop, game, thrown.x, thrown.y);
+      thrown.life = 0;
+      continue;
+    }
 
     thrown.life -= dt;
     thrown.vy += GRAVITY * 0.55 * dt;
@@ -333,6 +568,7 @@ export function stepThrownBreakables(game, dt, onFighterHit = null) {
 
     const finish = (ix, iy, enemy = null) => {
       if (enemy && typeof onFighterHit === "function") {
+        // Illusion owners already route through phantom via combat.hit.
         onFighterHit(enemy, thrown.owner, thrown.damage, Math.atan2(thrown.vy, thrown.vx), game);
       }
       shatterBreakableAt(prop, game, ix, iy, thrown.owner);
@@ -351,13 +587,18 @@ export function stepThrownBreakables(game, dt, onFighterHit = null) {
     }
     if (impacted) continue;
 
-    const solidTargets = [
-      ...(game.props || []),
-      ...(game.powerCrates || [])
-    ];
+    // Fake throws never chip real cover — they only collide for shatter FX.
+    const solidTargets = fakeThrow
+      ? []
+      : [
+        ...(game.props || []),
+        ...(game.powerCrates || [])
+      ];
     for (const other of solidTargets) {
       if (other === prop || other.destroyed || !other.breakable) continue;
-      if (other.heldBy || other.thrownInFlight || other.forgeHidden) continue;
+      if (other.heldBy || other.thrownInFlight || other.forgeHidden || other.illusionGhosted) {
+        continue;
+      }
       if (!other.solid && !other.blocksProjectiles) continue;
       if (rectsOverlap(prop.x, prop.y, prop.w, prop.h, other.x, other.y, other.w, other.h)) {
         if (other.powerCrate || other.kind === "powerCrate") {

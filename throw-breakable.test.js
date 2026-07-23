@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID, selectWeaponSlot } from "./equipment.js";
+import { Fighter, hit } from "./combat.js";
+import {
+  applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID, ILLUSIONIST_ID, selectWeaponSlot
+} from "./equipment.js";
+import { createFighterIllusion } from "./illusionist.js";
 import { createMapRuntime } from "./maps.js";
 import { damageProp } from "./maps.js";
 import {
@@ -7,9 +11,10 @@ import {
 } from "./powerups.js";
 import {
   attackThrowBreakable, bindThrowBreakablePowerCrateDamager, canGrabBreakable,
-  dropHeldBreakable, isThrowBreakable, shatterBreakableAt,
-  stepThrownBreakables, THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID,
-  throwHeldBreakable, tickThrowBreakable, tryGrabBreakable
+  dropHeldBreakable, isIllusionGhostedProp, isIllusionHeldProp, isThrowBreakable,
+  releaseIllusionThrowBreakable, shatterBreakableAt, stepThrownBreakables,
+  THROW_BREAKABLE_DAMAGE, THROW_BREAKABLE_ID, throwHeldBreakable,
+  tickThrowBreakable, tryGrabBreakable
 } from "./throw-breakable.js";
 
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
@@ -305,6 +310,115 @@ assert.equal(GEAR_BY_ID[THROW_BREAKABLE_ID].weaponStats.baseDamage, THROW_BREAKA
   };
   assert.ok(tryGrabBreakable(fighter, game));
   assert.equal(fighter.heldProp, cover, "skips full-HP power crate for cover");
+}
+
+// Illusion grab ghosts the real prop; throw is phantom + fake debris only.
+{
+  const yard = createMapRuntime("yard");
+  const crate = yard.props.find((p) => p.kind === "crate" && !p.destroyed);
+  assert.ok(crate);
+  const startX = crate.x;
+  const startY = crate.y;
+  const startHp = crate.hp;
+  const owner = applyLoadout(new Fighter({
+    x: crate.x - 40, y: crate.y, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: ILLUSIONIST_ID,
+    secondaryWeapon: THROW_BREAKABLE_ID,
+    weapon: "pulse-rifle"
+  });
+  const decoy = createFighterIllusion(owner, Fighter);
+  decoy.x = crate.x - 40;
+  decoy.y = crate.y;
+  decoy.aim = 0;
+  assert.ok(selectWeaponSlot(decoy, "secondaryWeapon"));
+  assert.ok(isThrowBreakable(decoy));
+
+  const victim = new Fighter({
+    x: crate.x + 120, y: crate.y, team: 1, hp: 500, maxHp: 500
+  });
+  const game = {
+    props: yard.props,
+    platforms: yard.platforms,
+    fighters: [owner, decoy, victim],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: [],
+    reconquerQueue: []
+  };
+
+  assert.ok(tryGrabBreakable(decoy, game));
+  assert.ok(isIllusionHeldProp(decoy.heldProp));
+  assert.ok(isIllusionGhostedProp(crate));
+  assert.equal(crate.x, startX);
+  assert.equal(crate.y, startY);
+  assert.equal(crate.solid, false);
+  assert.equal(crate.blocksProjectiles, false);
+  assert.notEqual(decoy.heldProp, crate);
+  assert.equal(canGrabBreakable(crate), false, "ghosted prop not re-grabbable");
+
+  assert.ok(throwHeldBreakable(decoy, game));
+  assert.equal(decoy.heldProp, null);
+  assert.ok(isIllusionGhostedProp(crate), "stays ghosted while fake is in flight");
+  assert.equal(game.thrownBreakables.length, 1);
+  assert.ok(isIllusionHeldProp(game.thrownBreakables[0].prop));
+
+  const thrown = game.thrownBreakables[0];
+  thrown.x = victim.x + 23;
+  thrown.y = victim.y + 23;
+  thrown.vx = 0;
+  thrown.vy = 0;
+  stepThrownBreakables(game, 1 / 60, hit);
+
+  assert.equal(game.thrownBreakables.length, 0);
+  assert.equal(victim.hp, 500, "illusion throw does not deal real HP");
+  assert.ok((victim.phantomDamage || 0) >= 40, "phantom gaslight on impact");
+  assert.equal(crate.destroyed, false, "real cover intact");
+  assert.equal(crate.hp, startHp);
+  assert.equal(isIllusionGhostedProp(crate), false, "real cover restored after fake shatter");
+  assert.equal(crate.x, startX);
+  assert.equal(crate.y, startY);
+  assert.equal(game.groundDebris.length, 0, "no real reconquer debris");
+  assert.ok(game.effects.some((e) => e.type === "debris" || e.type === "illusionBreak"));
+}
+
+// Fade while holding restores ghosted cover without destroying it.
+{
+  const yard = createMapRuntime("yard");
+  const barrel = yard.props.find((p) => p.kind === "barrel" && !p.destroyed);
+  assert.ok(barrel);
+  const bx = barrel.x;
+  const by = barrel.y;
+  const owner = applyLoadout(new Fighter({
+    x: barrel.x - 30, y: barrel.y, team: 0, aim: 0, hp: 500, maxHp: 500
+  }), {
+    ...DEFAULT_LOADOUT,
+    extensionSecondary: ILLUSIONIST_ID,
+    secondaryWeapon: THROW_BREAKABLE_ID
+  });
+  const decoy = createFighterIllusion(owner, Fighter);
+  decoy.x = barrel.x - 30;
+  decoy.y = barrel.y;
+  decoy.aim = 0;
+  selectWeaponSlot(decoy, "secondaryWeapon");
+  const game = {
+    props: yard.props,
+    platforms: yard.platforms,
+    fighters: [decoy],
+    effects: [],
+    groundDebris: [],
+    thrownBreakables: []
+  };
+  assert.ok(tryGrabBreakable(decoy, game));
+  assert.ok(isIllusionGhostedProp(barrel));
+  decoy.dead = true;
+  releaseIllusionThrowBreakable(decoy, game);
+  assert.equal(decoy.heldProp, null);
+  assert.equal(isIllusionGhostedProp(barrel), false);
+  assert.equal(barrel.destroyed, false);
+  assert.equal(barrel.x, bx);
+  assert.equal(barrel.y, by);
 }
 
 console.log("throw-breakable.test.js passed.");

@@ -1602,6 +1602,8 @@ export function createRenderer(canvas) {
     for (const prop of game.props || []) {
       // Held / in-flight props are drawn with the thrower / thrown pass.
       if (prop.heldBy || prop.thrownInFlight) continue;
+      // Ghosted while an illusion "holds" a fake copy — invisible until restored.
+      if (prop.illusionGhosted || prop.forgeHidden) continue;
       if (canopiesOnly) drawCanopy(prop, alpha);
       else drawPropBody(prop, alpha);
     }
@@ -1850,7 +1852,7 @@ export function createRenderer(canvas) {
 
   function drawPowerCrates(game, player) {
     for (const crate of game.powerCrates || []) {
-      if (crate.destroyed || crate.forgeHidden) continue;
+      if (crate.destroyed || crate.forgeHidden || crate.illusionGhosted) continue;
       // Held / in-flight crates are drawn with the thrower / thrown pass.
       if (crate.heldBy || crate.thrownInFlight) continue;
       if (!crateVisibleToTeam(game, player, crate)) continue;

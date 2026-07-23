@@ -644,6 +644,8 @@ export function projectileBlockers(game) {
     (p) => !p.destroyed
       && p.blocksProjectiles
       && !p.thrownInFlight
+      && !p.illusionGhosted
+      && !p.forgeHidden
       && (p.hp == null || p.hp > 0)
   );
 }
@@ -651,7 +653,13 @@ export function projectileBlockers(game) {
 /** Intact solid props that block fighter feet / walls. */
 export function solidProps(game) {
   const props = game?.props || [];
-  return props.filter((p) => !p.destroyed && p.solid && (p.hp == null || p.hp > 0));
+  return props.filter(
+    (p) => !p.destroyed
+      && p.solid
+      && !p.illusionGhosted
+      && !p.forgeHidden
+      && (p.hp == null || p.hp > 0)
+  );
 }
 
 /** Geometry that hard-blocks team vision (walls + sight-blocking props). */
@@ -659,7 +667,8 @@ export function sightBlockers(game) {
   const platforms = platformsOf(game).filter((p) => p.blocksSight);
   const props = [];
   for (const p of game?.props || []) {
-    if (p.destroyed || !p.blocksSight || (p.hp != null && !(p.hp > 0))) continue;
+    if (p.destroyed || p.illusionGhosted || p.forgeHidden) continue;
+    if (!p.blocksSight || (p.hp != null && !(p.hp > 0))) continue;
     // Light Condensation: LOS uses an inflated glare box, not the tiny sprite.
     if (p.lightCondensation || p.kind === "lightCondensation") {
       const side = p.sightBlockSide

@@ -344,8 +344,14 @@ function update(dt) {
   for (const fighter of game.fighters) {
     stepFighter(fighter, dt, game, profile, keys, humanIntent);
     if (fighter._trapPrevY != null) trapPrevY.set(fighter, fighter._trapPrevY);
-    // Decoys / Doppels skip secondary/extension world ticks — they only fight.
-    if (isIllusionFighter(fighter) || isCombatClone(fighter)) continue;
+    // Doppels skip secondary/extension world ticks — they only fight.
+    // Illusion decoys still tick Throw Breakable so fake held props track the hand
+    // and ghosted cover restores when they fade.
+    if (isCombatClone(fighter)) continue;
+    if (isIllusionFighter(fighter)) {
+      tickThrowBreakable(fighter, game, dt);
+      continue;
+    }
     tickFighterPowerBuffs(fighter, dt);
     tickThrowBreakable(fighter, game, dt);
     tickReconjurerBuilder(fighter, dt);
