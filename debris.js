@@ -1332,6 +1332,9 @@ export function armorDummyBlockers(game) {
  */
 export function damageArmorDummy(dummy, amount, game, impactX, impactY) {
   if (!dummy || dummy.destroyed || !dummy.breakable) return false;
+  const scale = game?.healthScale
+    || (game?.settings?.visual?.useClassic100Hp ? 0.2 : 1);
+  amount = Math.max(0, amount) * scale;
   dummy.hp = Math.max(0, (dummy.hp ?? dummy.maxHp ?? 1) - amount);
   dummy.hitFlash = 0.14;
   if (game?.effects) {

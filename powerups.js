@@ -366,9 +366,10 @@ export function awardPowerup(fighter, typeId, game) {
     healFighter(fighter, HEAL_AMOUNT);
   } else if (def.id === "shieldPatch") {
     if ((fighter.shieldMaxDurability || 0) > 0) {
+      const patch = SHIELD_PATCH_AMOUNT * (fighter.healthScale || 1);
       fighter.shieldDurability = Math.min(
         fighter.shieldMaxDurability,
-        (fighter.shieldDurability || 0) + SHIELD_PATCH_AMOUNT
+        (fighter.shieldDurability || 0) + patch
       );
       if (fighter.shieldDurability > 0) fighter.shieldBroken = false;
     } else {
@@ -423,6 +424,10 @@ export function awardPowerup(fighter, typeId, game) {
 export function damagePowerCrate(crate, amount, attacker, game, impactX, impactY) {
   if (!crate || crate.destroyed || crate.forgeHidden || !crate.breakable) return false;
   if (attacker) crate.lastDamager = attacker;
+  const scale = game?.healthScale
+    || attacker?.healthScale
+    || (game?.settings?.visual?.useClassic100Hp ? 0.2 : 1);
+  amount = Math.max(0, amount) * scale;
   const ix = impactX ?? crate.x + crate.w / 2;
   const iy = impactY ?? crate.y + crate.h / 2;
   // Wood bracing casing absorbs hits before the metal core.
@@ -564,7 +569,7 @@ export function tickProtectiveRebuilding(fighter, dt) {
   if (!fighter || fighter.dead) return;
   if (fighter.perkId !== "protective-rebuilding") return;
   if (!(dt > 0)) return;
-  const amount = (REGEN_TOTAL / REGEN_DURATION) * dt;
+  const amount = (REGEN_TOTAL / REGEN_DURATION) * dt * (fighter.healthScale || 1);
   let changed = false;
 
   if (fighter.retractableMax > 0 && fighter.retractableHp < fighter.retractableMax) {

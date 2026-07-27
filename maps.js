@@ -798,6 +798,9 @@ export function absorbBraceShell(prop, amount, game, impactX, impactY) {
  */
 export function damageProp(prop, amount, game, impactX, impactY, opts = null) {
   if (!prop || prop.destroyed || !prop.breakable) return false;
+  const scale = game?.healthScale
+    || (game?.settings?.visual?.useClassic100Hp ? 0.2 : 1);
+  amount = Math.max(0, amount) * scale;
   const ix = impactX ?? prop.x + prop.w / 2;
   const iy = impactY ?? prop.y + prop.h / 2;
   if (opts?.fromExplosion) noteOilIgnition(prop, "explosion");

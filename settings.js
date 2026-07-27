@@ -79,6 +79,48 @@ export function optimizeIllusionsEnabled(gameOrSettings) {
   return normalizeOptimizeIllusions(gameplay?.optimizeIllusions);
 }
 
+/** Default OFF — classic 100 HP combat scale (×0.2). */
+export function normalizeUseClassic100Hp(value) {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
+/** Multiplier applied to HP pools, damage, healing, regen, shield/armor. */
+export const CLASSIC_100_HP_SCALE = 0.2;
+
+/**
+ * Resolve health unit scale from a fighter, game, settings, or profile.
+ * Classic 100 HP mode → 0.2; otherwise 1.
+ */
+export function healthScale(context) {
+  if (context == null) return 1;
+  if (Number.isFinite(context.healthScale) && context.healthScale > 0) {
+    return context.healthScale;
+  }
+  const visual = context?.settings?.visual
+    || context?.visual
+    || context?.settings?.settings?.visual
+    || null;
+  if (normalizeUseClassic100Hp(visual?.useClassic100Hp)) return CLASSIC_100_HP_SCALE;
+  return 1;
+}
+
+/** Scale a canonical health-unit amount (HP, damage, heal, shield drain). */
+export function scaleHealthAmount(context, amount) {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return 0;
+  return n * healthScale(context);
+}
+
+/** True when fighter HP is below a canonical (500-HP-era) threshold. */
+export function hpBelow(fighter, canonicalThreshold) {
+  return (fighter?.hp || 0) < scaleHealthAmount(fighter, canonicalThreshold);
+}
+
+/** True when fighter HP is at/above a canonical threshold. */
+export function hpAtLeast(fighter, canonicalThreshold) {
+  return (fighter?.hp || 0) >= scaleHealthAmount(fighter, canonicalThreshold);
+}
+
 export function ensureSettingsProfile(profile, saved = profile) {
   const defaults = DEFAULT_PROFILE.settings.visual;
   const visual = { ...defaults, ...(saved?.settings?.visual || {}) };
@@ -95,7 +137,8 @@ export function ensureSettingsProfile(profile, saved = profile) {
       debrisDespawnStyle: normalizeDebrisDespawnStyle(visual.debrisDespawnStyle),
       reconquerRate: normalizeReconquerRate(visual.reconquerRate),
       armorDespawnStyle: normalizeArmorDespawnStyle(visual.armorDespawnStyle),
-      armorDespawnTimer: normalizeArmorDespawnTimer(visual.armorDespawnTimer)
+      armorDespawnTimer: normalizeArmorDespawnTimer(visual.armorDespawnTimer),
+      useClassic100Hp: normalizeUseClassic100Hp(visual.useClassic100Hp)
     },
     gameplay: {
       optimizeIllusions: normalizeOptimizeIllusions(gameplay.optimizeIllusions),
@@ -122,7 +165,8 @@ export function cloneSettings(settings) {
       ),
       reconquerRate: normalizeReconquerRate(settings?.visual?.reconquerRate),
       armorDespawnStyle: normalizeArmorDespawnStyle(settings?.visual?.armorDespawnStyle),
-      armorDespawnTimer: normalizeArmorDespawnTimer(settings?.visual?.armorDespawnTimer)
+      armorDespawnTimer: normalizeArmorDespawnTimer(settings?.visual?.armorDespawnTimer),
+      useClassic100Hp: normalizeUseClassic100Hp(settings?.visual?.useClassic100Hp)
     },
     gameplay: {
       optimizeIllusions: normalizeOptimizeIllusions(settings?.gameplay?.optimizeIllusions),

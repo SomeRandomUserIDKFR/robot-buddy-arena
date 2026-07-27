@@ -20,6 +20,7 @@ import {
   applyPerkModifiersToStats, CONQUEST_EXP, cyberWinMultiplier, ensureProgressionProfile,
   grantExp, normalizeEquippedPerk, perkCombatExtras
 } from "./perks.js";
+import { healthScale as resolveHealthScale } from "./settings.js";
 
 const item = (id, slot, name, tradeoff, modifiers = {}, extra = {}) => ({
   id, slot, name, tradeoff, modifiers, ...extra
@@ -1179,11 +1180,13 @@ export function nanotechArmorHp(fighter) {
     NANOTECH_ARMOR_BOT_CAP,
     Math.max(0, fighter?.nanobotArmor || 0)
   );
-  return Math.floor(bots / NANOTECH_BOTS_PER_HP);
+  const raw = Math.floor(bots / NANOTECH_BOTS_PER_HP);
+  return raw * (fighter?.healthScale || 1);
 }
 
 export function nanotechArmorMaxHp(fighter) {
-  return Math.floor(NANOTECH_ARMOR_BOT_CAP / NANOTECH_BOTS_PER_HP);
+  const raw = Math.floor(NANOTECH_ARMOR_BOT_CAP / NANOTECH_BOTS_PER_HP);
+  return raw * (fighter?.healthScale || 1);
 }
 
 export function canNanotechAttack(fighter) {
@@ -2251,8 +2254,11 @@ export function tickRetractableArmor(fighter, dt) {
 }
 
 /** Damage after shield block: nano armor, then retractable pool while deployed, then core. */
-export function applyHpDamage(fighter, dealt, game = null) {
+export function applyHpDamage(fighter, dealt, game = null, extras = {}) {
   let left = Math.max(0, dealt);
+  if (!extras.alreadyScaled) {
+    left *= (fighter?.healthScale || resolveHealthScale(game) || 1);
+  }
   if (left <= 0) {
     if ((fighter.retractableMax || 0) > 0 || (fighter.nanobotMax || 0) > 0) {
       syncNanotechDisplayedHp(fighter);
@@ -2270,7 +2276,7 @@ export function applyHpDamage(fighter, dealt, game = null) {
     fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
     if ((fighter.nanobotMax || 0) > 0) syncNanotechDisplayedHp(fighter);
     else fighter.coreMaxHp = fighter.maxHp;
-    return dealt;
+    return left;
   }
 
   fighter.coreMaxHp = fighter.coreMaxHp ?? fighter.maxHp;
@@ -2280,9 +2286,10 @@ export function applyHpDamage(fighter, dealt, game = null) {
     const armorHp = nanotechArmorHp(fighter);
     const absorb = Math.min(left, armorHp);
     if (absorb > 0) {
+      const scale = Math.max(1e-6, fighter.healthScale || 1);
       fighter.nanobotArmor = Math.max(
         0,
-        fighter.nanobotArmor - absorb * NANOTECH_BOTS_PER_HP
+        fighter.nanobotArmor - absorb * NANOTECH_BOTS_PER_HP / scale
       );
       left -= absorb;
     }
@@ -2310,7 +2317,7 @@ export function applyHpDamage(fighter, dealt, game = null) {
 }
 
 export function healFighter(fighter, amount) {
-  let left = Math.max(0, amount);
+  let left = Math.max(0, amount) * (fighter?.healthScale || 1);
   if (!(fighter.retractableMax > 0) && !(fighter.nanobotArmor > 0)) {
     fighter.hp = Math.min(fighter.maxHp, fighter.hp + left);
     fighter.coreHp = fighter.hp;
@@ -2659,7 +2666,7 @@ export function effectiveStats(loadout) {
   return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, Math.round(value)]));
 }
 
-export function applyLoadout(fighter, loadout) {
+export function applyLoadout(fighter, loadout, opts = {}) {
   const stats = effectiveStats(loadout);
   const perkCombat = perkCombatExtras(loadout?.perk);
   const weapon = GEAR_BY_ID[loadout.weapon] || GEAR_BY_ID["pulse-rifle"];
@@ -2667,6 +2674,12 @@ export function applyLoadout(fighter, loadout) {
     ? GEAR_BY_ID[loadout.shield]
     : GEAR_BY_ID["no-shield"];
   const shield = shieldStats(shieldGear);
+  const scale = Number.isFinite(opts.healthScale) && opts.healthScale > 0
+    ? opts.healthScale
+    : (Number.isFinite(fighter.healthScale) && fighter.healthScale > 0
+      ? fighter.healthScale
+      : resolveHealthScale(opts.settings || opts.game || null));
+  fighter.healthScale = scale;
   fighter.loadout = {
     ...DEFAULT_LOADOUT, ...loadout, shield: shieldGear.id,
     perk: loadout?.perk || null
@@ -2677,16 +2690,16 @@ export function applyLoadout(fighter, loadout) {
   fighter.weapon = weaponKind(weapon);
   fighter.weaponStats = { ...weaponStats(weapon) };
   fighter.materialConsumer = !!weapon.materialConsumer;
-  fighter.coreMaxHp = stats.hp;
-  fighter.coreHp = stats.hp;
-  fighter.maxHp = stats.hp;
-  fighter.hp = stats.hp;
+  fighter.coreMaxHp = stats.hp * scale;
+  fighter.coreHp = stats.hp * scale;
+  fighter.maxHp = stats.hp * scale;
+  fighter.hp = stats.hp * scale;
   fighter.moveSpeed = stats.speed;
   fighter.acceleration = 1800 * (stats.speed / 520);
   const retractable = resolveRetractableArmor(loadout);
   if (retractable) {
-    fighter.retractableMax = retractable.hp;
-    fighter.retractableHp = retractable.hp;
+    fighter.retractableMax = retractable.hp * scale;
+    fighter.retractableHp = retractable.hp * scale;
     fighter.retractableSourceId = retractable.sourceId;
     fighter.retractableDeployed = false;
     fighter.retractableMorphing = false;
@@ -2834,7 +2847,7 @@ export function applyLoadout(fighter, loadout) {
   fighter.sightHalfAngle = fighter.weaponStats.sightHalfAngle || 0;
   // Per-match shield pool: full at spawn; Protective Rebuilding can refill mid-match.
   fighter.shieldId = shieldGear.id;
-  fighter.shieldMaxDurability = shield.durability * perkCombat.shieldDurability;
+  fighter.shieldMaxDurability = shield.durability * perkCombat.shieldDurability * scale;
   fighter.shieldDurability = fighter.shieldMaxDurability;
   fighter.shieldBlockHalfAngle = shield.blockHalfAngle;
   fighter.shieldRaisedSpeed = shield.raisedSpeed * perkCombat.shieldRaisedSpeed;
@@ -2857,7 +2870,7 @@ export function applyLoadout(fighter, loadout) {
     fighter._modularPerkCombat = perkCombat;
     fighter._modularShieldRaisedPerk = perkCombat.shieldRaisedSpeed;
     const plate = MODULAR_MODE_DEFS.shield.shield;
-    fighter.modularPlateMax = plate.durability * perkCombat.shieldDurability;
+    fighter.modularPlateMax = plate.durability * perkCombat.shieldDurability * scale;
     fighter.modularPlateDurability = fighter.modularPlateMax;
     fighter.modularPlateBroken = false;
     fighter._dedicatedShieldSnap = null;

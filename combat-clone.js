@@ -84,14 +84,15 @@ export function createCombatClone(owner, FighterCtor) {
     aim: owner.aim,
     facing: owner.facing || 1,
     sight: owner.sight
-  }), loadout);
+  }), loadout, { healthScale: owner.healthScale || 1 });
   clone.human = false;
   clone.buddy = false;
   clone.combatClone = true;
   clone.cloneOwner = owner;
   clone.aim = owner.aim;
   clone.facing = owner.facing || 1;
-  const maxHp = Math.max(40, Math.round((owner.maxHp || 500) * COMBAT_CLONE_HP_FRAC));
+  const minHp = 40 * (owner.healthScale || 1);
+  const maxHp = Math.max(minHp, Math.round((owner.maxHp || 500 * (owner.healthScale || 1)) * COMBAT_CLONE_HP_FRAC));
   clone.maxHp = maxHp;
   clone.hp = maxHp;
   clone.fuel = Math.min(1, owner.fuel ?? 1);

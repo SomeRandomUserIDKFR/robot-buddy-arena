@@ -76,7 +76,9 @@ export const DEFAULT_PROFILE = {
       reconquerRate: 1,
       armorDespawnStyle: "fade",
       // Seconds before armor scraps despawn / build a dummy (tenths).
-      armorDespawnTimer: 14
+      armorDespawnTimer: 14,
+      // Scale fighter HP / damage / heals to a classic ~100 HP feel (×0.2).
+      useClassic100Hp: false
     },
     gameplay: {
       // Light decoy AI, no summon team-vision, leaner Illusionist/Doppel draw.

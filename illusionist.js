@@ -420,7 +420,7 @@ export function createFighterIllusion(owner, FighterCtor) {
     aim: owner.aim,
     facing: owner.facing || 1,
     sight: owner.sight
-  }), loadout);
+  }), loadout, { healthScale: owner.healthScale || 1 });
   decoy.human = false;
   decoy.buddy = false;
   decoy.illusion = true;
@@ -431,9 +431,10 @@ export function createFighterIllusion(owner, FighterCtor) {
   decoy.aim = owner.aim;
   decoy.facing = owner.facing || 1;
   // Fake health pool mirrors the source's current displayed HP.
-  const fakeMax = Math.max(40, owner.maxHp || 500);
+  const scale = owner.healthScale || 1;
+  const fakeMax = Math.max(40 * scale, owner.maxHp || 500 * scale);
   const fakeNow = Math.max(
-    40,
+    40 * scale,
     Math.min(fakeMax, (owner.hp || fakeMax) - (owner.phantomDamage || 0))
   );
   decoy.illusionFakeMaxHp = fakeMax;

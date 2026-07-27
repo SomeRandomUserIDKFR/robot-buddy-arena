@@ -40,7 +40,7 @@ import {
 } from "./illusionist.js";
 import {
   ensureSettingsProfile, normalizeArmorDespawnTimer, normalizeOptimizeIllusions,
-  normalizeReconquerRate, normalizeSfxEnabled
+  normalizeReconquerRate, normalizeSfxEnabled, normalizeUseClassic100Hp
 } from "./settings.js";
 import { applySfxSettings } from "./sfx.js";
 import { normalizeTrapType, trapTypeLabel } from "./trapper.js";
@@ -164,6 +164,7 @@ export const ui = {
   unlockAllGearTemporaryInput: $("#unlockAllGearTemporary"),
   optimizeIllusionsInput: $("#optimizeIllusions"),
   sfxEnabledInput: $("#sfxEnabled"),
+  useClassic100HpInput: $("#useClassic100Hp"),
   modularMorphStyleInputs: [...document.querySelectorAll('input[name="modularMorphStyle"]')],
   debrisDespawnStyleInputs: [...document.querySelectorAll('input[name="debrisDespawnStyle"]')],
   reconquerRateInput: $("#reconquerRate"),
@@ -905,6 +906,11 @@ export function refreshSettings(profile) {
   if (ui.sfxEnabledInput) {
     ui.sfxEnabledInput.checked = normalizeSfxEnabled(
       profile.settings.gameplay?.sfxEnabled
+    );
+  }
+  if (ui.useClassic100HpInput) {
+    ui.useClassic100HpInput.checked = normalizeUseClassic100Hp(
+      profile.settings.visual?.useClassic100Hp
     );
   }
   applySfxSettings(profile.settings);
@@ -1813,6 +1819,11 @@ export function bindUi(handlers) {
     const armorTimer = event.target.closest('input[name="armorDespawnTimer"]');
     if (armorTimer) {
       handlers.settingsChange?.({ armorDespawnTimer: armorTimer.value });
+      return;
+    }
+    const useClassic100Hp = event.target.closest('input[name="useClassic100Hp"]');
+    if (useClassic100Hp) {
+      handlers.settingsChange?.({ useClassic100Hp: useClassic100Hp.checked });
       return;
     }
     const optimizeIllusions = event.target.closest('input[name="optimizeIllusions"]');

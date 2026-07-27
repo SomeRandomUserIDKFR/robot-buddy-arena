@@ -4,6 +4,7 @@ import {
   recentProposalIntents, rememberProposal, topicPreference
 } from "./coaching.js";
 import { isPrecisionAimWeapon } from "./equipment.js";
+import { hpBelow } from "./settings.js";
 import { clamp, dist } from "./utils.js";
 
 export const MIMIC_INTENSITY_KEYS = ["slight", "quite", "full"];
@@ -312,7 +313,7 @@ export function trackTraining(game, dt) {
     if (distance < 400 || closing) stats.jetAggro += dt;
     else stats.jetEscape += dt;
   }
-  if (player.hp < 180) stats.lowHpTime += dt;
+  if (hpBelow(player, 180)) stats.lowHpTime += dt;
 
   const buddyClosing = Math.sign(player.x - buddy.x) * buddy.vx;
   if (buddyClosing > 80) stats.buddyClosing += dt;
@@ -330,7 +331,7 @@ export function trackTraining(game, dt) {
     stats.rushOpportunities++;
   }
   if (player.thrusting && opportunity(game, "jet")) stats.jetOpportunities++;
-  if (player.hp < 180 && opportunity(game, "lowHp", 2)) stats.lowHpOpportunities++;
+  if (hpBelow(player, 180) && opportunity(game, "lowHp", 2)) stats.lowHpOpportunities++;
 
   // Shield habits only accrue when the player actually has a usable shield.
   // Unsampled shieldUse never participates in readiness (same as other domains).
@@ -364,7 +365,7 @@ export function trackTraining(game, dt) {
       if (game.elapsed - (game.lastPlayerAttackAt || -99) < .45) {
         stats.shieldRaiseAfterShot++;
       }
-      if (player.hp < 180) stats.shieldRaiseLowHp++;
+      if (hpBelow(player, 180)) stats.shieldRaiseLowHp++;
     }
     game.playerWasShieldRaised = !!player.shieldRaised;
   } else {

@@ -41,7 +41,7 @@ import {
 } from "./trapper.js";
 import { angleDiff, clamp, dist, formatTime, lerp } from "./utils.js";
 import { crateVisibleToTeam } from "./powerups.js";
-import { optimizeIllusionsEnabled } from "./settings.js";
+import { hpAtLeast, hpBelow, optimizeIllusionsEnabled, scaleHealthAmount } from "./settings.js";
 import { hasLineOfSight, visibleToSelf, visibleToTeam } from "./vision.js";
 import { Fighter } from "./combat.js";
 
@@ -668,7 +668,7 @@ export function wantAiSecondarySlot(fighter, game, visible, target) {
     // In grab reach: pick it up opportunistically. Farther: only while fighting / hurt.
     if (grabDist <= THROW_BREAKABLE_GRAB_RANGE) return "secondaryWeapon";
     const engaged = !!target && !target.dead;
-    if (foe || engaged || fighter.hp < 260) return "secondaryWeapon";
+    if (foe || engaged || hpBelow(fighter, 260)) return "secondaryWeapon";
     return "weapon";
   }
 
@@ -803,7 +803,7 @@ export function updateAiThrowBreakable(fighter, state, game, visible, target) {
   const d = Math.hypot(px - fx, py - fy);
   const engaged = !!target && !target.dead;
   // Only chase beyond grab reach while fighting or hurt.
-  if (d > THROW_BREAKABLE_GRAB_RANGE && !foe && !engaged && fighter.hp >= 260) return;
+  if (d > THROW_BREAKABLE_GRAB_RANGE && !foe && !engaged && hpAtLeast(fighter, 260)) return;
   state.mx = Math.abs(px - fx) > 20 ? Math.sign(px - fx) : 0;
   state.desiredAim = Math.atan2(py - fy, px - fx);
   if (d <= THROW_BREAKABLE_GRAB_RANGE) {
@@ -835,7 +835,7 @@ export function updateAiReconjurer(fighter, state, game, visible, target) {
   }
 
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
-  const pressured = fighter.hp < 240 || (foe && dist(fighter, foe) < 280);
+  const pressured = hpBelow(fighter, 240) || (foe && dist(fighter, foe) < 280);
   if (!pressured) return;
   const tank = materialEjectionTank(fighter);
   const canPay = tank.length > 0 || (fighter.nanobotFree || 0) >= RECONJURER_BOT_COST;
@@ -849,7 +849,7 @@ export function updateAiReconjurer(fighter, state, game, visible, target) {
     metalReady
     && choices.includes(RECONJURER_METAL_TYPE)
     && (fighter.nanobotFree || 0) >= RECONJURER_BOT_COST * 2
-    && fighter.hp < 180
+    && hpBelow(fighter, 180)
   ) {
     want = RECONJURER_METAL_TYPE;
   }
@@ -910,7 +910,7 @@ export function updateAiLightCondensation(fighter, state, game, visible, target)
 
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
   const hunting = !!target && !foe && (state.stale || 0) < 6;
-  const pressured = fighter.hp < 220 || (foe && dist(fighter, foe) < 300);
+  const pressured = hpBelow(fighter, 220) || (foe && dist(fighter, foe) < 300);
   const ownGlare = listLightCondensationProps(game).filter((p) => p.team === fighter.team);
   // Cap active ally nodes so maps don't fill with neon squares.
   if (ownGlare.length >= 2) return;
@@ -953,7 +953,7 @@ export function updateAiTrapper(fighter, state, game, visible, target) {
 
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
   const engaged = !!target && !target.dead;
-  if (!foe && !engaged && fighter.hp >= 260) return;
+  if (!foe && !engaged && hpAtLeast(fighter, 260)) return;
 
   // Pick type: airborne / above → fake platform; else bear.
   let want = "bear";
@@ -1004,12 +1004,12 @@ export function updateAiIllusionist(fighter, state, game, visible, target) {
 
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
   const engaged = !!target && !target.dead;
-  if (!foe && !engaged && fighter.hp >= 280) return;
+  if (!foe && !engaged && hpAtLeast(fighter, 280)) return;
 
   let want = "fighter";
   if (foe && (!foe.grounded || foe.y < fighter.y - 50)) want = "platform";
   else if (foe && dist(fighter, foe) > 420) want = "prop";
-  else if (fighter.hp < 200) want = "fighter";
+  else if (hpBelow(fighter, 200)) want = "fighter";
 
   // Cycle toward desired type (at most 2 steps for 3 types).
   for (let i = 0; i < 2; i++) {
@@ -1414,7 +1414,7 @@ export function updateAiCombatClone(fighter, state, game, visible, target) {
   const owned = listCombatClones(game).filter((c) => c.cloneOwner === fighter).length;
   if (owned >= 2) return;
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
-  const pressed = (fighter.hp || 0) < 280;
+  const pressed = hpBelow(fighter, 280);
   const midFight = !!foe && dist(fighter, foe) < 720;
   if (!pressed && !midFight) return;
   if (foe || target) {
@@ -1540,7 +1540,7 @@ export function updateAI(fighter, dt, game, profile) {
       protect = .55;
     }
     if (
-      lowHpKnowledge > .35 && player.hp < 190
+      lowHpKnowledge > .35 && hpBelow(player, 190)
     ) {
       protect = learned.habits.lowHpBehavior.estimate > .45 ? .95 : .6;
     }
@@ -1550,7 +1550,7 @@ export function updateAI(fighter, dt, game, profile) {
     if (
       lowHpKnowledge > .2
       && learned.habits.lowHpBehavior.estimate !== null
-      && player.hp < 190
+      && hpBelow(player, 190)
       && isTeamMode(game)
     ) {
       // Copy low-HP aggression: high estimate → stay aggressive near the player.
@@ -1604,8 +1604,8 @@ export function updateAI(fighter, dt, game, profile) {
       goalX = lerp(goalX, player.x, followBias);
     }
     // Mimic soft safety: always keep a light teammate bias in 2v2.
-    if (isMimic && (player.hp < 190 || dist(fighter, player) > 520)) {
-      goalX = lerp(goalX, player.x, MIMIC_TEAM_SAFETY * (player.hp < 190 ? 1.15 : 1));
+    if (isMimic && (hpBelow(player, 190) || dist(fighter, player) > 520)) {
+      goalX = lerp(goalX, player.x, MIMIC_TEAM_SAFETY * (hpBelow(player, 190) ? 1.15 : 1));
       protect = Math.max(protect, lerp(protect, .75, MIMIC_TEAM_SAFETY));
     }
   }
@@ -1622,6 +1622,7 @@ export function updateAI(fighter, dt, game, profile) {
     const mimicRetreat = lerp(155, 55, aggressive);
     retreatHp = lerp(retreatHp, mimicRetreat, mimicBlend * lowHpKnowledge);
   }
+  retreatHp = scaleHealthAmount(fighter, retreatHp);
 
   if (target) {
     const dx = target.x - fighter.x;
@@ -1753,7 +1754,7 @@ export function updateAI(fighter, dt, game, profile) {
   ) {
     if (isMimic) {
       // Soft safety: Full Mimic still hesitates to mirror-suicide on fumes.
-      const safeToMirror = fighter.hp > 120 || fighter.fuel > .45;
+      const safeToMirror = !hpBelow(fighter, 120) || fighter.fuel > .45;
       if (safeToMirror || Math.random() > MIMIC_TEAM_SAFETY) state.jet = true;
     } else {
       state.jet = true;
@@ -1829,7 +1830,8 @@ export function updateAI(fighter, dt, game, profile) {
     const threatReach = (threat.weapon || "gun") === "saber" ? 300 : 780;
     const closeEngagement = (threat.weapon || "gun") === "saber" ? 260 : 430;
     const critical = fighter.hp < retreatHp && threatDistance < threatReach;
-    const badlyLosing = fighter.hp + 120 < (threat.hp || 500)
+    const badlyLosing = fighter.hp + scaleHealthAmount(fighter, 120)
+      < (threat.hp || scaleHealthAmount(threat, 500) || scaleHealthAmount(fighter, 500))
       && threatDistance < closeEngagement;
     if (critical || badlyLosing || (priorRetreatDecision && threatDistance < threatReach)) {
       state.escape = makeEscapePlan(fighter, threat, game, learned, basePreset);
@@ -1917,7 +1919,7 @@ export function updateAI(fighter, dt, game, profile) {
     const threatInfo = evaluateShieldThreat(fighter, threatFoe, game, visible);
     const underFire = dodgeInfo.severity >= 2
       || threatInfo.severity >= 2
-      || (threatInfo.severity >= 1 && fighter.hp < 180);
+      || (threatInfo.severity >= 1 && hpBelow(fighter, 180));
     let wantMode = fighter.modularMode || "sword";
     if (underFire) {
       wantMode = "shield";

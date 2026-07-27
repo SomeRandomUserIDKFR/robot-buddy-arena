@@ -71,10 +71,10 @@ import {
 import { createRenderer } from "./rendering.js";
 import { profile, saveProfile } from "./storage.js";
 import {
-  cloneSettings, ensureSettingsProfile, normalizeArmorDespawnStyle,
+  cloneSettings, ensureSettingsProfile, healthScale, normalizeArmorDespawnStyle,
   normalizeArmorDespawnTimer, normalizeDebrisDespawnStyle,
   normalizeModularMorphStyle, normalizeOptimizeIllusions, normalizeReconquerRate,
-  normalizeSfxEnabled, normalizeUnlockAllGearTemporary
+  normalizeSfxEnabled, normalizeUnlockAllGearTemporary, normalizeUseClassic100Hp
 } from "./settings.js";
 import { applySfxSettings, setJetpackThrusting, unlockSfx } from "./sfx.js";
 import {
@@ -125,30 +125,38 @@ function makeGame(mode) {
   if (profile.equipment.buddyMode === "choice") setBuddyMode(profile, "choice");
   if (profile.buddyPerkAutonomy === "choice") setBuddyPerkAutonomy(profile, "choice");
 
+  ensureSettingsProfile(profile);
+  const matchSettings = cloneSettings(profile.settings);
+  const hs = healthScale(matchSettings);
+  const outfit = (fighter, loadout) => applyLoadout(fighter, loadout, {
+    healthScale: hs,
+    settings: matchSettings
+  });
+
   const mapId = resolveMapId(mode);
   const map = createMapRuntime(mapId);
   const powerCrateState = initPowerCrates(map.id, map.theme);
   const spawns = map.spawnPoints[mode === "training" ? "training" : "conquest"];
 
   const fighters = [
-    applyLoadout(new Fighter({
+    outfit(new Fighter({
       x: spawns.player.x, y: spawns.player.y, team: 0, color: "#e7f9ff", name: "YOU",
       human: true
     }), playerLoadout)
   ];
   if (mode === "training") {
-    fighters.push(applyLoadout(new Fighter({
+    fighters.push(outfit(new Fighter({
       x: spawns.buddy.x, y: spawns.buddy.y, team: 1, color: "#42dff5", name: buddyName,
       buddy: true, ai: mind
     }), buddyLoadout));
   } else if (mode === "survival") {
     ensureSurvivalProfile(profile);
-    fighters.push(applyLoadout(new Fighter({
+    fighters.push(outfit(new Fighter({
       x: spawns.buddy.x, y: spawns.buddy.y, team: 0, color: "#42dff5", name: buddyName,
       buddy: true, ai: mind
     }), buddyLoadout));
   } else {
-    fighters.push(applyLoadout(new Fighter({
+    fighters.push(outfit(new Fighter({
       x: spawns.buddy.x, y: spawns.buddy.y, team: 0, color: "#42dff5", name: buddyName,
       buddy: true, ai: mind
     }), buddyLoadout));
@@ -162,13 +170,13 @@ function makeGame(mode) {
     const follower = encounter?.follower || {
       name: "FOLLOWER", ai: "rookie", loadout: trainerLoadout("veteran", true)
     };
-    fighters.push(applyLoadout(new Fighter({
+    fighters.push(outfit(new Fighter({
       x: spawns.enemy1.x, y: spawns.enemy1.y, team: 1,
       color: trainer.color || "#ff5e56",
       name: trainer.name || "TRAINER",
       ai: trainer.ai || "veteran"
     }), trainer.loadout || trainerLoadout("veteran")));
-    fighters.push(applyLoadout(new Fighter({
+    fighters.push(outfit(new Fighter({
       x: spawns.enemy2.x, y: spawns.enemy2.y, team: 1,
       color: follower.color || "#ff9b4a",
       name: follower.name || "FOLLOWER",
@@ -182,7 +190,6 @@ function makeGame(mode) {
       : mode === "survival"
         ? "survival"
         : "veteran";
-  ensureSettingsProfile(profile);
   const gameState = {
     id: `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`,
     mode,
@@ -207,7 +214,8 @@ function makeGame(mode) {
     backdrop: map.backdrop,
     gimmick: null,
     learningLocked: !!profile.learningLocked,
-    settings: cloneSettings(profile.settings),
+    settings: matchSettings,
+    healthScale: hs,
     fighters,
     bullets: [],
     effects: [],
@@ -809,7 +817,8 @@ bindUi({
   },
   settingsChange({
     modularMorphStyle, debrisDespawnStyle, reconquerRate,
-    armorDespawnStyle, armorDespawnTimer, optimizeIllusions, sfxEnabled,
+    armorDespawnStyle, armorDespawnTimer, useClassic100Hp,
+    optimizeIllusions, sfxEnabled,
     unlockAllGearTemporary
   } = {}) {
     ensureSettingsProfile(profile);
@@ -827,6 +836,9 @@ bindUi({
     }
     if (armorDespawnTimer != null) {
       profile.settings.visual.armorDespawnTimer = normalizeArmorDespawnTimer(armorDespawnTimer);
+    }
+    if (useClassic100Hp != null) {
+      profile.settings.visual.useClassic100Hp = normalizeUseClassic100Hp(useClassic100Hp);
     }
     if (optimizeIllusions != null) {
       profile.settings.gameplay.optimizeIllusions = normalizeOptimizeIllusions(optimizeIllusions);

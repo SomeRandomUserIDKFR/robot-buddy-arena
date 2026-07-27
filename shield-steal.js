@@ -130,7 +130,8 @@ export function tickShieldStealBeam(fighter, game, dt) {
   fighter.shieldStealBeamY = oy + Math.sin(aim) * reach;
 
   const step = Math.max(0, dt || 0);
-  const drain = SHIELD_STEAL_DRAIN_PER_SEC * step;
+  const drain = SHIELD_STEAL_DRAIN_PER_SEC * step
+    * (victim.healthScale || fighter.healthScale || 1);
   const taken = Math.min(drain, victim.shieldDurability || 0);
   if (!(taken > 0)) return null;
 

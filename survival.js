@@ -293,7 +293,10 @@ export function spawnSurvivalEnemy(game, FighterCtor, random = Math.random) {
     name: `${spec.name}-${state.spawned + 1}`,
     ai: spec.ai,
     survivalSwarm: true
-  }), spec.loadout);
+  }), spec.loadout, {
+    healthScale: game.healthScale || 1,
+    settings: game.settings
+  });
   game.fighters.push(fighter);
   state.spawned += 1;
   return fighter;

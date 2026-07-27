@@ -46,6 +46,7 @@ import {
 import {
   playImpactSfx, playMeleeSfx, playShotSfx, setJetpackThrusting
 } from "./sfx.js";
+import { hpBelow } from "./settings.js";
 import {
   applyIcePinToIntent, bindSpellbookHitter, castSpellbook, iceSlowMult,
   isSpellbook, tickSpellbookFighter
@@ -164,7 +165,13 @@ function hit(target, source, damage, angle, game, extras = {}) {
   }
   // Illusion attackers only gaslight — never real HP / shield drain.
   if (isIllusionFighter(source)) {
-    const phantom = Math.max(ILLUSION_PHANTOM_DAMAGE, damage * (target.damageTaken || 1));
+    const scale = Number.isFinite(target.healthScale) && target.healthScale > 0
+      ? target.healthScale
+      : 1;
+    const phantom = Math.max(
+      ILLUSION_PHANTOM_DAMAGE * scale,
+      damage * scale * (target.damageTaken || 1)
+    );
     applyPhantomDamage(target, phantom, game, source);
     target.vx += Math.cos(angle) * 40;
     target.vy += Math.sin(angle) * 20 - 12;
@@ -174,7 +181,13 @@ function hit(target, source, damage, angle, game, extras = {}) {
   const counterEligible = !extras.fromCounterSlash
     && !!target.shieldRaised
     && !target.shieldBroken;
-  let dealt = damage * (target.damageTaken || 1);
+  const scale = Number.isFinite(target.healthScale) && target.healthScale > 0
+    ? target.healthScale
+    : (Number.isFinite(source?.healthScale) && source.healthScale > 0
+      ? source.healthScale
+      : (game?.settings?.visual?.useClassic100Hp ? 0.2 : 1));
+  const scaledDamage = damage * scale;
+  let dealt = scaledDamage * (target.damageTaken || 1);
   let shieldBlocked = false;
   if (!extras.unblockable && shieldBlocksAttack(target, angle) && dealt > 0) {
     const shieldMult = extras.shieldDamageMult
@@ -217,7 +230,7 @@ function hit(target, source, damage, angle, game, extras = {}) {
       return;
     }
   }
-  applyHpDamage(target, dealt, game);
+  applyHpDamage(target, dealt, game, { alreadyScaled: true });
   target.hitFlash = .12;
   target.hitFace = .35;
   target.lastHitAt = game.elapsed;
@@ -425,7 +438,7 @@ export function attack(fighter, game, random = Math.random) {
       game.lastPlayerAttackAt = game.elapsed;
       const buddy = game.fighters.find((candidate) => candidate.buddy);
       if (buddy) game.stats.attackRangeSum += dist(fighter, buddy);
-      if (fighter.hp < 180) game.stats.lowHpAttack++;
+      if (hpBelow(fighter, 180)) game.stats.lowHpAttack++;
     }
     return;
   }
@@ -441,7 +454,7 @@ export function attack(fighter, game, random = Math.random) {
       game.lastPlayerAttackAt = game.elapsed;
       const buddy = game.fighters.find((candidate) => candidate.buddy);
       if (buddy) game.stats.attackRangeSum += dist(fighter, buddy);
-      if (fighter.hp < 180) game.stats.lowHpAttack++;
+      if (hpBelow(fighter, 180)) game.stats.lowHpAttack++;
     }
     return;
   }
@@ -457,7 +470,7 @@ export function attack(fighter, game, random = Math.random) {
       game.lastPlayerAttackAt = game.elapsed;
       const buddy = game.fighters.find((candidate) => candidate.buddy);
       if (buddy) game.stats.attackRangeSum += dist(fighter, buddy);
-      if (fighter.hp < 180) game.stats.lowHpAttack++;
+      if (hpBelow(fighter, 180)) game.stats.lowHpAttack++;
     }
     return;
   }
@@ -558,7 +571,7 @@ export function attack(fighter, game, random = Math.random) {
     game.lastPlayerAttackAt = game.elapsed;
     const buddy = game.fighters.find((candidate) => candidate.buddy);
     if (buddy) game.stats.attackRangeSum += dist(fighter, buddy);
-    if (fighter.hp < 180) game.stats.lowHpAttack++;
+    if (hpBelow(fighter, 180)) game.stats.lowHpAttack++;
   }
 }
 

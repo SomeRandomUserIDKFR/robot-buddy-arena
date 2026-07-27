@@ -282,7 +282,7 @@ function applyBearTrap(trap, victim, game) {
     victim.shieldFlash = Math.max(victim.shieldFlash || 0, 0.16);
     victim.shieldDurability = Math.max(
       0,
-      (victim.shieldDurability || 0) - BEAR_TRAP_DAMAGE * 0.35
+      (victim.shieldDurability || 0) - BEAR_TRAP_DAMAGE * 0.35 * (victim.healthScale || 1)
     );
     if (victim.shieldDurability <= 0) {
       victim.shieldBroken = true;
