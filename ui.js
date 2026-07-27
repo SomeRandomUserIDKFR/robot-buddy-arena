@@ -14,6 +14,10 @@ import {
   beginConquestSelect, getPendingEncounter, hasFreeReroll, loadoutSummary,
   REROLL_CYBER_COST
 } from "./conquest.js";
+import {
+  beginCampaignSelect, campaignShopCatalog, campaignStageCards, CAMPAIGN_STAGES,
+  ensureCampaignProfile, getPendingCampaignEncounter
+} from "./campaign.js";
 import { listMaps } from "./maps.js";
 import {
   estimateProfilePowers, formatPower, powerBarPercent
@@ -65,6 +69,17 @@ export const ui = {
   conquestRerollBtn: $("#conquestRerollBtn"),
   conquestFightBtn: $("#conquestFightBtn"),
   conquestBackBtn: $("#conquestBackBtn"),
+  campaignSelect: $("#campaignSelect"),
+  campaignStageRanking: $("#campaignStageRanking"),
+  campaignCleared: $("#campaignCleared"),
+  campaignCyber: $("#campaignCyber"),
+  campaignStageList: $("#campaignStageList"),
+  campaignOpponentPanel: $("#campaignOpponentPanel"),
+  campaignShopPanel: $("#campaignShopPanel"),
+  campaignLoadoutSummary: $("#campaignLoadoutSummary"),
+  campaignSelectFeedback: $("#campaignSelectFeedback"),
+  campaignFightBtn: $("#campaignFightBtn"),
+  campaignBackBtn: $("#campaignBackBtn"),
   mapSelect: $("#mapSelect"),
   learningLock: $("#learningLock"),
   learningLockHint: $("#learningLockHint"),
@@ -331,6 +346,7 @@ function refreshMindControls(profile, learned) {
 export function showGame(mode, profile, mapName = "") {
   ui.menu.classList.add("hidden");
   ui.conquestSelect?.classList.add("hidden");
+  ui.campaignSelect?.classList.add("hidden");
   ui.results.classList.add("hidden");
   ui.pause.classList.add("hidden");
   ui.perkModal?.classList.add("hidden");
@@ -341,7 +357,10 @@ export function showGame(mode, profile, mapName = "") {
   ui.modeLabel.textContent = lockedSpar
     ? `SPAR — learning locked // ${ui.aiMode.value.toUpperCase()} BUDDY${mapTag}`
     : `${mode.toUpperCase()} // ${ui.aiMode.value.toUpperCase()} BUDDY${mapTag}`;
-  const weapon = weaponKind(profile.equipment.player.weapon);
+  const loadout = mode === "campaign"
+    ? (profile.campaign?.player || profile.equipment.player)
+    : profile.equipment.player;
+  const weapon = weaponKind(loadout.weapon);
   ui.readinessLabel.textContent = lockedSpar
     ? "SPAR — learning locked"
     : readiness(profile.weapons[weapon]);
@@ -349,7 +368,9 @@ export function showGame(mode, profile, mapName = "") {
     ? `SPAR — LEARNING LOCKED${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
     : mode === "training"
       ? `TRAIN YOUR BUDDY${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
-      : `PROTECT YOUR TEAM${mapName ? ` · ${mapName.toUpperCase()}` : ""}`;
+      : mode === "campaign"
+        ? `CLEAR THE STAGE${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
+        : `PROTECT YOUR TEAM${mapName ? ` · ${mapName.toUpperCase()}` : ""}`;
 }
 
 export function updateHud(game) {
@@ -681,7 +702,7 @@ export function showResults(
     ? `+${earnedCyber}¢ CYBER EARNED · BALANCE ${profile.cyber}¢`
     : `${game.mode === "training" ? "TRAINING PAYS NO CYBER" : "NO CYBER LOST"} · BALANCE ${profile.cyber}¢`;
   if (ui.resultExp) {
-    if (game.mode !== "conquest") {
+    if (game.mode !== "conquest" && game.mode !== "campaign") {
       ui.resultExp.textContent = "TRAINING / SPAR GRANTS NO CONQUEST EXP";
     } else if (earnedExp > 0) {
       const levelBit = levelsGained > 0
@@ -698,7 +719,12 @@ export function showResults(
     }
   }
   if (ui.resultRanking) {
-    if (game.mode !== "conquest") {
+    if (game.mode === "campaign") {
+      const cleared = rewards?.stageCleared
+        ? ` · Stage cleared`
+        : "";
+      ui.resultRanking.textContent = `Campaign — Ranking unchanged (now ${rankingNow})${cleared}`;
+    } else if (game.mode !== "conquest") {
       ui.resultRanking.textContent = "TRAINING / SPAR — RANKING UNCHANGED";
     } else if (rankingDelta > 0) {
       ui.resultRanking.textContent = `Ranking +${rankingDelta} (now ${rankingNow})`;
@@ -772,6 +798,7 @@ export function showMenu(fromResults = false, profile = null) {
   ui.pause.classList.add("hidden");
   ui.hud.classList.add("hidden");
   ui.conquestSelect?.classList.add("hidden");
+  ui.campaignSelect?.classList.add("hidden");
   ui.menu.classList.remove("hidden");
   showSettings(false);
   if (profile) renderPerkModal(profile);
@@ -1434,8 +1461,141 @@ export function showConquestSelect(profile) {
   ui.pause.classList.add("hidden");
   ui.hud.classList.add("hidden");
   ui.perkModal?.classList.add("hidden");
+  ui.campaignSelect?.classList.add("hidden");
   ui.conquestSelect?.classList.remove("hidden");
   refreshConquestSelect(profile, encounter);
+}
+
+/** @type {"player"|"buddy"} */
+let campaignKitOwner = "player";
+
+function campaignLoadoutMarkup(profile, owner) {
+  ensureCampaignProfile(profile);
+  const loadout = profile.campaign[owner];
+  const slots = loadoutSummary(loadout);
+  return `
+    <div class="campaign-equipped">
+      <span class="campaign-equipped-label">${owner === "buddy" ? "Buddy kit" : "Your kit"}</span>
+      ${slots.map((slot) => (
+        `<span><em>${escapeHtml(SLOT_LABELS[slot.slot] || slot.slot)}</em> ${escapeHtml(slot.name)}</span>`
+      )).join("")}
+    </div>
+  `;
+}
+
+function campaignShopMarkup(profile, stageId) {
+  const rows = campaignShopCatalog(profile, stageId);
+  if (!rows.length) {
+    return "<p class=\"lede\">No shop offers on this stage yet.</p>";
+  }
+  return rows.map((row) => {
+    const action = row.owned ? "Equip" : `Buy ${row.price}¢`;
+    const disabled = !row.affordable && !row.owned ? " disabled" : "";
+    const ownedTag = row.owned ? " · owned" : "";
+    return `
+      <button type="button" class="campaign-shop-item" data-campaign-buy="${escapeHtml(row.id)}"${disabled}>
+        <strong>${escapeHtml(row.name)}</strong>
+        <span>${escapeHtml(row.slot)}${ownedTag}</span>
+        <em>${escapeHtml(action)}</em>
+      </button>
+    `;
+  }).join("");
+}
+
+function campaignOpponentMarkup(encounter) {
+  if (!encounter) return "<p class=\"lede\">Select a stage.</p>";
+  const power = encounter.power || 0;
+  const powerPct = powerBarPercent(power);
+  const duoFmt = formatPower(power);
+  return `
+    <div class="conquest-duo-meta">
+      <span>Map <strong>${escapeHtml(encounter.mapName || "Battlefield")}</strong></span>
+      <span>Est. training <strong>${escapeHtml(encounter.training)}</strong></span>
+      <span>Stage Ranking <strong>${encounter.ranking ?? "—"}</strong></span>
+      <span>Duo power <strong>${duoFmt.value}</strong> <em>${escapeHtml(duoFmt.label)}</em></span>
+      <span class="conquest-power-split">Trainer <strong>${encounter.trainerPower ?? "—"}</strong>
+        · Follower <strong>${encounter.followerPower ?? "—"}</strong></span>
+      <div class="conquest-power-bar" title="Duo power ${power}" aria-hidden="true">
+        <i style="width:${powerPct}%"></i>
+      </div>
+      ${encounter.blurb ? `<p class="conquest-map-blurb">${escapeHtml(encounter.blurb)}</p>` : ""}
+    </div>
+    ${fighterCardMarkup(encounter.trainer, encounter.trainerPower)}
+    ${fighterCardMarkup(encounter.follower, encounter.followerPower)}
+  `;
+}
+
+/** Render Campaign stage select + shop for the selected stage. */
+export function refreshCampaignSelect(profile, feedback = "") {
+  if (!ui.campaignSelect) return;
+  ensureCampaignProfile(profile);
+  const cards = campaignStageCards(profile);
+  const selected = cards.find((c) => c.selected) || cards[0];
+  const encounter = getPendingCampaignEncounter()
+    || (selected ? beginCampaignSelect(profile) : null);
+  const cyber = Number.isInteger(profile?.cyber) ? profile.cyber : 0;
+  const clearedCount = profile.campaign.cleared.length;
+
+  if (ui.campaignStageRanking) {
+    ui.campaignStageRanking.textContent = String(selected?.ranking ?? "—");
+  }
+  if (ui.campaignCleared) {
+    ui.campaignCleared.textContent = `${clearedCount} / ${CAMPAIGN_STAGES.length}`;
+  }
+  if (ui.campaignCyber) ui.campaignCyber.textContent = `${cyber}¢`;
+  if (ui.campaignSelectFeedback) ui.campaignSelectFeedback.textContent = feedback || "";
+
+  if (ui.campaignStageList) {
+    ui.campaignStageList.innerHTML = cards.map((card) => {
+      const state = !card.unlocked
+        ? "locked"
+        : card.cleared ? "cleared" : "open";
+      const disabled = card.unlocked ? "" : " disabled";
+      const active = card.selected ? " active" : "";
+      return `
+        <button type="button" class="campaign-stage-card ${state}${active}"
+          data-campaign-stage="${escapeHtml(card.id)}" role="listitem"${disabled}>
+          <span class="campaign-stage-index">Stage ${card.index}</span>
+          <strong>${escapeHtml(card.name)}</strong>
+          <span>${escapeHtml(card.mapName)} · R${card.ranking}</span>
+          <em>${card.unlocked ? (card.cleared ? "Cleared" : "Ready") : "Locked"}</em>
+        </button>
+      `;
+    }).join("");
+  }
+
+  if (ui.campaignOpponentPanel) {
+    ui.campaignOpponentPanel.innerHTML = campaignOpponentMarkup(encounter);
+  }
+  if (ui.campaignLoadoutSummary) {
+    ui.campaignLoadoutSummary.innerHTML = campaignLoadoutMarkup(profile, campaignKitOwner);
+  }
+  if (ui.campaignShopPanel) {
+    ui.campaignShopPanel.innerHTML = campaignShopMarkup(
+      profile, selected?.id || profile.campaign.selectedStageId
+    );
+  }
+  for (const btn of ui.campaignSelect.querySelectorAll("[data-campaign-owner]")) {
+    const on = btn.dataset.campaignOwner === campaignKitOwner;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  }
+  if (ui.campaignFightBtn) {
+    ui.campaignFightBtn.disabled = !selected?.unlocked;
+  }
+}
+
+export function showCampaignSelect(profile) {
+  ensureCampaignProfile(profile);
+  beginCampaignSelect(profile);
+  ui.menu.classList.add("hidden");
+  ui.results.classList.add("hidden");
+  ui.pause.classList.add("hidden");
+  ui.hud.classList.add("hidden");
+  ui.perkModal?.classList.add("hidden");
+  ui.conquestSelect?.classList.add("hidden");
+  ui.campaignSelect?.classList.remove("hidden");
+  refreshCampaignSelect(profile);
 }
 
 function fillMapSelect() {
@@ -1455,9 +1615,29 @@ export function bindUi(handlers) {
   fillMapSelect();
   $("#trainingBtn").addEventListener("click", () => handlers.start("training"));
   $("#conquestBtn").addEventListener("click", () => handlers.openConquest?.());
+  $("#campaignBtn")?.addEventListener("click", () => handlers.openCampaign?.());
   ui.conquestBackBtn?.addEventListener("click", () => handlers.conquestBack?.());
   ui.conquestRerollBtn?.addEventListener("click", () => handlers.conquestReroll?.());
   ui.conquestFightBtn?.addEventListener("click", () => handlers.conquestFight?.());
+  ui.campaignBackBtn?.addEventListener("click", () => handlers.campaignBack?.());
+  ui.campaignFightBtn?.addEventListener("click", () => handlers.campaignFight?.());
+  ui.campaignSelect?.addEventListener("click", (event) => {
+    const stageBtn = event.target.closest("[data-campaign-stage]");
+    if (stageBtn && !stageBtn.disabled) {
+      handlers.campaignSelectStage?.(stageBtn.dataset.campaignStage);
+      return;
+    }
+    const ownerBtn = event.target.closest("[data-campaign-owner]");
+    if (ownerBtn) {
+      campaignKitOwner = ownerBtn.dataset.campaignOwner === "buddy" ? "buddy" : "player";
+      handlers.campaignRefresh?.();
+      return;
+    }
+    const buyBtn = event.target.closest("[data-campaign-buy]");
+    if (buyBtn && !buyBtn.disabled) {
+      handlers.campaignBuy?.(buyBtn.dataset.campaignBuy, campaignKitOwner);
+    }
+  });
   $("#resumeBtn").addEventListener("click", handlers.resume);
   $("#quitBtn").addEventListener("click", handlers.quit);
   $("#menuBtn").addEventListener("click", handlers.menu);

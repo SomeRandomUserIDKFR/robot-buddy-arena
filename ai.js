@@ -45,6 +45,10 @@ import { optimizeIllusionsEnabled } from "./settings.js";
 import { hasLineOfSight, visibleToSelf, visibleToTeam } from "./vision.js";
 import { Fighter } from "./combat.js";
 
+function isTeamMode(game) {
+  return game?.mode === "conquest" || game?.mode === "campaign";
+}
+
 /** Min seconds between AI primary ↔ secondary swaps. */
 export const AI_WEAPON_SWAP_CD = 0.9;
 /** Search radius when hunting a throw prop (beyond grab reach). */
@@ -1522,7 +1526,7 @@ export function updateAI(fighter, dt, game, profile) {
   let protect = .35;
   // Flash / Balanced / Thinker: Conquest counter/support from habits.
   // Mimic: copy player style instead (applied below).
-  if (fighter.buddy && game.mode === "conquest" && !isMimic) {
+  if (fighter.buddy && isTeamMode(game) && !isMimic) {
     if (rushKnowledge > .35 && learned.habits.rushPrediction.estimate > .08) {
       desired = fighter.weapon === "gun" ? 320 : 100;
       protect = .8;
@@ -1545,7 +1549,7 @@ export function updateAI(fighter, dt, game, profile) {
       lowHpKnowledge > .2
       && learned.habits.lowHpBehavior.estimate !== null
       && player.hp < 190
-      && game.mode === "conquest"
+      && isTeamMode(game)
     ) {
       // Copy low-HP aggression: high estimate → stay aggressive near the player.
       const lowHp = learned.habits.lowHpBehavior.estimate;
@@ -1572,7 +1576,7 @@ export function updateAI(fighter, dt, game, profile) {
   state.mimicBlend = isMimic ? mimicBlend : 0;
 
   let goalX = target ? target.x : fighter.x;
-  if (fighter.buddy && game.mode === "conquest") {
+  if (fighter.buddy && isTeamMode(game)) {
     if (!isMimic) {
       if (
         rangeKnowledge > .35
@@ -1618,7 +1622,7 @@ export function updateAI(fighter, dt, game, profile) {
     const idealX = target.x - Math.sign(dx || 1) * desired;
     if (Math.abs(distance - desired) > 45) goalX = idealX;
     const flankBias = coachingBias("flankScout");
-    if (flankBias && game.mode === "conquest" && dist(fighter, player) < 700) {
+    if (flankBias && isTeamMode(game) && dist(fighter, player) < 700) {
       goalX += Math.sign(target.x - player.x || fighter.facing) * 180 * flankBias;
     }
     const lead = preset.prediction * Math.min(.5, distance / 1500);
@@ -1736,7 +1740,7 @@ export function updateAI(fighter, dt, game, profile) {
     state.jet = Math.random() < useJetpack;
   }
   if (
-    fighter.buddy && game.mode === "conquest" && player.thrusting
+    fighter.buddy && isTeamMode(game) && player.thrusting
     && jetKnowledge > .4 && learned.habits.jetpackUse.estimate > .5
     && fighter.fuel > fuelCare * .35
   ) {

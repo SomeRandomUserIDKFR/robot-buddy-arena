@@ -100,9 +100,9 @@ export function fighterVisibleToViewer(game, viewer, fighter) {
   return visibleToTeam(game, viewer, fighter);
 }
 
-/** True when `a` and `b` are the conquest player↔buddy pair (same team). */
+/** True when `a` and `b` are the conquest/campaign player↔buddy pair (same team). */
 export function isConquestDuo(game, a, b) {
-  if (!game || game.mode !== "conquest" || !a || !b) return false;
+  if (!game || (game.mode !== "conquest" && game.mode !== "campaign") || !a || !b) return false;
   if (a.team !== b.team) return false;
   return !!(a.buddy || b.buddy) && !!(a.human || b.human || a.buddy || b.buddy);
 }

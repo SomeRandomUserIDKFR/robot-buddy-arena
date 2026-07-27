@@ -25,6 +25,10 @@ import {
   tryNanotechWeaponAction, toggleRetractableArmor, toggleShieldRaise, trainerLoadout,
   weaponKind
 } from "./equipment.js";
+import {
+  awardCampaign, beginCampaignSelect, campaignEquip, ensureCampaignProfile,
+  getPendingCampaignEncounter, selectCampaignStage, setPendingCampaignEncounter
+} from "./campaign.js";
 import { cycleSpellType, isSpellbook, tickSpellbookWorld } from "./spellbook.js";
 import { tickGroundDebris } from "./debris.js";
 import { tickThrowBreakable } from "./throw-breakable.js";
@@ -70,8 +74,9 @@ import {
 } from "./settings.js";
 import { applySfxSettings, setJetpackThrusting, unlockSfx } from "./sfx.js";
 import {
-  bindUi, refreshConquestSelect, refreshCoaching, refreshMenu, refreshSettings, showBuildStamp,
-  showConquestSelect, showGame, showMenu, showPause, showResults, showSettings, ui, updateHud
+  bindUi, refreshCampaignSelect, refreshConquestSelect, refreshCoaching, refreshMenu,
+  refreshSettings, showBuildStamp, showCampaignSelect, showConquestSelect, showGame,
+  showMenu, showPause, showResults, showSettings, ui, updateHud
 } from "./ui.js";
 import { capitalize, clamp, formatTime, thoughtReason } from "./utils.js";
 
@@ -83,9 +88,17 @@ let lastTime = performance.now();
 let nanoFHoldT = 0;
 let nanoFHoldLatched = false;
 
+function isTeamMode(mode) {
+  return mode === "conquest" || mode === "campaign";
+}
+
 function resolveMapId(mode) {
   if (mode === "conquest") {
     const encounter = getPendingEncounter();
+    if (encounter?.mapId) return encounter.mapId;
+  }
+  if (mode === "campaign") {
+    const encounter = getPendingCampaignEncounter();
     if (encounter?.mapId) return encounter.mapId;
   }
   const picked = ui.mapSelect?.value || "random";
@@ -96,7 +109,14 @@ function resolveMapId(mode) {
 function makeGame(mode) {
   const buddyName = ui.name.value.trim() || "Pixel";
   profile.botName = buddyName;
-  const learned = profile.weapons[weaponKind(profile.equipment.player.weapon)];
+  ensureCampaignProfile(profile);
+  const playerLoadout = mode === "campaign"
+    ? profile.campaign.player
+    : profile.equipment.player;
+  const buddyLoadout = mode === "campaign"
+    ? profile.campaign.buddy
+    : profile.equipment.buddy;
+  const learned = profile.weapons[weaponKind(playerLoadout.weapon)];
   let mind = normalizeAiMode(ui.aiMode.value);
   if (mind === "mimic" && mimicUnlockLevel(learned) === "locked") mind = "balanced";
   profile.aiMode = mind;
@@ -114,19 +134,21 @@ function makeGame(mode) {
     applyLoadout(new Fighter({
       x: spawns.player.x, y: spawns.player.y, team: 0, color: "#e7f9ff", name: "YOU",
       human: true
-    }), profile.equipment.player)
+    }), playerLoadout)
   ];
   if (mode === "training") {
     fighters.push(applyLoadout(new Fighter({
       x: spawns.buddy.x, y: spawns.buddy.y, team: 1, color: "#42dff5", name: buddyName,
       buddy: true, ai: mind
-    }), profile.equipment.buddy));
+    }), buddyLoadout));
   } else {
     fighters.push(applyLoadout(new Fighter({
       x: spawns.buddy.x, y: spawns.buddy.y, team: 0, color: "#42dff5", name: buddyName,
       buddy: true, ai: mind
-    }), profile.equipment.buddy));
-    const encounter = getPendingEncounter();
+    }), buddyLoadout));
+    const encounter = mode === "campaign"
+      ? getPendingCampaignEncounter()
+      : getPendingEncounter();
     // Prefer the select-screen encounter; fall back to classic Veteran duo.
     const trainer = encounter?.trainer || {
       name: "TRAINER", ai: "veteran", loadout: trainerLoadout("veteran")
@@ -147,15 +169,22 @@ function makeGame(mode) {
       ai: follower.ai || "rookie"
     }), follower.loadout || trainerLoadout("veteran", true)));
   }
-  const difficulty = mode === "conquest"
-    ? (getPendingEncounter()?.rewardTier || "veteran")
+  const difficulty = isTeamMode(mode)
+    ? (
+      mode === "campaign"
+        ? (getPendingCampaignEncounter()?.rewardTier || "rookie")
+        : (getPendingEncounter()?.rewardTier || "veteran")
+    )
     : "veteran";
   ensureSettingsProfile(profile);
   const gameState = {
     id: `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`,
     mode,
     difficulty,
-    encounter: mode === "conquest" ? getPendingEncounter() : null,
+    encounter: isTeamMode(mode)
+      ? (mode === "campaign" ? getPendingCampaignEncounter() : getPendingEncounter())
+      : null,
+    stageId: mode === "campaign" ? getPendingCampaignEncounter()?.stageId || null : null,
     mapId: map.id,
     mapName: map.name,
     theme: map.theme,
@@ -232,6 +261,10 @@ function start(mode) {
     showConquestSelect(profile);
     return;
   }
+  if (mode === "campaign" && !getPendingCampaignEncounter()) {
+    showCampaignSelect(profile);
+    return;
+  }
   game = makeGame(mode);
   showGame(mode, profile, game.mapName);
   mouse.down = false;
@@ -248,12 +281,31 @@ function openConquest() {
   showConquestSelect(profile);
 }
 
+function openCampaign() {
+  const blockedWords = ["fuck", "shit", "bitch", "cunt", "nazi"];
+  const name = ui.name.value.trim();
+  if (!name || blockedWords.some((word) => name.toLowerCase().includes(word))) {
+    ui.nameError.textContent = "Please pick another name for your buddy.";
+    return;
+  }
+  ui.nameError.textContent = "";
+  showCampaignSelect(profile);
+}
+
 function conquestFight() {
   if (!getPendingEncounter()) {
     showConquestSelect(profile);
     return;
   }
   start("conquest");
+}
+
+function campaignFight() {
+  if (!getPendingCampaignEncounter()) {
+    showCampaignSelect(profile);
+    return;
+  }
+  start("campaign");
 }
 
 function conquestReroll() {
@@ -277,8 +329,47 @@ function conquestReroll() {
   );
 }
 
+function campaignSelectStage(stageId) {
+  if (!selectCampaignStage(profile, stageId)) {
+    refreshCampaignSelect(profile, "That stage is still locked.");
+    return;
+  }
+  beginCampaignSelect(profile);
+  saveProfile();
+  refreshCampaignSelect(profile);
+}
+
+function campaignBuy(gearId, owner) {
+  const result = campaignEquip(profile, gearId, owner);
+  if (!result.ok) {
+    const msg = result.reason === "insufficient"
+      ? `Need ${result.shortfall}¢ more Cyber.`
+      : result.reason === "not-in-shop"
+        ? "That gear unlocks deeper in the campaign."
+        : result.reason === "owned"
+          ? "Already owned — pick Equip on the kit tab."
+          : "Could not equip that gear.";
+    refreshCampaignSelect(profile, msg);
+    return;
+  }
+  saveProfile();
+  refreshMenu(profile);
+  refreshCampaignSelect(
+    profile,
+    result.purchased
+      ? `Unlocked ${result.gear.name} for ${result.spent}¢ · equipped on ${result.owner}.`
+      : `Equipped ${result.gear.name} on ${result.owner}.`
+  );
+}
+
 function conquestBack() {
   setPendingEncounter(null);
+  showMenu(false, profile);
+  refreshMenu(profile);
+}
+
+function campaignBack() {
+  setPendingCampaignEncounter(null);
   showMenu(false, profile);
   refreshMenu(profile);
 }
@@ -430,9 +521,17 @@ function finish(win) {
     learningChanged = updateLearning(game, profile);
     createTrainingProposal(game, profile);
   }
-  const rewards = awardConquest(profile, {
-    id: game.id, mode: game.mode, difficulty: game.difficulty, win
-  });
+  const rewards = game.mode === "campaign"
+    ? awardCampaign(profile, {
+      id: game.id,
+      mode: game.mode,
+      difficulty: game.difficulty,
+      win,
+      stageId: game.stageId || getPendingCampaignEncounter()?.stageId || null
+    })
+    : awardConquest(profile, {
+      id: game.id, mode: game.mode, difficulty: game.difficulty, win
+    });
   saveProfile();
   showResults(game, profile, win, practiceLines, rewards, learningChanged);
   refreshMenu(profile);
@@ -552,9 +651,17 @@ installInput(canvas, handleKeyDown, handleKeyUp, handleWheel);
 bindUi({
   start,
   openConquest,
+  openCampaign,
   conquestFight,
   conquestReroll,
   conquestBack,
+  campaignFight,
+  campaignBack,
+  campaignSelectStage,
+  campaignBuy,
+  campaignRefresh() {
+    refreshCampaignSelect(profile);
+  },
   resume() {
     game.paused = false;
     showPause(false);
@@ -563,17 +670,23 @@ bindUi({
     setJetpackThrusting(false);
     game = null;
     setPendingEncounter(null);
+    setPendingCampaignEncounter(null);
     showMenu(false, profile);
   },
   menu() {
     setJetpackThrusting(false);
     game = null;
     setPendingEncounter(null);
+    setPendingCampaignEncounter(null);
     showMenu(true, profile);
   },
   again() {
     if (game?.mode === "conquest") {
       openConquest();
+      return;
+    }
+    if (game?.mode === "campaign") {
+      openCampaign();
       return;
     }
     start(game.mode);

@@ -1,5 +1,6 @@
 import { DEFAULT_PROFILE, STORAGE_KEY } from "./config.js";
 import { ensureCoaching } from "./coaching.js";
+import { ensureCampaignProfile } from "./campaign.js";
 import {
   ensureEconomyProfile, ensureEquipmentProfile, setBuddyMode, weaponKind
 } from "./equipment.js";
@@ -46,6 +47,7 @@ export function migrateProfile(saved) {
   }
   ensureEquipmentProfile(loaded, saved || {});
   ensureEconomyProfile(loaded, saved || {});
+  ensureCampaignProfile(loaded, saved || {});
   ensureProgressionProfile(loaded, saved || {});
   ensureSettingsProfile(loaded, saved || {});
   if (loaded.equipment.buddyMode !== "user") {
@@ -83,6 +85,7 @@ export const profile = loadProfile();
 ensureCoaching(profile);
 ensureEquipmentProfile(profile, profile);
 ensureEconomyProfile(profile, profile);
+ensureCampaignProfile(profile, profile);
 ensureProgressionProfile(profile, profile);
 
 export function saveProfile() {
