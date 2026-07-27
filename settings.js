@@ -79,12 +79,15 @@ export function optimizeIllusionsEnabled(gameOrSettings) {
   return normalizeOptimizeIllusions(gameplay?.optimizeIllusions);
 }
 
-/** Default OFF — classic 100 HP combat scale (×0.2). */
+/** Default OFF — cosmetic classic ~100 HP bar readout (×0.2). */
 export function normalizeUseClassic100Hp(value) {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
-/** Multiplier applied to HP pools, damage, healing, regen, shield/armor. */
+/**
+ * Multiplier for HP pools / damage / heals when classic 100 HP readout is on.
+ * Kept under Visual: pacing is unchanged; bars and numbers just read smaller.
+ */
 export const CLASSIC_100_HP_SCALE = 0.2;
 
 /**

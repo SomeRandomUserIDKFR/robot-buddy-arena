@@ -77,7 +77,8 @@ export const DEFAULT_PROFILE = {
       armorDespawnStyle: "fade",
       // Seconds before armor scraps despawn / build a dummy (tenths).
       armorDespawnTimer: 14,
-      // Scale fighter HP / damage / heals to a classic ~100 HP feel (×0.2).
+      // Cosmetic HP bar readout: ÷5 so bars read ~100 instead of ~500.
+      // Fight pacing is unchanged (damage/heals scale with it).
       useClassic100Hp: false
     },
     gameplay: {
