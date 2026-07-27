@@ -46,7 +46,9 @@ import { hasLineOfSight, visibleToSelf, visibleToTeam } from "./vision.js";
 import { Fighter } from "./combat.js";
 
 function isTeamMode(game) {
-  return game?.mode === "conquest" || game?.mode === "campaign";
+  return game?.mode === "conquest"
+    || game?.mode === "campaign"
+    || game?.mode === "survival";
 }
 
 /** Min seconds between AI primary ↔ secondary swaps. */
@@ -1570,6 +1572,11 @@ export function updateAI(fighter, dt, game, profile) {
       ? ENEMY_GREEN.recruitOvercommit
       : ENEMY_GREEN.overcommit;
     desired = Math.max(40, desired - over);
+  }
+  // Survival swarm: charge hard — ignore spacing finesse, collapse on the closest threat.
+  if (game.mode === "survival" && fighter.survivalSwarm) {
+    desired = fighter.weapon === "saber" ? 55 : Math.min(220, desired * 0.55);
+    protect = 0.1;
   }
   // Expose for tests / HUD debugging of Mimic blend.
   state.mimicDesired = isMimic ? desired : null;

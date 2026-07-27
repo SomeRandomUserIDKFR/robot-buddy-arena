@@ -18,6 +18,7 @@ import {
   beginCampaignSelect, campaignShopCatalog, campaignStageCards, CAMPAIGN_STAGES,
   ensureCampaignProfile, getPendingCampaignEncounter
 } from "./campaign.js";
+import { countLivingSwarm, survivalHudLine } from "./survival.js";
 import { listMaps } from "./maps.js";
 import {
   estimateProfilePowers, formatPower, powerBarPercent
@@ -370,7 +371,9 @@ export function showGame(mode, profile, mapName = "") {
       ? `TRAIN YOUR BUDDY${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
       : mode === "campaign"
         ? `CLEAR THE STAGE${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
-        : `PROTECT YOUR TEAM${mapName ? ` · ${mapName.toUpperCase()}` : ""}`;
+        : mode === "survival"
+          ? `HOLD THE LINE${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
+          : `PROTECT YOUR TEAM${mapName ? ` · ${mapName.toUpperCase()}` : ""}`;
 }
 
 export function updateHud(game) {
@@ -529,19 +532,41 @@ export function updateHud(game) {
       }
     }
   }
-  ui.teamBars.innerHTML = game.fighters.filter((f) => !f.illusion && !f.combatClone).map((fighter) => {
-    // Illusionists see real HP; everyone else can be gaslit by phantom damage.
-    const showHp = player?.illusionist
-      ? Math.max(0, fighter.hp || 0)
-      : Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
-    const pct = fighter.maxHp > 0 ? (showHp / fighter.maxHp) * 100 : 0;
-    return `
+  ui.teamBars.innerHTML = (() => {
+    const real = game.fighters.filter((f) => !f.illusion && !f.combatClone);
+    const shown = game.mode === "survival"
+      ? real.filter((f) => f.team === 0 || (!f.survivalSwarm && f.team === 1))
+      : real;
+    const bars = shown.map((fighter) => {
+      // Illusionists see real HP; everyone else can be gaslit by phantom damage.
+      const showHp = player?.illusionist
+        ? Math.max(0, fighter.hp || 0)
+        : Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
+      const pct = fighter.maxHp > 0 ? (showHp / fighter.maxHp) * 100 : 0;
+      return `
     <div class="fighter-bar" style="opacity:${fighter.dead ? .38 : 1}">
       <b style="color:${fighter.color}">${escapeHtml(fighter.name)}</b>
       <div class="hp-track"><i class="hp-fill" style="width:${pct}%;background:${fighter.team ? "#ff665c" : "#42dff5"}"></i></div>
       <span>${Math.ceil(showHp)}</span>
     </div>`;
-  }).join("");
+    });
+    if (game.mode === "survival" && game.survival) {
+      const live = countLivingSwarm(game);
+      const line = survivalHudLine(game);
+      bars.push(`
+    <div class="fighter-bar survival-swarm-bar">
+      <b style="color:#ff665c">SWARM ×${live}</b>
+      <div class="hp-track"><i class="hp-fill" style="width:${Math.min(100, live * 12)}%;background:#ff665c"></i></div>
+      <span>${escapeHtml(line)}</span>
+    </div>`);
+    }
+    return bars.join("");
+  })();
+  // Band flash on survival announcements
+  if (game.mode === "survival" && (game.survival?.announcement || 0) > 0 && ui.announcement) {
+    const line = survivalHudLine(game);
+    if (line) ui.announcement.textContent = line.toUpperCase();
+  }
   ui.fuel.style.width = `${player.fuel * 100}%`;
   ui.fuelMeter.classList.toggle("exhausted", !!player.jetLocked);
   ui.fuelLabel.textContent = player.jetLocked ? "EXHAUSTED" : "FUEL";
@@ -697,12 +722,32 @@ export function showResults(
 
   ui.hud.classList.add("hidden");
   ui.results.classList.remove("hidden");
-  ui.resultTitle.textContent = win ? "Victory" : "Defeat";
+  if (game.mode === "survival") {
+    const waves = rewards?.waves || game.survival?.wave || 0;
+    const secs = Math.floor(rewards?.time || game.survival?.elapsed || game.elapsed || 0);
+    ui.resultTitle.textContent = waves > 0 || secs >= 20
+      ? `Survived ${waves} wave${waves === 1 ? "" : "s"}`
+      : "Overrun";
+  } else {
+    ui.resultTitle.textContent = win ? "Victory" : "Defeat";
+  }
   ui.resultCyber.textContent = earnedCyber > 0
     ? `+${earnedCyber}¢ CYBER EARNED · BALANCE ${profile.cyber}¢`
     : `${game.mode === "training" ? "TRAINING PAYS NO CYBER" : "NO CYBER LOST"} · BALANCE ${profile.cyber}¢`;
   if (ui.resultExp) {
-    if (game.mode !== "conquest" && game.mode !== "campaign") {
+    if (game.mode === "survival") {
+      if (earnedExp > 0) {
+        const levelBit = levelsGained > 0
+          ? ` · LEVEL UP ×${levelsGained} → LVL ${profile.level}`
+          : ` · LVL ${profile.level}`;
+        const pickBit = pendingCount > 0
+          ? ` · ${pendingCount} PERK PICK${pendingCount > 1 ? "S" : ""} READY`
+          : "";
+        ui.resultExp.textContent = `+${earnedExp} EXP${levelBit}${pickBit}`;
+      } else {
+        ui.resultExp.textContent = `LVL ${profile.level} · ${profile.exp} / ${profile.expToNext} EXP`;
+      }
+    } else if (game.mode !== "conquest" && game.mode !== "campaign") {
       ui.resultExp.textContent = "TRAINING / SPAR GRANTS NO CONQUEST EXP";
     } else if (earnedExp > 0) {
       const levelBit = levelsGained > 0
@@ -719,7 +764,17 @@ export function showResults(
     }
   }
   if (ui.resultRanking) {
-    if (game.mode === "campaign") {
+    if (game.mode === "survival") {
+      const kills = rewards?.kills || game.survival?.kills || 0;
+      const secs = Math.floor(rewards?.time || game.survival?.elapsed || 0);
+      const best = rewards?.best ? " · NEW BEST" : "";
+      const bestLine = profile.survival
+        ? ` · Best ${Math.floor(profile.survival.bestTime || 0)}s / ${profile.survival.bestWaves || 0} waves`
+        : "";
+      ui.resultRanking.textContent = (
+        `${kills} kills · ${secs}s held${best}${bestLine} · Ranking unchanged (${rankingNow})`
+      );
+    } else if (game.mode === "campaign") {
       const cleared = rewards?.stageCleared
         ? ` · Stage cleared`
         : "";
@@ -754,6 +809,13 @@ export function showResults(
         lines.push("My long-range aim settled a little.");
       }
     }
+  } else if (game.mode === "survival") {
+    const waves = rewards?.waves || game.survival?.wave || 0;
+    const kills = rewards?.kills || game.survival?.kills || 0;
+    if (buddy?.dead) lines.push("I went down in the swarm. Cover me next time and I'll last longer.");
+    else lines.push("I stayed up with you until the end. That horde got thick.");
+    lines.push(`We cleared ${kills} bots across ${waves} wave${waves === 1 ? "" : "s"}.`);
+    lines.push(`I contributed ${Math.round(buddy?.totalDamage || 0)} damage before the line broke.`);
   } else {
     if (buddy?.dead) lines.push("I got isolated and went down. That was my fault.");
     else if ((buddy?.fuel || 0) < .15) lines.push("I spent too much jetpack fuel chasing. I'll budget it better.");
@@ -1616,6 +1678,7 @@ export function bindUi(handlers) {
   $("#trainingBtn").addEventListener("click", () => handlers.start("training"));
   $("#conquestBtn").addEventListener("click", () => handlers.openConquest?.());
   $("#campaignBtn")?.addEventListener("click", () => handlers.openCampaign?.());
+  $("#survivalBtn")?.addEventListener("click", () => handlers.start("survival"));
   ui.conquestBackBtn?.addEventListener("click", () => handlers.conquestBack?.());
   ui.conquestRerollBtn?.addEventListener("click", () => handlers.conquestReroll?.());
   ui.conquestFightBtn?.addEventListener("click", () => handlers.conquestFight?.());

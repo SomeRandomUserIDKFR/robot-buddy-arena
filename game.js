@@ -29,6 +29,10 @@ import {
   awardCampaign, beginCampaignSelect, campaignEquip, ensureCampaignProfile,
   getPendingCampaignEncounter, selectCampaignStage, setPendingCampaignEncounter
 } from "./campaign.js";
+import {
+  awardSurvival, ensureSurvivalProfile, initSurvivalState,
+  survivalHudLine, tickSurvival
+} from "./survival.js";
 import { cycleSpellType, isSpellbook, tickSpellbookWorld } from "./spellbook.js";
 import { tickGroundDebris } from "./debris.js";
 import { tickThrowBreakable } from "./throw-breakable.js";
@@ -88,10 +92,6 @@ let lastTime = performance.now();
 let nanoFHoldT = 0;
 let nanoFHoldLatched = false;
 
-function isTeamMode(mode) {
-  return mode === "conquest" || mode === "campaign";
-}
-
 function resolveMapId(mode) {
   if (mode === "conquest") {
     const encounter = getPendingEncounter();
@@ -141,6 +141,12 @@ function makeGame(mode) {
       x: spawns.buddy.x, y: spawns.buddy.y, team: 1, color: "#42dff5", name: buddyName,
       buddy: true, ai: mind
     }), buddyLoadout));
+  } else if (mode === "survival") {
+    ensureSurvivalProfile(profile);
+    fighters.push(applyLoadout(new Fighter({
+      x: spawns.buddy.x, y: spawns.buddy.y, team: 0, color: "#42dff5", name: buddyName,
+      buddy: true, ai: mind
+    }), buddyLoadout));
   } else {
     fighters.push(applyLoadout(new Fighter({
       x: spawns.buddy.x, y: spawns.buddy.y, team: 0, color: "#42dff5", name: buddyName,
@@ -169,22 +175,23 @@ function makeGame(mode) {
       ai: follower.ai || "rookie"
     }), follower.loadout || trainerLoadout("veteran", true)));
   }
-  const difficulty = isTeamMode(mode)
-    ? (
-      mode === "campaign"
-        ? (getPendingCampaignEncounter()?.rewardTier || "rookie")
-        : (getPendingEncounter()?.rewardTier || "veteran")
-    )
-    : "veteran";
+  const difficulty = mode === "campaign"
+    ? (getPendingCampaignEncounter()?.rewardTier || "rookie")
+    : mode === "conquest"
+      ? (getPendingEncounter()?.rewardTier || "veteran")
+      : mode === "survival"
+        ? "survival"
+        : "veteran";
   ensureSettingsProfile(profile);
   const gameState = {
     id: `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`,
     mode,
     difficulty,
-    encounter: isTeamMode(mode)
+    encounter: mode === "conquest" || mode === "campaign"
       ? (mode === "campaign" ? getPendingCampaignEncounter() : getPendingEncounter())
       : null,
     stageId: mode === "campaign" ? getPendingCampaignEncounter()?.stageId || null : null,
+    survival: mode === "survival" ? initSurvivalState(map) : null,
     mapId: map.id,
     mapName: map.name,
     theme: map.theme,
@@ -222,7 +229,7 @@ function makeGame(mode) {
     elapsed: 0,
     over: false,
     paused: false,
-    announcement: 2.2,
+    announcement: mode === "survival" ? 2.6 : 2.2,
     thoughts: [],
     thoughtClock: 8,
     lastShotAtPlayer: -99,
@@ -499,11 +506,16 @@ function update(dt) {
   }
 
   updateCamera(game.camera, player, { width: canvas.width, height: canvas.height }, dt);
+  if (game.mode === "survival") tickSurvival(game, dt, Fighter);
   updateHud(game);
 
   const teamZeroAlive = game.fighters.some((fighter) => (
     fighter.team === 0 && isRealCombatant(fighter)
   ));
+  if (game.mode === "survival") {
+    if (!teamZeroAlive) finish(false);
+    return;
+  }
   const teamOneAlive = game.fighters.some((fighter) => (
     fighter.team === 1 && isRealCombatant(fighter)
   ));
@@ -529,9 +541,17 @@ function finish(win) {
       win,
       stageId: game.stageId || getPendingCampaignEncounter()?.stageId || null
     })
-    : awardConquest(profile, {
-      id: game.id, mode: game.mode, difficulty: game.difficulty, win
-    });
+    : game.mode === "survival"
+      ? awardSurvival(profile, {
+        id: game.id,
+        mode: game.mode,
+        waves: game.survival?.wave || 0,
+        kills: game.survival?.kills || 0,
+        time: game.survival?.elapsed || game.elapsed || 0
+      })
+      : awardConquest(profile, {
+        id: game.id, mode: game.mode, difficulty: game.difficulty, win
+      });
   saveProfile();
   showResults(game, profile, win, practiceLines, rewards, learningChanged);
   refreshMenu(profile);
