@@ -42,6 +42,9 @@ import {
   ensureSettingsProfile, normalizeArmorDespawnTimer, normalizeOptimizeIllusions,
   normalizeReconquerRate, normalizeSfxEnabled, normalizeUseClassic100Hp
 } from "./settings.js";
+import {
+  ensureBuddyCharacter, getBuddyCharacter, listBuddyCharacters, personalizeResultLines
+} from "./buddy-characters.js";
 import { applySfxSettings } from "./sfx.js";
 import { normalizeTrapType, trapTypeLabel } from "./trapper.js";
 import { isSpellbook, normalizeSpellType, spellManaCost, spellTypeLabel } from "./spellbook.js";
@@ -57,6 +60,8 @@ export const ui = {
   buildStamp: $("#buildStamp"),
   name: $("#botName"),
   nameError: $("#nameError"),
+  buddyCharacterList: $("#buddyCharacterList"),
+  buddyCharacterHint: $("#buddyCharacterHint"),
   aiMode: $("#aiMode"),
   mimicControls: $("#mimicControls"),
   mimicIntensity: $("#mimicIntensity"),
@@ -266,8 +271,10 @@ function refreshProgression(profile) {
 }
 
 export function refreshMenu(profile) {
+  ensureBuddyCharacter(profile);
   ui.name.value = profile.botName || "Pixel";
   ui.buddyColumnName.textContent = profile.botName || "Pixel";
+  refreshBuddyCharacters(profile);
   const weaponType = weaponKind(profile.equipment.player.weapon);
   const data = profile.weapons[weaponType];
   ui.readiness.textContent = readiness(data);
@@ -283,6 +290,29 @@ export function refreshMenu(profile) {
   renderShop(profile);
   renderPerkModal(profile);
   refreshSettings(profile);
+}
+
+function refreshBuddyCharacters(profile) {
+  if (!ui.buddyCharacterList) return;
+  ensureBuddyCharacter(profile);
+  const selected = getBuddyCharacter(profile);
+  ui.buddyCharacterList.innerHTML = listBuddyCharacters().map((character) => {
+    const active = character.id === selected.id;
+    return `
+      <button type="button" class="buddy-character-card${active ? " active" : ""}"
+        data-buddy-character="${escapeHtml(character.id)}"
+        role="radio" aria-checked="${active ? "true" : "false"}"
+        style="--character-accent:${escapeHtml(character.accent)}">
+        <strong><i class="swatch" aria-hidden="true"></i>${escapeHtml(character.name)}</strong>
+        <span>${escapeHtml(character.blurb)}</span>
+      </button>
+    `;
+  }).join("");
+  if (ui.buddyCharacterHint) {
+    ui.buddyCharacterHint.textContent = (
+      `${selected.name} — ${selected.blurb} Mind below still controls fight style.`
+    );
+  }
 }
 
 function refreshLearningLock(profile) {
@@ -824,7 +854,8 @@ export function showResults(
     lines.push(`I contributed ${Math.round(buddy?.totalDamage || 0)} damage and followed ${game.pings.length ? "your ping" : "our shared vision"}.`);
     lines.push(win ? "We handled that together." : "I own my part of the loss. Let's adjust and try again.");
   }
-  ui.feedback.innerHTML = lines.map((line) => `<p>${escapeHtml(line)}</p>`).join("");
+  const voiced = personalizeResultLines(profile, lines);
+  ui.feedback.innerHTML = voiced.map((line) => `<p>${escapeHtml(line)}</p>`).join("");
   const thoughts = game.thoughts.length
     ? game.thoughts.slice(-3)
     : [`${formatTime(game.elapsed)} — Held position: no safe target was visible`];
@@ -1718,6 +1749,11 @@ export function bindUi(handlers) {
     handlers.aiMode?.(ui.aiMode.value);
   });
   $("#menu").addEventListener("click", (event) => {
+    const character = event.target.closest("[data-buddy-character]");
+    if (character) {
+      handlers.buddyCharacter?.(character.dataset.buddyCharacter);
+      return;
+    }
     const mode = event.target.closest("[data-mode]");
     const perkMode = event.target.closest("[data-perk-mode]");
     const intensity = event.target.closest("[data-mimic-intensity]");

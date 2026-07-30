@@ -1,4 +1,5 @@
 import { DEFAULT_PROFILE, STORAGE_KEY } from "./config.js";
+import { ensureBuddyCharacter } from "./buddy-characters.js";
 import { ensureCoaching } from "./coaching.js";
 import { ensureCampaignProfile } from "./campaign.js";
 import { ensureSurvivalProfile } from "./survival.js";
@@ -59,6 +60,7 @@ export function migrateProfile(saved) {
     setBuddyPerkAutonomy(loaded, loaded.buddyPerkAutonomy);
   }
   ensureCoaching(loaded);
+  ensureBuddyCharacter(loaded);
   loaded.learningLocked = !!loaded.learningLocked;
   loaded.aiMode = normalizeAiMode(loaded.aiMode);
   loaded.mimicIntensity = normalizeMimicIntensity(loaded.mimicIntensity);
@@ -85,6 +87,7 @@ function loadProfile() {
 
 export const profile = loadProfile();
 ensureCoaching(profile);
+ensureBuddyCharacter(profile);
 ensureEquipmentProfile(profile, profile);
 ensureEconomyProfile(profile, profile);
 ensureCampaignProfile(profile, profile);

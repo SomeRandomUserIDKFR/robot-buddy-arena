@@ -53,6 +53,8 @@ export const MIMIC_BLEND = {
 
 export const DEFAULT_PROFILE = {
   botName: "Pixel",
+  // Selectable identity; null → random on first ensureBuddyCharacter.
+  buddyCharacterId: null,
   matches: 0,
   cyber: 120,
   ranking: 100,

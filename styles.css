@@ -981,6 +981,58 @@ button span { opacity: .6; font-size: 11px; }
   text-transform: uppercase;
   letter-spacing: .08em;
 }
+.buddy-character-picker {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+.buddy-character-heading {
+  font: 700 11px ui-monospace, Consolas, monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #8aa0ab;
+}
+.buddy-character-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.buddy-character-card {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #2a4452;
+  background: rgba(10, 24, 32, .72);
+  color: #c9dde6;
+}
+.buddy-character-card strong {
+  color: #e7f9ff;
+  font-size: 13px;
+}
+.buddy-character-card span {
+  color: #8aa0ab;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.buddy-character-card.active {
+  border-color: var(--character-accent, var(--cyan));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--character-accent, var(--cyan)) 45%, transparent);
+}
+.buddy-character-card .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--character-accent, var(--cyan));
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+#buddyCharacterHint { min-height: 0; margin: 0; font-size: 10px; }
+
 .segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 7px; }
 .segmented button { margin: 0; padding: 8px 4px; font-size: 9px; }
 .segmented button.active { color: #061116; border-color: var(--cyan); background: var(--cyan); }

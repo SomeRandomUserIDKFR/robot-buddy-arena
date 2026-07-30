@@ -4,6 +4,7 @@ import {
   matchGameFaq, topicChipPrompt, FAQ_TOPIC_CHIPS
 } from "./game-faq.js";
 import { composeDeepReply } from "./buddy-reply.js";
+import { voiceBuddyText } from "./buddy-characters.js";
 import { detectForceCode, retrieveKnowledge } from "./knowledge-retrieve.js";
 
 export const DIRECTIVES = {
@@ -758,13 +759,19 @@ export function ensureCoaching(profile) {
 
 export function addHistory(profile, role, text, meta = {}) {
   const coaching = ensureCoaching(profile);
-  coaching.history.push({
+  let body = String(text);
+  if (role !== "player") {
+    body = voiceBuddyText(profile, body, coaching);
+  }
+  const entry = {
     role: role === "player" ? "player" : "buddy",
-    text: String(text).slice(0, 280),
+    text: body.slice(0, 280),
     at: Date.now(),
     ...meta
-  });
+  };
+  coaching.history.push(entry);
   coaching.history = coaching.history.slice(-20);
+  return entry.text;
 }
 
 function replaceConflict(directives, intent, weapon) {
@@ -1160,13 +1167,13 @@ export function quickReplyText(label) {
 export function buddyChatReply(profile, text, weapon, analysis = null, options = {}) {
   const allowDirectives = options.allowDirectives !== false;
   const coaching = ensureCoaching(profile);
+  const speak = (reply, meta = {}) => addHistory(profile, "buddy", reply, meta);
 
   // Pending confirmation / clarification always stay on the coaching path.
   if (coaching.pending || coaching.clarification) {
     if (!allowDirectives) {
       addHistory(profile, "player", text);
-      const reply = "I am still checking a previous coaching interpretation from Training. After Conquest I can answer game questions, but I will not save new practice goals here.";
-      addHistory(profile, "buddy", reply);
+      const reply = speak("I am still checking a previous coaching interpretation from Training. After Conquest I can answer game questions, but I will not save new practice goals here.");
       return { reply, quickReplies: FAQ_TOPIC_CHIPS.slice(0, 3), kind: "blocked" };
     }
     return { ...coachingReply(profile, text, weapon, analysis?.coaching || null), kind: "coaching" };
@@ -1174,8 +1181,7 @@ export function buddyChatReply(profile, text, weapon, analysis = null, options =
 
   if (analysis?.kind === "ambiguous") {
     addHistory(profile, "player", text);
-    const reply = composeAmbiguousRouteReply(coaching);
-    addHistory(profile, "buddy", reply, { kind: "ambiguous" });
+    const reply = speak(composeAmbiguousRouteReply(coaching), { kind: "ambiguous" });
     return {
       reply,
       quickReplies: ["Asking about the game", "Coaching how to play", ...FAQ_TOPIC_CHIPS.slice(0, 2)],
@@ -1194,7 +1200,7 @@ export function buddyChatReply(profile, text, weapon, analysis = null, options =
       generatedBlurb: analysis.generatedBlurb || null
     });
     // Preserve legacy FAQ-only analyses (tests passing match without retrieval).
-    const reply = analysis.retrieval || analysis.forceCode
+    const composed = analysis.retrieval || analysis.forceCode
       ? deep.reply
       : (analysis.match
         ? composeFaqReply(analysis.match, pack, coaching)
@@ -1203,7 +1209,7 @@ export function buddyChatReply(profile, text, weapon, analysis = null, options =
       ? (deep.kind === "faq" ? "faq" : deep.kind)
       : "faq";
     const faqId = deep.faqId || analysis.match?.entry?.id || null;
-    addHistory(profile, "buddy", reply, {
+    const reply = speak(composed, {
       kind,
       faqId,
       path: deep.path || retrieval.path,
@@ -1223,20 +1229,17 @@ export function buddyChatReply(profile, text, weapon, analysis = null, options =
   const clean = normalizeCoachingText(text);
   if (/^asking about the game$/.test(clean)) {
     addHistory(profile, "player", text);
-    const reply = "Ask me about controls, learning, vision, the shop, jetpack, weapons, or match rules. I answer from the local FAQ, manual chunks, or code-facts. Say you want a code based answer to force the code dig.";
-    addHistory(profile, "buddy", reply, { kind: "faq" });
+    const reply = speak("Ask me about controls, learning, vision, the shop, jetpack, weapons, or match rules. I answer from the local FAQ, manual chunks, or code-facts. Say you want a code based answer to force the code dig.", { kind: "faq" });
     return { reply, quickReplies: FAQ_TOPIC_CHIPS.slice(), kind: "faq" };
   }
   if (/^coaching how to play$/.test(clean)) {
     if (!allowDirectives) {
       addHistory(profile, "player", text);
-      const reply = "Practice coaching is available after Training matches. Here I can still answer questions about how the game works.";
-      addHistory(profile, "buddy", reply);
+      const reply = speak("Practice coaching is available after Training matches. Here I can still answer questions about how the game works.");
       return { reply, quickReplies: FAQ_TOPIC_CHIPS.slice(0, 3), kind: "blocked" };
     }
     addHistory(profile, "player", text);
-    const reply = "Tell me the behavior you want me to practice—rushing, playing safer, staying close, covering from range, jetpack use, dodging, flanking, or focusing pings.";
-    addHistory(profile, "buddy", reply);
+    const reply = speak("Tell me the behavior you want me to practice—rushing, playing safer, staying close, covering from range, jetpack use, dodging, flanking, or focusing pings.");
     return { reply, quickReplies: defaultQuickReplies(profile, weapon), kind: "coaching" };
   }
 
@@ -1255,19 +1258,18 @@ export function buddyChatReply(profile, text, weapon, analysis = null, options =
   if (!allowDirectives) {
     addHistory(profile, "player", text);
     if (analysis?.kind === "coaching" && analysis.coaching?.type === "directive") {
-      const reply = "After Conquest I will not save practice goals. Ask a game question, or run Training if you want me to practice a behavior.";
-      addHistory(profile, "buddy", reply);
+      const reply = speak("After Conquest I will not save practice goals. Ask a game question, or run Training if you want me to practice a behavior.");
       return { reply, quickReplies: FAQ_TOPIC_CHIPS.slice(0, 3), kind: "blocked" };
     }
     const pack = getGameFaqPack();
     const match = pack ? matchGameFaq(text, pack) : null;
     if (match?.type === "match") {
-      const reply = composeFaqReply(match, pack, coaching);
-      addHistory(profile, "buddy", reply, { kind: "faq", faqId: match.entry.id });
+      const reply = speak(composeFaqReply(match, pack, coaching), {
+        kind: "faq", faqId: match.entry.id
+      });
       return { reply, quickReplies: faqQuickReplies(match), kind: "faq", faqId: match.entry.id };
     }
-    const reply = "I can answer questions about the game here. Practice coaching waits for Training. Try Controls, Learning, Vision, Shop, or Jetpack.";
-    addHistory(profile, "buddy", reply);
+    const reply = speak("I can answer questions about the game here. Practice coaching waits for Training. Try Controls, Learning, Vision, Shop, or Jetpack.");
     return { reply, quickReplies: FAQ_TOPIC_CHIPS.slice(), kind: "blocked" };
   }
 

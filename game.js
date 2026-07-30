@@ -33,6 +33,7 @@ import {
   awardSurvival, ensureSurvivalProfile, initSurvivalState,
   survivalHudLine, tickSurvival
 } from "./survival.js";
+import { selectBuddyCharacter } from "./buddy-characters.js";
 import { cycleSpellType, isSpellbook, tickSpellbookWorld } from "./spellbook.js";
 import { tickGroundDebris } from "./debris.js";
 import { tickThrowBreakable } from "./throw-breakable.js";
@@ -777,6 +778,11 @@ bindUi({
   },
   buddyMode(mode) {
     setBuddyMode(profile, mode);
+    saveProfile();
+    refreshMenu(profile);
+  },
+  buddyCharacter(characterId) {
+    if (!selectBuddyCharacter(profile, characterId)) return;
     saveProfile();
     refreshMenu(profile);
   },
