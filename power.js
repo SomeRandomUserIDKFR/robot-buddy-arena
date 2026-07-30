@@ -314,20 +314,27 @@ export function estimateEncounterPower(encounter, jitter = 0) {
     role: "enemy",
     ai: encounter?.trainer?.ai
   });
-  const follower = estimateFighterPower({
-    loadout: encounter?.follower?.loadout,
-    role: "enemy",
-    ai: encounter?.follower?.ai
-  });
+  const hasFollower = !!(encounter?.follower?.loadout);
+  const follower = hasFollower
+    ? estimateFighterPower({
+      loadout: encounter.follower.loadout,
+      role: "enemy",
+      ai: encounter.follower.ai
+    })
+    : { power: 0 };
   const j = Number.isFinite(jitter) ? Number(jitter) : 0;
-  const duo = roundPower(trainer.power + follower.power + j);
+  // Solo boss encounters score trainer only (optional mild boss weight via hpMult).
+  const bossWeight = encounter?.boss && Number(encounter.hpMult) > 1
+    ? 1 + (Number(encounter.hpMult) - 1) * 0.35
+    : 1;
+  const duo = roundPower(trainer.power * bossWeight + follower.power + j);
   return {
-    trainer: trainer.power,
+    trainer: roundPower(trainer.power * bossWeight),
     follower: follower.power,
     duo,
     jitter: Math.round(j),
     trainerDetail: trainer,
-    followerDetail: follower
+    followerDetail: hasFollower ? follower : null
   };
 }
 

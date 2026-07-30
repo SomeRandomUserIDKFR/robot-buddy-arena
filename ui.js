@@ -15,8 +15,8 @@ import {
   REROLL_CYBER_COST
 } from "./conquest.js";
 import {
-  beginCampaignSelect, campaignShopCatalog, campaignStageCards, CAMPAIGN_STAGES,
-  ensureCampaignProfile, getPendingCampaignEncounter
+  beginCampaignSelect, campaignBossHudLine, campaignShopCatalog, campaignStageCards,
+  CAMPAIGN_STAGES, ensureCampaignProfile, getPendingCampaignEncounter
 } from "./campaign.js";
 import { countLivingSwarm, survivalHudLine } from "./survival.js";
 import { listMaps } from "./maps.js";
@@ -48,6 +48,9 @@ import {
 import {
   ensureFightStyle, getFightStyle, listFightStyles
 } from "./fight-styles.js";
+import {
+  ensureTutorialProfile, shouldRunGuidedFight, shouldShowBayTutorialHint
+} from "./tutorial.js";
 import { applySfxSettings } from "./sfx.js";
 import { normalizeTrapType, trapTypeLabel } from "./trapper.js";
 import { isSpellbook, normalizeSpellType, spellManaCost, spellTypeLabel } from "./spellbook.js";
@@ -92,6 +95,10 @@ export const ui = {
   campaignFightBtn: $("#campaignFightBtn"),
   campaignBackBtn: $("#campaignBackBtn"),
   mapSelect: $("#mapSelect"),
+  tutorialBanner: $("#tutorialBanner"),
+  tutorialBtn: $("#tutorialBtn"),
+  tutorialDismissBtn: $("#tutorialDismissBtn"),
+  trainingBtn: $("#trainingBtn"),
   learningLock: $("#learningLock"),
   learningLockHint: $("#learningLockHint"),
   readiness: $("#menuReadiness"),
@@ -293,10 +300,21 @@ export function refreshMenu(profile) {
   refreshProgression(profile);
   refreshMindControls(profile, data);
   refreshLearningLock(profile);
+  refreshTutorialBanner(profile);
   renderEquipment(profile);
   renderShop(profile);
   renderPerkModal(profile);
   refreshSettings(profile);
+}
+
+function refreshTutorialBanner(profile) {
+  ensureTutorialProfile(profile);
+  const show = shouldShowBayTutorialHint(profile);
+  ui.tutorialBanner?.classList.toggle("hidden", !show);
+  ui.trainingBtn?.classList.toggle("tutorial-pulse", shouldRunGuidedFight(profile));
+  if (ui.tutorialBtn) {
+    ui.tutorialBtn.textContent = "Start Tutorial";
+  }
 }
 
 function refreshBuddyCharacters(profile) {
@@ -419,25 +437,31 @@ export function showGame(mode, profile, mapName = "") {
   ui.hud.classList.remove("hidden");
   const lockedSpar = mode === "training" && isLearningLocked(profile);
   const mapTag = mapName ? ` · ${mapName}` : "";
-  ui.modeLabel.textContent = lockedSpar
-    ? `SPAR — learning locked // ${ui.aiMode.value.toUpperCase()} BUDDY${mapTag}`
-    : `${mode.toUpperCase()} // ${ui.aiMode.value.toUpperCase()} BUDDY${mapTag}`;
+  ui.modeLabel.textContent = mode === "tutorial"
+    ? `TUTORIAL // SPAR DUMMY${mapTag}`
+    : lockedSpar
+      ? `SPAR — learning locked // ${ui.aiMode.value.toUpperCase()} BUDDY${mapTag}`
+      : `${mode.toUpperCase()} // ${ui.aiMode.value.toUpperCase()} BUDDY${mapTag}`;
   const loadout = mode === "campaign"
     ? (profile.campaign?.player || profile.equipment.player)
     : profile.equipment.player;
   const weapon = weaponKind(loadout.weapon);
-  ui.readinessLabel.textContent = lockedSpar
-    ? "SPAR — learning locked"
-    : readiness(profile.weapons[weapon]);
-  ui.announcement.textContent = lockedSpar
-    ? `SPAR — LEARNING LOCKED${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
-    : mode === "training"
-      ? `TRAIN YOUR BUDDY${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
-      : mode === "campaign"
-        ? `CLEAR THE STAGE${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
-        : mode === "survival"
-          ? `HOLD THE LINE${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
-          : `PROTECT YOUR TEAM${mapName ? ` · ${mapName.toUpperCase()}` : ""}`;
+  ui.readinessLabel.textContent = mode === "tutorial"
+    ? "Tutorial spar"
+    : lockedSpar
+      ? "SPAR — learning locked"
+      : readiness(profile.weapons[weapon]);
+  ui.announcement.textContent = mode === "tutorial"
+    ? `TUTORIAL · MOVE — hold A or D${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
+    : lockedSpar
+      ? `SPAR — LEARNING LOCKED${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
+      : mode === "training"
+        ? `TRAIN YOUR BUDDY${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
+        : mode === "campaign"
+          ? `CLEAR THE STAGE${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
+          : mode === "survival"
+            ? `HOLD THE LINE${mapName ? ` · ${mapName.toUpperCase()}` : ""}`
+            : `PROTECT YOUR TEAM${mapName ? ` · ${mapName.toUpperCase()}` : ""}`;
 }
 
 export function updateHud(game) {
@@ -631,6 +655,14 @@ export function updateHud(game) {
     const line = survivalHudLine(game);
     if (line) ui.announcement.textContent = line.toUpperCase();
   }
+  if (
+    game.mode === "campaign"
+    && (game.campaignBoss?.announcement || 0) > 0
+    && ui.announcement
+  ) {
+    const line = campaignBossHudLine(game);
+    if (line) ui.announcement.textContent = line.toUpperCase();
+  }
   ui.fuel.style.width = `${player.fuel * 100}%`;
   ui.fuelMeter.classList.toggle("exhausted", !!player.jetLocked);
   ui.fuelLabel.textContent = player.jetLocked ? "EXHAUSTED" : "FUEL";
@@ -763,12 +795,25 @@ export function updateHud(game) {
   const gimmickBit = game.gimmick?.label
     ? ` · ${gimmickLabel(game.gimmick.kind) || game.gimmick.label}`
     : "";
+  if (game.mode === "tutorial" && game.tutorial?.prompt && ui.announcement) {
+    ui.announcement.textContent = game.tutorial.prompt;
+    return;
+  }
+  if (
+    game.mode === "campaign"
+    && (game.campaignBoss?.announcement || 0) > 0
+    && ui.announcement
+  ) {
+    return;
+  }
   ui.announcement.textContent = game.announcement > 0
     ? (sparLocked
       ? `SPAR — LEARNING LOCKED${mapBit}${gimmickBit}`
       : game.mode === "training"
         ? `TRAIN YOUR BUDDY${mapBit}${gimmickBit}`
-        : `PROTECT YOUR TEAM${mapBit}${gimmickBit}`)
+        : game.mode === "campaign" && game.campaignBoss
+          ? `APEX BOSS${mapBit}${gimmickBit}`
+          : `PROTECT YOUR TEAM${mapBit}${gimmickBit}`)
     : "";
 }
 
@@ -792,14 +837,24 @@ export function showResults(
     ui.resultTitle.textContent = waves > 0 || secs >= 20
       ? `Survived ${waves} wave${waves === 1 ? "" : "s"}`
       : "Overrun";
+  } else if (game.mode === "tutorial") {
+    ui.resultTitle.textContent = win ? "Tutorial complete" : "Tutorial wrapped";
   } else {
     ui.resultTitle.textContent = win ? "Victory" : "Defeat";
   }
   ui.resultCyber.textContent = earnedCyber > 0
     ? `+${earnedCyber}¢ CYBER EARNED · BALANCE ${profile.cyber}¢`
-    : `${game.mode === "training" ? "TRAINING PAYS NO CYBER" : "NO CYBER LOST"} · BALANCE ${profile.cyber}¢`;
+    : `${
+      game.mode === "training" || game.mode === "tutorial"
+        ? (game.mode === "tutorial" ? "TUTORIAL PAYS NO CYBER" : "TRAINING PAYS NO CYBER")
+        : "NO CYBER LOST"
+    } · BALANCE ${profile.cyber}¢`;
   if (ui.resultExp) {
-    if (game.mode === "survival") {
+    if (game.mode === "tutorial") {
+      ui.resultExp.textContent = win
+        ? "Basics locked in — try Training, Conquest, or Campaign next"
+        : "You can rerun Training anytime to keep practicing";
+    } else if (game.mode === "survival") {
       if (earnedExp > 0) {
         const levelBit = levelsGained > 0
           ? ` · LEVEL UP ×${levelsGained} → LVL ${profile.level}`
@@ -843,6 +898,8 @@ export function showResults(
         ? ` · Stage cleared`
         : "";
       ui.resultRanking.textContent = `Campaign — Ranking unchanged (now ${rankingNow})${cleared}`;
+    } else if (game.mode === "tutorial") {
+      ui.resultRanking.textContent = "TUTORIAL — RANKING UNCHANGED";
     } else if (game.mode !== "conquest") {
       ui.resultRanking.textContent = "TRAINING / SPAR — RANKING UNCHANGED";
     } else if (rankingDelta > 0) {
@@ -856,7 +913,12 @@ export function showResults(
   const player = game.fighters[0];
   const buddy = game.fighters.find((fighter) => fighter.buddy);
   const lines = [];
-  if (game.mode === "training") {
+  if (game.mode === "tutorial") {
+    lines.push(win
+      ? "Tutorial complete. You can kit up and jump into Training or Conquest."
+      : "Tutorial wrapped. Rematch becomes normal Training — try again anytime.");
+    lines.push("Basics: A/D move · W jump · click fire · C dodge. Shift jets when you need height.");
+  } else if (game.mode === "training") {
     const data = profile.weapons[player.weapon];
     if (isLearningLocked(profile)) {
       lines.push("SPAR — learning was locked. Nothing I know changed this match.");
@@ -895,13 +957,16 @@ export function showResults(
   ui.thoughts.innerHTML = thoughts.map((thought) => `<li>${escapeHtml(thought)}</li>`).join("");
   coachingWeapon = player.weapon;
   const training = game.mode === "training";
+  const tutorialMode = game.mode === "tutorial";
   ui.coachingPanel.classList.toggle("read-only", !training);
-  ui.coachingForm.classList.remove("hidden");
-  ui.coachingQuickReplies.classList.remove("hidden");
+  ui.coachingForm.classList.toggle("hidden", tutorialMode);
+  ui.coachingQuickReplies.classList.toggle("hidden", tutorialMode);
   if (ui.coachingTitle) {
-    ui.coachingTitle.textContent = training
-      ? (isLearningLocked(profile) ? "Post-spar coaching" : "Post-match coaching")
-      : "Post-match Q&A";
+    ui.coachingTitle.textContent = tutorialMode
+      ? "Tutorial notes"
+      : training
+        ? (isLearningLocked(profile) ? "Post-spar coaching" : "Post-match coaching")
+        : "Post-match Q&A";
   }
   if (ui.coachingInput) {
     ui.coachingInput.placeholder = training
@@ -1639,21 +1704,26 @@ function campaignOpponentMarkup(encounter) {
   const power = encounter.power || 0;
   const powerPct = powerBarPercent(power);
   const duoFmt = formatPower(power);
+  const solo = !!(encounter.solo || encounter.boss || !encounter.follower);
+  const powerLabel = solo ? "Boss power" : "Duo power";
+  const split = solo
+    ? `<span class="conquest-power-split">Boss <strong>${encounter.trainerPower ?? "—"}</strong></span>`
+    : `<span class="conquest-power-split">Trainer <strong>${encounter.trainerPower ?? "—"}</strong>
+        · Follower <strong>${encounter.followerPower ?? "—"}</strong></span>`;
   return `
     <div class="conquest-duo-meta">
       <span>Map <strong>${escapeHtml(encounter.mapName || "Battlefield")}</strong></span>
       <span>Est. training <strong>${escapeHtml(encounter.training)}</strong></span>
       <span>Stage Ranking <strong>${encounter.ranking ?? "—"}</strong></span>
-      <span>Duo power <strong>${duoFmt.value}</strong> <em>${escapeHtml(duoFmt.label)}</em></span>
-      <span class="conquest-power-split">Trainer <strong>${encounter.trainerPower ?? "—"}</strong>
-        · Follower <strong>${encounter.followerPower ?? "—"}</strong></span>
-      <div class="conquest-power-bar" title="Duo power ${power}" aria-hidden="true">
+      <span>${powerLabel} <strong>${duoFmt.value}</strong> <em>${escapeHtml(duoFmt.label)}</em></span>
+      ${split}
+      <div class="conquest-power-bar" title="${powerLabel} ${power}" aria-hidden="true">
         <i style="width:${powerPct}%"></i>
       </div>
       ${encounter.blurb ? `<p class="conquest-map-blurb">${escapeHtml(encounter.blurb)}</p>` : ""}
     </div>
     ${fighterCardMarkup(encounter.trainer, encounter.trainerPower)}
-    ${fighterCardMarkup(encounter.follower, encounter.followerPower)}
+    ${solo ? "" : fighterCardMarkup(encounter.follower, encounter.followerPower)}
   `;
 }
 
@@ -1746,6 +1816,13 @@ function fillMapSelect() {
 export function bindUi(handlers) {
   fillMapSelect();
   $("#trainingBtn").addEventListener("click", () => handlers.start("training"));
+  ui.tutorialBtn?.addEventListener("click", () => {
+    // Dismiss the banner strip, then run the guided spar (do not opt out).
+    handlers.start?.("tutorial");
+  });
+  ui.tutorialDismissBtn?.addEventListener("click", () => {
+    handlers.dismissTutorialHint?.();
+  });
   $("#conquestBtn").addEventListener("click", () => handlers.openConquest?.());
   $("#campaignBtn")?.addEventListener("click", () => handlers.openCampaign?.());
   $("#survivalBtn")?.addEventListener("click", () => handlers.start("survival"));

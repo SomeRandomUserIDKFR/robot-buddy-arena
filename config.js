@@ -72,6 +72,12 @@ export const DEFAULT_PROFILE = {
   mimicIntensity: "quite",
   // Tactical posture (rusher/defender/…); null → seed from character suggestion.
   fightStyle: null,
+  // First-run guided spar + bay hints.
+  tutorial: {
+    completed: false,
+    bayHintsSeen: false,
+    guidedFightDone: false
+  },
   settings: {
     visual: {
       modularMorphStyle: "fold",

@@ -26,9 +26,14 @@ import {
   weaponKind
 } from "./equipment.js";
 import {
-  awardCampaign, beginCampaignSelect, campaignEquip, ensureCampaignProfile,
-  getPendingCampaignEncounter, selectCampaignStage, setPendingCampaignEncounter
+  applyCampaignBossModifiers, awardCampaign, beginCampaignSelect, campaignEquip,
+  ensureCampaignProfile, getPendingCampaignEncounter, initCampaignBossState,
+  selectCampaignStage, setPendingCampaignEncounter, tickCampaignBoss
 } from "./campaign.js";
+import {
+  completeGuidedFight, dismissBayTutorialHint, ensureTutorialProfile,
+  initTutorialState, shouldRunGuidedFight, tickTutorial
+} from "./tutorial.js";
 import {
   awardSurvival, ensureSurvivalProfile, initSurvivalState,
   survivalHudLine, tickSurvival
@@ -103,10 +108,13 @@ function resolveMapId(mode) {
     const encounter = getPendingCampaignEncounter();
     if (encounter?.mapId) return encounter.mapId;
   }
+  // Tutorial uses the Training map picker / random pool.
   const picked = ui.mapSelect?.value || "random";
   if (picked && picked !== "random") return picked;
   return pickRandomMapId();
 }
+
+let tutorialDodgePulse = false;
 
 function makeGame(mode) {
   const buddyName = ui.name.value.trim() || "Pixel";
@@ -136,10 +144,11 @@ function makeGame(mode) {
     settings: matchSettings
   });
 
-  const mapId = resolveMapId(mode);
+  const mapId = resolveMapId(mode === "tutorial" ? "training" : mode);
   const map = createMapRuntime(mapId);
   const powerCrateState = initPowerCrates(map.id, map.theme);
-  const spawns = map.spawnPoints[mode === "training" ? "training" : "conquest"];
+  const sparLayout = mode === "training" || mode === "tutorial";
+  const spawns = map.spawnPoints[sparLayout ? "training" : "conquest"];
 
   const fighters = [
     outfit(new Fighter({
@@ -147,7 +156,13 @@ function makeGame(mode) {
       human: true
     }), playerLoadout)
   ];
-  if (mode === "training") {
+  if (mode === "tutorial") {
+    // Controlled recruit spar dummy — not the player's tuned mind/style.
+    fighters.push(outfit(new Fighter({
+      x: spawns.buddy.x, y: spawns.buddy.y, team: 1, color: "#7aa8b8",
+      name: "Spar Dummy", buddy: false, ai: "recruit"
+    }), buddyLoadout));
+  } else if (mode === "training") {
     fighters.push(outfit(new Fighter({
       x: spawns.buddy.x, y: spawns.buddy.y, team: 1, color: "#42dff5", name: buddyName,
       buddy: true, ai: mind
@@ -170,21 +185,26 @@ function makeGame(mode) {
     const trainer = encounter?.trainer || {
       name: "TRAINER", ai: "veteran", loadout: trainerLoadout("veteran")
     };
-    const follower = encounter?.follower || {
-      name: "FOLLOWER", ai: "rookie", loadout: trainerLoadout("veteran", true)
-    };
-    fighters.push(outfit(new Fighter({
+    const soloBoss = mode === "campaign" && !!(encounter?.solo || encounter?.boss);
+    const trainerFighter = outfit(new Fighter({
       x: spawns.enemy1.x, y: spawns.enemy1.y, team: 1,
       color: trainer.color || "#ff5e56",
       name: trainer.name || "TRAINER",
       ai: trainer.ai || "veteran"
-    }), trainer.loadout || trainerLoadout("veteran")));
-    fighters.push(outfit(new Fighter({
-      x: spawns.enemy2.x, y: spawns.enemy2.y, team: 1,
-      color: follower.color || "#ff9b4a",
-      name: follower.name || "FOLLOWER",
-      ai: follower.ai || "rookie"
-    }), follower.loadout || trainerLoadout("veteran", true)));
+    }), trainer.loadout || trainerLoadout("veteran"));
+    if (soloBoss) applyCampaignBossModifiers(trainerFighter, encounter);
+    fighters.push(trainerFighter);
+    if (!soloBoss) {
+      const follower = encounter?.follower || {
+        name: "FOLLOWER", ai: "rookie", loadout: trainerLoadout("veteran", true)
+      };
+      fighters.push(outfit(new Fighter({
+        x: spawns.enemy2.x, y: spawns.enemy2.y, team: 1,
+        color: follower.color || "#ff9b4a",
+        name: follower.name || "FOLLOWER",
+        ai: follower.ai || "rookie"
+      }), follower.loadout || trainerLoadout("veteran", true)));
+    }
   }
   const difficulty = mode === "campaign"
     ? (getPendingCampaignEncounter()?.rewardTier || "rookie")
@@ -202,6 +222,10 @@ function makeGame(mode) {
       : null,
     stageId: mode === "campaign" ? getPendingCampaignEncounter()?.stageId || null : null,
     survival: mode === "survival" ? initSurvivalState(map) : null,
+    campaignBoss: mode === "campaign"
+      ? initCampaignBossState(getPendingCampaignEncounter())
+      : null,
+    tutorial: mode === "tutorial" ? initTutorialState() : null,
     mapId: map.id,
     mapName: map.name,
     theme: map.theme,
@@ -216,7 +240,7 @@ function makeGame(mode) {
     groundStyle: map.groundStyle,
     backdrop: map.backdrop,
     gimmick: null,
-    learningLocked: !!profile.learningLocked,
+    learningLocked: mode === "tutorial" ? true : !!profile.learningLocked,
     settings: matchSettings,
     healthScale: hs,
     fighters,
@@ -240,7 +264,7 @@ function makeGame(mode) {
     elapsed: 0,
     over: false,
     paused: false,
-    announcement: mode === "survival" ? 2.6 : 2.2,
+    announcement: mode === "tutorial" ? 3.2 : mode === "survival" ? 2.6 : 2.2,
     thoughts: [],
     thoughtClock: 8,
     lastShotAtPlayer: -99,
@@ -282,6 +306,12 @@ function start(mode) {
   if (mode === "campaign" && !getPendingCampaignEncounter()) {
     showCampaignSelect(profile);
     return;
+  }
+  ensureTutorialProfile(profile);
+  if (mode === "tutorial") {
+    // Starting the guided spar clears the bay nag without opting out of completion.
+    profile.tutorial.bayHintsSeen = true;
+    saveProfile();
   }
   game = makeGame(mode);
   showGame(mode, profile, game.mapName);
@@ -518,6 +548,15 @@ function update(dt) {
 
   updateCamera(game.camera, player, { width: canvas.width, height: canvas.height }, dt);
   if (game.mode === "survival") tickSurvival(game, dt, Fighter);
+  if (game.mode === "campaign") tickCampaignBoss(game, dt);
+  if (game.mode === "tutorial") {
+    tickTutorial(game, {
+      keys,
+      mouse,
+      dodgePressed: tutorialDodgePulse
+    });
+    tutorialDodgePulse = false;
+  }
   updateHud(game);
 
   const teamZeroAlive = game.fighters.some((fighter) => (
@@ -539,30 +578,37 @@ function finish(win) {
   profile.matches++;
   let practiceLines = [];
   let learningChanged = [];
-  if (game.mode === "training") {
+  if (game.mode === "tutorial") {
+    completeGuidedFight(profile);
+  } else if (game.mode === "training") {
     practiceLines = advanceDirectiveTraining(game, profile);
     learningChanged = updateLearning(game, profile);
     createTrainingProposal(game, profile);
   }
-  const rewards = game.mode === "campaign"
-    ? awardCampaign(profile, {
-      id: game.id,
-      mode: game.mode,
-      difficulty: game.difficulty,
-      win,
-      stageId: game.stageId || getPendingCampaignEncounter()?.stageId || null
-    })
-    : game.mode === "survival"
-      ? awardSurvival(profile, {
+  const emptyRewards = {
+    cyber: 0, exp: 0, levelsGained: 0, pendingPicks: [], rankingDelta: 0
+  };
+  const rewards = game.mode === "tutorial"
+    ? emptyRewards
+    : game.mode === "campaign"
+      ? awardCampaign(profile, {
         id: game.id,
         mode: game.mode,
-        waves: game.survival?.wave || 0,
-        kills: game.survival?.kills || 0,
-        time: game.survival?.elapsed || game.elapsed || 0
+        difficulty: game.difficulty,
+        win,
+        stageId: game.stageId || getPendingCampaignEncounter()?.stageId || null
       })
-      : awardConquest(profile, {
-        id: game.id, mode: game.mode, difficulty: game.difficulty, win
-      });
+      : game.mode === "survival"
+        ? awardSurvival(profile, {
+          id: game.id,
+          mode: game.mode,
+          waves: game.survival?.wave || 0,
+          kills: game.survival?.kills || 0,
+          time: game.survival?.elapsed || game.elapsed || 0
+        })
+        : awardConquest(profile, {
+          id: game.id, mode: game.mode, difficulty: game.difficulty, win
+        });
   saveProfile();
   showResults(game, profile, win, practiceLines, rewards, learningChanged);
   refreshMenu(profile);
@@ -621,7 +667,10 @@ function handleKeyDown(event) {
     const player = game.fighters[0];
     if (isIllusionist(player)) cycleIllusionPropKind(player, game);
   }
-  if (event.code === "KeyC") triggerDodge(game.fighters[0], game, keys);
+  if (event.code === "KeyC") {
+    tutorialDodgePulse = true;
+    triggerDodge(game.fighters[0], game, keys);
+  }
   if (event.code === MATERIAL_CONSUMER_REFORM_KEY && !event.repeat) {
     const player = game.fighters[0];
     if (isMaterialConsumer(player)) {
@@ -720,7 +769,17 @@ bindUi({
       openCampaign();
       return;
     }
+    // Tutorial is one-shot; rematch becomes normal Training.
+    if (game?.mode === "tutorial") {
+      start("training");
+      return;
+    }
     start(game.mode);
+  },
+  dismissTutorialHint() {
+    dismissBayTutorialHint(profile);
+    saveProfile();
+    refreshMenu(profile);
   },
   aiMode(mode) {
     const learned = profile.weapons[weaponKind(profile.equipment.player.weapon)];

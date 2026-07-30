@@ -260,11 +260,34 @@ export const CAMPAIGN_STAGES = Object.freeze([
     id: "c8-apex",
     index: 8,
     name: "Apex Circuit",
-    blurb: "Peak duo. Full shop depth. Ranking label is display-only.",
+    blurb: "Solo apex boss. Halcyon phase-shifts under pressure. Ranking label is display-only.",
     ranking: 1100,
     rewardTier: "elite",
     training: "Peak",
     mapId: "city",
+    boss: true,
+    solo: true,
+    hpMult: 1.85,
+    phases: Object.freeze([
+      Object.freeze({
+        hpFrac: 1,
+        ai: "elite",
+        announce: null,
+        aggression: 0
+      }),
+      Object.freeze({
+        hpFrac: 0.55,
+        ai: "elite",
+        announce: "HALCYON SHIFTS — CLOSING HARD",
+        aggression: 1
+      }),
+      Object.freeze({
+        hpFrac: 0.25,
+        ai: "elite",
+        announce: "FINAL CIRCUIT — NO QUARTER",
+        aggression: 2
+      })
+    ]),
     trainer: Object.freeze({
       name: "Rook Halcyon",
       ai: "elite",
@@ -275,16 +298,7 @@ export const CAMPAIGN_STAGES = Object.freeze([
         jetpack: "recycler-pack", shield: "kinetic-targe"
       })
     }),
-    follower: Object.freeze({
-      name: "Gasket",
-      ai: "elite",
-      color: "#1ab8a8",
-      loadout: Object.freeze({
-        body: "bulwark-frame", helmet: "guard-helm", weapon: "spellbook",
-        secondaryWeapon: "sticky-charge", extensionSecondary: "light-condensation",
-        jetpack: "endurance-pack", shield: "kinetic-targe"
-      })
-    }),
+    follower: null,
     shopAdds: Object.freeze([
       "strong-sniper", "doppel", "light-condensation", "adaptive-nanotech-unit"
     ])
@@ -441,6 +455,7 @@ export function buildStageEncounter(stageOrId) {
   const stage = typeof stageOrId === "string" ? getStage(stageOrId) : stageOrId;
   if (!stage) return null;
   const map = getMap(stage.mapId);
+  const solo = !!stage.solo || !stage.follower;
   const encounter = {
     stageId: stage.id,
     stageName: stage.name,
@@ -452,18 +467,30 @@ export function buildStageEncounter(stageOrId) {
     mapId: stage.mapId,
     mapName: map?.name || stage.mapId,
     mapBlurb: stage.blurb,
+    boss: !!stage.boss,
+    solo,
+    hpMult: Number(stage.hpMult) > 0 ? Number(stage.hpMult) : 1,
+    phases: Array.isArray(stage.phases) ? stage.phases.slice() : null,
     trainer: {
+      role: "trainer",
+      label: stage.boss ? "Boss" : "Trainer",
       name: stage.trainer.name,
       ai: stage.trainer.ai,
       color: stage.trainer.color,
+      training: stage.training,
       loadout: { ...DEFAULT_LOADOUT, ...stage.trainer.loadout }
     },
-    follower: {
-      name: stage.follower.name,
-      ai: stage.follower.ai,
-      color: stage.follower.color,
-      loadout: { ...DEFAULT_LOADOUT, ...stage.follower.loadout }
-    }
+    follower: solo || !stage.follower
+      ? null
+      : {
+        role: "follower",
+        label: "Follower",
+        name: stage.follower.name,
+        ai: stage.follower.ai,
+        color: stage.follower.color,
+        training: stage.training,
+        loadout: { ...DEFAULT_LOADOUT, ...stage.follower.loadout }
+      }
   };
   const powers = estimateEncounterPower(encounter, 0);
   encounter.trainerPower = powers.trainer;
@@ -471,6 +498,101 @@ export function buildStageEncounter(stageOrId) {
   encounter.power = powers.duo;
   encounter.powerJitter = 0;
   return encounter;
+}
+
+/** Scale core/max/current HP after applyLoadout. Safe no-op if mult ≤ 1. */
+export function applyBossHpMult(fighter, hpMult = 1) {
+  const mult = Number(hpMult);
+  if (!fighter || !(mult > 1)) return fighter;
+  const scale = (key) => {
+    if (Number.isFinite(fighter[key])) fighter[key] *= mult;
+  };
+  scale("coreMaxHp");
+  scale("coreHp");
+  scale("maxHp");
+  scale("hp");
+  return fighter;
+}
+
+/** Tag fighter as campaign boss and apply encounter HP mult. */
+export function applyCampaignBossModifiers(fighter, encounter) {
+  if (!fighter || !encounter?.boss) return fighter;
+  fighter.campaignBoss = true;
+  fighter.bossAggression = 0;
+  applyBossHpMult(fighter, encounter.hpMult || 1);
+  return fighter;
+}
+
+/**
+ * Resolve phase index from boss HP fraction.
+ * Phases are ordered healthy → critical; enter phase i when hp/max ≤ phases[i].hpFrac.
+ * Phase 0 (typically hpFrac: 1) is always active at full health.
+ */
+export function campaignBossPhaseIndex(hpFrac, phases) {
+  if (!Array.isArray(phases) || !phases.length) return 0;
+  const frac = Math.max(0, Math.min(1, Number(hpFrac) || 0));
+  let idx = 0;
+  for (let i = 0; i < phases.length; i++) {
+    const threshold = Number(phases[i]?.hpFrac);
+    if (!Number.isFinite(threshold)) continue;
+    if (frac <= threshold) idx = i;
+  }
+  return idx;
+}
+
+export function initCampaignBossState(encounter) {
+  if (!encounter?.boss) return null;
+  const phases = Array.isArray(encounter.phases) && encounter.phases.length
+    ? encounter.phases
+    : [{ hpFrac: 1, ai: encounter.trainer?.ai || "elite", announce: null, aggression: 0 }];
+  return {
+    phase: 0,
+    phases,
+    announcement: 0,
+    lastAnnounce: null
+  };
+}
+
+/**
+ * Advance boss phases from HP. Sets game.announcement and bossAggression.
+ * Call once per frame from the main update loop.
+ */
+export function tickCampaignBoss(game, dt) {
+  if (!game || game.mode !== "campaign" || game.over || !game.campaignBoss) return;
+  const state = game.campaignBoss;
+  if (state.announcement > 0) state.announcement -= dt;
+
+  const boss = game.fighters?.find((f) => f.campaignBoss && !f.buddy && !f.human);
+  if (!boss || boss.dead) return;
+
+  const maxHp = Math.max(1, boss.maxHp || boss.coreMaxHp || 1);
+  const frac = Math.max(0, (boss.hp || 0) / maxHp);
+  const next = campaignBossPhaseIndex(frac, state.phases);
+  if (next !== state.phase) {
+    state.phase = next;
+    const phase = state.phases[next] || state.phases[0];
+    boss.bossAggression = Number(phase?.aggression) || 0;
+    if (phase?.ai) boss.ai = phase.ai;
+    if (phase?.announce) {
+      state.lastAnnounce = phase.announce;
+      state.announcement = 2.6;
+      game.announcement = Math.max(game.announcement || 0, 2.6);
+    }
+  } else {
+    const phase = state.phases[state.phase] || state.phases[0];
+    boss.bossAggression = Number(phase?.aggression) || 0;
+  }
+}
+
+export function campaignBossHudLine(game) {
+  const state = game?.campaignBoss;
+  if (!state) return "";
+  if ((state.announcement || 0) > 0 && state.lastAnnounce) return state.lastAnnounce;
+  const phase = state.phases?.[state.phase];
+  if (!phase) return "APEX BOSS";
+  return state.phase > 0
+    ? `APEX · PHASE ${state.phase + 1}`
+    : "APEX BOSS";
 }
 
 export function getPendingCampaignEncounter() {
@@ -597,6 +719,7 @@ export function validateCampaignCatalog() {
       if (!GEAR_BY_ID[id]) missing.push(`${stage.id}:${id}`);
     }
     for (const role of ["trainer", "follower"]) {
+      if (!stage[role]) continue;
       for (const slot of SLOT_ORDER) {
         const id = stage[role]?.loadout?.[slot];
         if (id && !GEAR_BY_ID[id] && id !== NO_SECONDARY_ID && id !== NO_EXTENSION_ID) {

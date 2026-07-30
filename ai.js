@@ -1595,6 +1595,15 @@ export function updateAI(fighter, dt, game, profile) {
     desired = fighter.weapon === "saber" ? 55 : Math.min(220, desired * 0.55);
     protect = 0.1;
   }
+  // Campaign apex boss: later phases close harder (aggression 1–2).
+  if (fighter.campaignBoss && (fighter.bossAggression || 0) > 0) {
+    const aggro = Math.min(2, Number(fighter.bossAggression) || 0);
+    desired = Math.max(
+      40,
+      desired - (fighter.weapon === "saber" ? 18 : 90) * aggro
+    );
+    protect = Math.max(0.05, protect - 0.15 * aggro);
+  }
   // Expose for tests / HUD debugging of Mimic blend.
   state.mimicDesired = isMimic ? desired : null;
   state.mimicBlend = isMimic ? mimicBlend : 0;

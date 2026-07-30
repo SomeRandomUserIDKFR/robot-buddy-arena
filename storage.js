@@ -4,6 +4,7 @@ import { ensureFightStyle } from "./fight-styles.js";
 import { ensureCoaching } from "./coaching.js";
 import { ensureCampaignProfile } from "./campaign.js";
 import { ensureSurvivalProfile } from "./survival.js";
+import { ensureTutorialProfile } from "./tutorial.js";
 import {
   ensureEconomyProfile, ensureEquipmentProfile, setBuddyMode, weaponKind
 } from "./equipment.js";
@@ -63,6 +64,7 @@ export function migrateProfile(saved) {
   ensureCoaching(loaded);
   ensureBuddyCharacter(loaded);
   ensureFightStyle(loaded);
+  ensureTutorialProfile(loaded, saved);
   loaded.learningLocked = !!loaded.learningLocked;
   loaded.aiMode = normalizeAiMode(loaded.aiMode);
   loaded.mimicIntensity = normalizeMimicIntensity(loaded.mimicIntensity);
@@ -95,6 +97,7 @@ ensureEquipmentProfile(profile, profile);
 ensureEconomyProfile(profile, profile);
 ensureCampaignProfile(profile, profile);
 ensureSurvivalProfile(profile, profile);
+ensureTutorialProfile(profile, profile);
 ensureProgressionProfile(profile, profile);
 
 export function saveProfile() {

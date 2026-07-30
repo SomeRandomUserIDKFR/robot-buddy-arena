@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import {
-  awardCampaign, beginCampaignSelect, buildStageEncounter, CAMPAIGN_STAGES,
-  campaignEquip, campaignShopCatalog, campaignStageCards, ensureCampaignProfile,
-  getPendingCampaignEncounter, isStageCleared, isStageUnlocked, markStageCleared,
-  selectCampaignStage, shopPoolForStage, validateCampaignCatalog
+  applyBossHpMult, applyCampaignBossModifiers, awardCampaign, beginCampaignSelect,
+  buildStageEncounter, CAMPAIGN_STAGES, campaignBossPhaseIndex, campaignEquip,
+  campaignShopCatalog, campaignStageCards, ensureCampaignProfile,
+  getPendingCampaignEncounter, initCampaignBossState, isStageCleared,
+  isStageUnlocked, markStageCleared, selectCampaignStage, shopPoolForStage,
+  tickCampaignBoss, validateCampaignCatalog
 } from "./campaign.js";
 import {
   DEFAULT_LOADOUT, ensureEconomyProfile, ensureEquipmentProfile, STARTING_CYBER
@@ -177,6 +179,72 @@ function freshProfile(overrides = {}) {
   const profile = freshProfile();
   assert.equal(profile.campaign.player.weapon, DEFAULT_LOADOUT.weapon);
   assert.equal(profile.campaign.buddy.body, DEFAULT_LOADOUT.body);
+}
+
+// c8 apex is a solo boss with phases + HP mult.
+{
+  const stage = CAMPAIGN_STAGES.find((s) => s.id === "c8-apex");
+  assert.equal(stage.boss, true);
+  assert.equal(stage.solo, true);
+  assert.equal(stage.follower, null);
+  assert.ok(stage.hpMult > 1);
+  assert.ok(stage.phases.length >= 3);
+
+  const encounter = buildStageEncounter("c8-apex");
+  assert.equal(encounter.boss, true);
+  assert.equal(encounter.solo, true);
+  assert.equal(encounter.follower, null);
+  assert.equal(encounter.trainer.label, "Boss");
+  assert.ok(encounter.power > 0);
+  assert.equal(encounter.followerPower, 0);
+
+  assert.equal(campaignBossPhaseIndex(1, stage.phases), 0);
+  assert.equal(campaignBossPhaseIndex(0.5, stage.phases), 1);
+  assert.equal(campaignBossPhaseIndex(0.2, stage.phases), 2);
+
+  const fighter = {
+    hp: 100, maxHp: 100, coreHp: 100, coreMaxHp: 100, ai: "elite"
+  };
+  applyCampaignBossModifiers(fighter, encounter);
+  assert.equal(fighter.campaignBoss, true);
+  assert.ok(fighter.maxHp > 100);
+  assert.equal(applyBossHpMult({ hp: 10, maxHp: 10 }, 1).maxHp, 10);
+
+  const bossState = initCampaignBossState(encounter);
+  assert.equal(bossState.phase, 0);
+  const game = {
+    mode: "campaign",
+    over: false,
+    announcement: 0,
+    campaignBoss: bossState,
+    fighters: [{
+      campaignBoss: true,
+      hp: fighter.maxHp * 0.5,
+      maxHp: fighter.maxHp,
+      ai: "elite",
+      bossAggression: 0
+    }]
+  };
+  tickCampaignBoss(game, 0.016);
+  assert.equal(game.campaignBoss.phase, 1);
+  assert.ok(game.fighters[0].bossAggression >= 1);
+  assert.ok(game.campaignBoss.announcement > 0);
+}
+
+// Clearing c8 still awards elite cyber/exp.
+{
+  const profile = freshProfile();
+  for (const stage of CAMPAIGN_STAGES.slice(0, 7)) {
+    markStageCleared(profile, stage.id);
+  }
+  const win = awardCampaign(profile, {
+    id: "camp-c8-win", mode: "campaign", difficulty: "elite", win: true,
+    stageId: "c8-apex"
+  });
+  assert.ok(win.cyber > 0);
+  assert.ok(win.exp > 0);
+  assert.equal(win.stageCleared, "c8-apex");
+  assert.equal(isStageCleared(profile, "c8-apex"), true);
 }
 
 console.log("campaign.test.js: ok");
