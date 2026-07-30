@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import {
   awardSurvival, countLivingSwarm, ensureSurvivalProfile, initSurvivalState,
-  listSurvivalSpawnPoints, pruneDeadSwarm, rollSurvivalEnemySpec, spawnSurvivalEnemy,
-  survivalBand, SURVIVAL_KITS, tickSurvival
+  listNewSurvivalMilestones, listSurvivalSpawnPoints, pruneDeadSwarm,
+  rollSurvivalEnemySpec, spawnSurvivalEnemy, survivalBand, survivalMilestoneMet,
+  SURVIVAL_BAND_ORDER, SURVIVAL_KITS, SURVIVAL_MILESTONES, tickSurvival,
+  tickSurvivalMilestones
 } from "./survival.js";
 import {
   ensureEconomyProfile, ensureEquipmentProfile, STARTING_CYBER
@@ -29,7 +31,7 @@ function seeded(seq) {
   };
 }
 
-// Bands ramp with time.
+// Bands ramp with time — including post-siege milestones.
 {
   assert.equal(survivalBand(0).id, "green");
   assert.equal(survivalBand(0).kitPool, "bare");
@@ -38,8 +40,13 @@ function seeded(seq) {
   assert.equal(survivalBand(120).id, "press");
   assert.equal(survivalBand(200).id, "heavy");
   assert.equal(survivalBand(300).id, "siege");
-  assert.ok(survivalBand(0).maxAlive < survivalBand(300).maxAlive);
-  assert.ok(survivalBand(0).spawnInterval > survivalBand(300).spawnInterval);
+  assert.equal(survivalBand(400).id, "breach");
+  assert.equal(survivalBand(520).id, "onslaught");
+  assert.equal(survivalBand(700).id, "collapse");
+  assert.equal(survivalBand(400).kitPool, "peak");
+  assert.ok(survivalBand(0).maxAlive < survivalBand(700).maxAlive);
+  assert.ok(survivalBand(0).spawnInterval > survivalBand(700).spawnInterval);
+  assert.ok(SURVIVAL_BAND_ORDER.includes("collapse"));
 }
 
 // Kits stay lower-tier (no elite nanotech toys).
@@ -153,6 +160,80 @@ function seeded(seq) {
   assert.equal(train.cyber, 0);
   assert.equal(profile.cyber, cyberBefore + lossy.cyber);
   assert.ok(profile.cyber >= STARTING_CYBER);
+}
+
+// Milestone thresholds + one-time unlock bonuses.
+{
+  assert.ok(SURVIVAL_MILESTONES.length >= 12);
+  assert.equal(survivalMilestoneMet(
+    SURVIVAL_MILESTONES.find((m) => m.id === "hold-60"),
+    { time: 59 }
+  ), false);
+  assert.equal(survivalMilestoneMet(
+    SURVIVAL_MILESTONES.find((m) => m.id === "hold-60"),
+    { time: 60 }
+  ), true);
+  assert.equal(survivalMilestoneMet(
+    SURVIVAL_MILESTONES.find((m) => m.id === "band-breach"),
+    { time: 400, bandId: "breach" }
+  ), true);
+  assert.equal(survivalMilestoneMet(
+    SURVIVAL_MILESTONES.find((m) => m.id === "band-siege"),
+    { bandId: "collapse" }
+  ), true);
+
+  const profile = freshProfile();
+  const fresh = listNewSurvivalMilestones(profile, {
+    time: 200, waves: 6, kills: 30, bandId: "heavy"
+  });
+  assert.ok(fresh.some((m) => m.id === "hold-60"));
+  assert.ok(fresh.some((m) => m.id === "waves-5"));
+  assert.ok(fresh.some((m) => m.id === "kills-25"));
+  assert.ok(!fresh.some((m) => m.id === "band-siege"));
+
+  const cyberBefore = profile.cyber;
+  const awarded = awardSurvival(profile, {
+    id: "surv-mile-1", mode: "survival",
+    waves: 6, kills: 30, time: 200, bandId: "heavy"
+  });
+  assert.ok(awarded.milestones.length >= 3);
+  assert.ok(awarded.milestoneCyber > 0);
+  assert.ok(profile.survival.milestones.includes("hold-60"));
+  assert.ok(profile.cyber > cyberBefore);
+
+  // Second long run does not re-pay the same milestones.
+  const again = awardSurvival(profile, {
+    id: "surv-mile-2", mode: "survival",
+    waves: 6, kills: 30, time: 200, bandId: "heavy"
+  });
+  assert.equal(again.milestones.length, 0);
+  assert.equal(again.milestoneCyber, 0);
+}
+
+// Mid-run milestone flash.
+{
+  const state = initSurvivalState({
+    id: "yard",
+    spawnPoints: {
+      conquest: {
+        enemy1: { x: 2920, y: 1300 },
+        enemy2: { x: 3150, y: 1300 }
+      }
+    }
+  }, () => 0);
+  state.elapsed = 60;
+  state.wave = 5;
+  state.kills = 0;
+  state.bandId = "stir";
+  const hit = tickSurvivalMilestones(state, []);
+  assert.ok(hit);
+  assert.ok(state.milestonesFlashed.includes(hit.id));
+  assert.ok(state.announcement > 0);
+  assert.ok(state.milestoneAnnounce);
+  const again = tickSurvivalMilestones(state, []);
+  // May unlock another unmet milestone in the same stats — but never re-flash same id.
+  if (again) assert.notEqual(again.id, hit.id);
+  assert.ok(state.milestonesFlashed.includes(hit.id));
 }
 
 console.log("survival.test.js: ok");

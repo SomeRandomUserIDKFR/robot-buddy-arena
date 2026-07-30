@@ -547,7 +547,7 @@ function update(dt) {
   }
 
   updateCamera(game.camera, player, { width: canvas.width, height: canvas.height }, dt);
-  if (game.mode === "survival") tickSurvival(game, dt, Fighter);
+  if (game.mode === "survival") tickSurvival(game, dt, Fighter, Math.random, profile);
   if (game.mode === "campaign") tickCampaignBoss(game, dt);
   if (game.mode === "tutorial") {
     tickTutorial(game, {
@@ -604,7 +604,8 @@ function finish(win) {
           mode: game.mode,
           waves: game.survival?.wave || 0,
           kills: game.survival?.kills || 0,
-          time: game.survival?.elapsed || game.elapsed || 0
+          time: game.survival?.elapsed || game.elapsed || 0,
+          bandId: game.survival?.bandId || null
         })
         : awardConquest(profile, {
           id: game.id, mode: game.mode, difficulty: game.difficulty, win

@@ -855,6 +855,10 @@ export function showResults(
         ? "Basics locked in — try Training, Conquest, or Campaign next"
         : "You can rerun Training anytime to keep practicing";
     } else if (game.mode === "survival") {
+      const mileCount = rewards?.milestones?.length || 0;
+      const mileBit = mileCount > 0
+        ? ` · ${mileCount} MILESTONE${mileCount > 1 ? "S" : ""}`
+        : "";
       if (earnedExp > 0) {
         const levelBit = levelsGained > 0
           ? ` · LEVEL UP ×${levelsGained} → LVL ${profile.level}`
@@ -862,9 +866,11 @@ export function showResults(
         const pickBit = pendingCount > 0
           ? ` · ${pendingCount} PERK PICK${pendingCount > 1 ? "S" : ""} READY`
           : "";
-        ui.resultExp.textContent = `+${earnedExp} EXP${levelBit}${pickBit}`;
+        ui.resultExp.textContent = `+${earnedExp} EXP${levelBit}${pickBit}${mileBit}`;
       } else {
-        ui.resultExp.textContent = `LVL ${profile.level} · ${profile.exp} / ${profile.expToNext} EXP`;
+        ui.resultExp.textContent = (
+          `LVL ${profile.level} · ${profile.exp} / ${profile.expToNext} EXP${mileBit}`
+        );
       }
     } else if (game.mode !== "conquest" && game.mode !== "campaign") {
       ui.resultExp.textContent = "TRAINING / SPAR GRANTS NO CONQUEST EXP";
@@ -890,8 +896,12 @@ export function showResults(
       const bestLine = profile.survival
         ? ` · Best ${Math.floor(profile.survival.bestTime || 0)}s / ${profile.survival.bestWaves || 0} waves`
         : "";
+      const mileTotal = profile.survival?.milestones?.length || 0;
+      const mileLine = mileTotal > 0
+        ? ` · ${mileTotal} milestone${mileTotal === 1 ? "" : "s"}`
+        : "";
       ui.resultRanking.textContent = (
-        `${kills} kills · ${secs}s held${best}${bestLine} · Ranking unchanged (${rankingNow})`
+        `${kills} kills · ${secs}s held${best}${bestLine}${mileLine} · Ranking unchanged (${rankingNow})`
       );
     } else if (game.mode === "campaign") {
       const cleared = rewards?.stageCleared
@@ -942,6 +952,14 @@ export function showResults(
     else lines.push("I stayed up with you until the end. That horde got thick.");
     lines.push(`We cleared ${kills} bots across ${waves} wave${waves === 1 ? "" : "s"}.`);
     lines.push(`I contributed ${Math.round(buddy?.totalDamage || 0)} damage before the line broke.`);
+    const unlocked = rewards?.milestones || [];
+    if (unlocked.length) {
+      const names = unlocked.map((m) => m.label).join(", ");
+      const bonus = (rewards.milestoneCyber || 0) + (rewards.milestoneExp || 0) > 0
+        ? ` (+${rewards.milestoneCyber || 0}¢ / +${rewards.milestoneExp || 0} EXP)`
+        : "";
+      lines.push(`New milestones: ${names}${bonus}.`);
+    }
   } else {
     if (buddy?.dead) lines.push("I got isolated and went down. That was my fault.");
     else if ((buddy?.fuel || 0) < .15) lines.push("I spent too much jetpack fuel chasing. I'll budget it better.");

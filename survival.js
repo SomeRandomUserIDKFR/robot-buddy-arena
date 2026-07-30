@@ -5,11 +5,17 @@
  * team 0 is wiped. Enemies keep spawning; dead swarm bots are pruned.
  *
  * Ramp (by survival seconds):
- *   0–45    recruit AI, bare kits, slow spawn, low cap
- *   45–90   recruit/rookie, light starter sidegrades
- *   90–150  rookie, more concurrent
- *   150–240 contender pressure, mid-low gear
- *   240+    contender/veteran mix, denser spawns (still no elite toys)
+ *   0–45    green — recruit AI, bare kits
+ *   45–90   stir — recruit/rookie, light kits
+ *   90–150  press — rookie+, denser
+ *   150–240 heavy — contender, mid kits
+ *   240–360 siege — contender/veteran, hard kits
+ *   360–480 breach — veteran heavy, peak kits
+ *   480–600 onslaught — denser veteran/elite AI (still no elite toys)
+ *   600+    collapse — peak pressure plateau
+ *
+ * One-time milestones (time / waves / kills / band) grant bonus Cyber/EXP
+ * outside the soft run caps and flash mid-run when first crossed.
  */
 
 import {
@@ -106,8 +112,111 @@ export const SURVIVAL_KITS = Object.freeze({
       secondaryWeapon: NO_SECONDARY_ID, extensionSecondary: "trapper",
       jetpack: "vector-pack", shield: "kinetic-targe"
     })
+  ]),
+  // Peak kits: tougher frames/tools, still below Conquest elite nanotech toys.
+  peak: Object.freeze([
+    Object.freeze({
+      body: "bulwark-frame", helmet: "hunter-optics", weapon: "marksman-rifle",
+      secondaryWeapon: "frag-grenade", extensionSecondary: "trapper",
+      jetpack: "recycler-pack", shield: "kinetic-targe"
+    }),
+    Object.freeze({
+      body: "reactive-frame", helmet: "guard-helm", weapon: "heavy-saber",
+      secondaryWeapon: "throw-breakable", extensionSecondary: "reconjurer-builder",
+      jetpack: "endurance-pack", shield: "kinetic-targe"
+    }),
+    Object.freeze({
+      body: "bulwark-frame", helmet: "hunter-optics", weapon: "burst-carbine",
+      secondaryWeapon: "sticky-charge", extensionSecondary: "light-condensation",
+      jetpack: "recycler-pack", shield: "light-buckler"
+    }),
+    Object.freeze({
+      ...trainerLoadout("veteran", false),
+      secondaryWeapon: "hookshot-winch",
+      extensionSecondary: "trapper"
+    })
   ])
 });
+
+/** Ordered band timeline for tests / milestone band checks. */
+export const SURVIVAL_BAND_ORDER = Object.freeze([
+  "green", "stir", "press", "heavy", "siege", "breach", "onslaught", "collapse"
+]);
+
+/**
+ * One-time Survival milestones. Bonus Cyber/EXP sit outside the soft run caps.
+ * kind: time (sec) | waves | kills | band (band id string)
+ */
+export const SURVIVAL_MILESTONES = Object.freeze([
+  Object.freeze({
+    id: "hold-60", label: "First Minute", kind: "time", threshold: 60,
+    cyber: 20, exp: 12, announce: "MILESTONE · FIRST MINUTE"
+  }),
+  Object.freeze({
+    id: "hold-180", label: "Three Minutes", kind: "time", threshold: 180,
+    cyber: 35, exp: 20, announce: "MILESTONE · THREE MINUTES"
+  }),
+  Object.freeze({
+    id: "hold-300", label: "Five Minutes", kind: "time", threshold: 300,
+    cyber: 55, exp: 30, announce: "MILESTONE · FIVE MINUTES"
+  }),
+  Object.freeze({
+    id: "hold-480", label: "Eight Minutes", kind: "time", threshold: 480,
+    cyber: 75, exp: 40, announce: "MILESTONE · EIGHT MINUTES"
+  }),
+  Object.freeze({
+    id: "hold-600", label: "Ten Minutes", kind: "time", threshold: 600,
+    cyber: 100, exp: 55, announce: "MILESTONE · TEN MINUTES"
+  }),
+  Object.freeze({
+    id: "waves-5", label: "Wave 5", kind: "waves", threshold: 5,
+    cyber: 18, exp: 10, announce: "MILESTONE · WAVE 5"
+  }),
+  Object.freeze({
+    id: "waves-10", label: "Wave 10", kind: "waves", threshold: 10,
+    cyber: 32, exp: 18, announce: "MILESTONE · WAVE 10"
+  }),
+  Object.freeze({
+    id: "waves-15", label: "Wave 15", kind: "waves", threshold: 15,
+    cyber: 48, exp: 28, announce: "MILESTONE · WAVE 15"
+  }),
+  Object.freeze({
+    id: "waves-20", label: "Wave 20", kind: "waves", threshold: 20,
+    cyber: 70, exp: 40, announce: "MILESTONE · WAVE 20"
+  }),
+  Object.freeze({
+    id: "kills-25", label: "25 Kills", kind: "kills", threshold: 25,
+    cyber: 22, exp: 12, announce: "MILESTONE · 25 KILLS"
+  }),
+  Object.freeze({
+    id: "kills-50", label: "50 Kills", kind: "kills", threshold: 50,
+    cyber: 40, exp: 22, announce: "MILESTONE · 50 KILLS"
+  }),
+  Object.freeze({
+    id: "kills-100", label: "100 Kills", kind: "kills", threshold: 100,
+    cyber: 70, exp: 40, announce: "MILESTONE · 100 KILLS"
+  }),
+  Object.freeze({
+    id: "band-siege", label: "Reach Siege", kind: "band", threshold: "siege",
+    cyber: 30, exp: 18, announce: "MILESTONE · SIEGE REACHED"
+  }),
+  Object.freeze({
+    id: "band-breach", label: "Reach Breach", kind: "band", threshold: "breach",
+    cyber: 50, exp: 28, announce: "MILESTONE · BREACH REACHED"
+  }),
+  Object.freeze({
+    id: "band-onslaught", label: "Reach Onslaught", kind: "band", threshold: "onslaught",
+    cyber: 70, exp: 38, announce: "MILESTONE · ONSLAUGHT REACHED"
+  }),
+  Object.freeze({
+    id: "band-collapse", label: "Reach Collapse", kind: "band", threshold: "collapse",
+    cyber: 95, exp: 50, announce: "MILESTONE · COLLAPSE REACHED"
+  })
+]);
+
+export const SURVIVAL_MILESTONES_BY_ID = Object.freeze(
+  Object.fromEntries(SURVIVAL_MILESTONES.map((m) => [m.id, m]))
+);
 
 /**
  * Difficulty band from survival elapsed seconds.
@@ -159,15 +268,81 @@ export function survivalBand(elapsedSec) {
       label: "Heavy push"
     };
   }
+  if (t < 360) {
+    return {
+      id: "siege",
+      aiPool: ["contender", "contender", "veteran"],
+      kitPool: "hard",
+      spawnInterval: 1.8,
+      maxAlive: 11,
+      burst: 4,
+      label: "Siege"
+    };
+  }
+  if (t < 480) {
+    return {
+      id: "breach",
+      aiPool: ["contender", "veteran", "veteran"],
+      kitPool: "peak",
+      spawnInterval: 1.55,
+      maxAlive: 12,
+      burst: 4,
+      label: "Breach"
+    };
+  }
+  if (t < 600) {
+    return {
+      id: "onslaught",
+      aiPool: ["veteran", "veteran", "elite"],
+      kitPool: "peak",
+      spawnInterval: 1.35,
+      maxAlive: 13,
+      burst: 5,
+      label: "Onslaught"
+    };
+  }
   return {
-    id: "siege",
-    aiPool: ["contender", "contender", "veteran"],
-    kitPool: "hard",
-    spawnInterval: 1.8,
-    maxAlive: 11,
-    burst: 4,
-    label: "Siege"
+    id: "collapse",
+    aiPool: ["veteran", "elite", "elite"],
+    kitPool: "peak",
+    spawnInterval: 1.2,
+    maxAlive: 14,
+    burst: 5,
+    label: "Collapse"
   };
+}
+
+function bandReached(currentBandId, targetBandId) {
+  const cur = SURVIVAL_BAND_ORDER.indexOf(currentBandId);
+  const want = SURVIVAL_BAND_ORDER.indexOf(targetBandId);
+  if (cur < 0 || want < 0) return currentBandId === targetBandId;
+  return cur >= want;
+}
+
+/** Whether a milestone's threshold is met by the given run stats. */
+export function survivalMilestoneMet(milestone, stats = {}) {
+  if (!milestone) return false;
+  const time = Math.max(0, Number(stats.time) || 0);
+  const waves = Math.max(0, Number(stats.waves) || 0);
+  const kills = Math.max(0, Number(stats.kills) || 0);
+  const bandId = stats.bandId || survivalBand(time).id;
+  if (milestone.kind === "time") return time >= milestone.threshold;
+  if (milestone.kind === "waves") return waves >= milestone.threshold;
+  if (milestone.kind === "kills") return kills >= milestone.threshold;
+  if (milestone.kind === "band") return bandReached(bandId, milestone.threshold);
+  return false;
+}
+
+/**
+ * Milestones newly unlocked by this run (not yet on profile).
+ * Does not mutate profile.
+ */
+export function listNewSurvivalMilestones(profile, stats = {}) {
+  ensureSurvivalProfile(profile);
+  const owned = new Set(profile.survival.milestones || []);
+  return SURVIVAL_MILESTONES.filter((m) => (
+    !owned.has(m.id) && survivalMilestoneMet(m, stats)
+  ));
 }
 
 export function ensureSurvivalProfile(profile, saved = profile) {
@@ -176,10 +351,14 @@ export function ensureSurvivalProfile(profile, saved = profile) {
   const bestTime = Number.isFinite(Number(raw.bestTime)) ? Math.max(0, Number(raw.bestTime)) : 0;
   const bestWaves = Number.isInteger(raw.bestWaves) ? Math.max(0, raw.bestWaves) : 0;
   const bestKills = Number.isInteger(raw.bestKills) ? Math.max(0, raw.bestKills) : 0;
+  const milestones = Array.from(new Set(
+    Array.isArray(raw.milestones) ? raw.milestones : []
+  )).filter((id) => typeof id === "string" && SURVIVAL_MILESTONES_BY_ID[id]);
   profile.survival = {
     bestTime,
     bestWaves,
     bestKills,
+    milestones,
     rewardedResults: Array.from(new Set(
       Array.isArray(raw.rewardedResults) ? raw.rewardedResults : []
     )).filter((id) => typeof id === "string").slice(-100)
@@ -226,8 +405,38 @@ export function initSurvivalState(map, random = Math.random) {
     spawnIndex: Math.floor(random() * Math.max(1, spawns.length)),
     spawnPoints: spawns,
     bandId: "green",
-    announcement: 0
+    announcement: 0,
+    // Milestone ids flashed this run (profile unlock still happens at award).
+    milestonesFlashed: [],
+    milestoneAnnounce: null
   };
+}
+
+/**
+ * Flash newly reached milestones mid-run. `clearedIds` = already owned on profile.
+ * Returns the milestone just announced, or null.
+ */
+export function tickSurvivalMilestones(state, clearedIds = []) {
+  if (!state) return null;
+  const owned = new Set([
+    ...(Array.isArray(clearedIds) ? clearedIds : []),
+    ...(state.milestonesFlashed || [])
+  ]);
+  const stats = {
+    time: state.elapsed,
+    waves: state.wave,
+    kills: state.kills,
+    bandId: state.bandId
+  };
+  for (const milestone of SURVIVAL_MILESTONES) {
+    if (owned.has(milestone.id)) continue;
+    if (!survivalMilestoneMet(milestone, stats)) continue;
+    state.milestonesFlashed = [...(state.milestonesFlashed || []), milestone.id];
+    state.milestoneAnnounce = milestone.announce || `MILESTONE · ${milestone.label}`;
+    state.announcement = Math.max(state.announcement || 0, 2.5);
+    return milestone;
+  }
+  return null;
 }
 
 function pick(list, random) {
@@ -305,8 +514,9 @@ export function spawnSurvivalEnemy(game, FighterCtor, random = Math.random) {
 /**
  * Advance survival timers, spawn bursts, prune corpses, tally kills.
  * Call once per frame from the main update loop.
+ * Optional `profile` enables mid-run milestone flashes for unowned badges.
  */
-export function tickSurvival(game, dt, FighterCtor, random = Math.random) {
+export function tickSurvival(game, dt, FighterCtor, random = Math.random, profile = null) {
   if (!game || game.mode !== "survival" || game.over || !game.survival) return;
   const state = game.survival;
   state.elapsed += dt;
@@ -330,7 +540,14 @@ export function tickSurvival(game, dt, FighterCtor, random = Math.random) {
   if (band.id !== state.bandId) {
     state.bandId = band.id;
     state.announcement = 2.4;
+    state.milestoneAnnounce = null;
     game.announcement = Math.max(game.announcement || 0, 2.4);
+  }
+
+  const cleared = profile?.survival?.milestones || [];
+  const hit = tickSurvivalMilestones(state, cleared);
+  if (hit) {
+    game.announcement = Math.max(game.announcement || 0, 2.5);
   }
 
   state.nextSpawnIn -= dt;
@@ -352,6 +569,9 @@ export function tickSurvival(game, dt, FighterCtor, random = Math.random) {
 export function survivalHudLine(game) {
   const state = game?.survival;
   if (!state) return "";
+  if ((state.announcement || 0) > 0 && state.milestoneAnnounce) {
+    return state.milestoneAnnounce;
+  }
   const band = survivalBand(state.elapsed);
   const alive = countLivingSwarm(game);
   const secs = Math.floor(state.elapsed);
@@ -361,11 +581,12 @@ export function survivalHudLine(game) {
 /**
  * Soft rewards on death / quit — based on waves, kills, time. No Ranking.
  * Always awards once per result id (even though Survival is a "loss").
+ * First-time milestones add bonus Cyber/EXP outside the soft run caps.
  */
 export function awardSurvival(profile, result, random = Math.random) {
   const empty = {
     cyber: 0, exp: 0, levelsGained: 0, pendingPicks: [], rankingDelta: 0,
-    waves: 0, kills: 0, time: 0, best: false
+    waves: 0, kills: 0, time: 0, best: false, milestones: []
   };
   if (result?.mode !== "survival") return empty;
   ensureSurvivalProfile(profile);
@@ -382,6 +603,7 @@ export function awardSurvival(profile, result, random = Math.random) {
   const waves = Math.max(0, Number(result.waves) || 0);
   const kills = Math.max(0, Number(result.kills) || 0);
   const time = Math.max(0, Number(result.time) || 0);
+  const bandId = result.bandId || survivalBand(time).id;
   let cyber = Math.round(
     waves * SURVIVAL_REWARD.cyberPerWave
     + kills * SURVIVAL_REWARD.cyberPerKill
@@ -393,6 +615,18 @@ export function awardSurvival(profile, result, random = Math.random) {
     + Math.floor(time / 30) * SURVIVAL_REWARD.expPerThirtySec
   );
   exp = Math.min(SURVIVAL_REWARD.expCap, exp);
+
+  const unlocked = listNewSurvivalMilestones(profile, { time, waves, kills, bandId });
+  let milestoneCyber = 0;
+  let milestoneExp = 0;
+  for (const milestone of unlocked) {
+    milestoneCyber += Number(milestone.cyber) || 0;
+    milestoneExp += Number(milestone.exp) || 0;
+    profile.survival.milestones.push(milestone.id);
+  }
+  milestoneCyber = Math.round(milestoneCyber * cyberWinMultiplier(profile));
+  cyber += milestoneCyber;
+  exp += milestoneExp;
 
   profile.cyber += cyber;
   const progression = exp > 0
@@ -422,7 +656,12 @@ export function awardSurvival(profile, result, random = Math.random) {
     waves,
     kills,
     time,
-    best
+    best,
+    milestones: unlocked.map((m) => ({
+      id: m.id, label: m.label, cyber: m.cyber, exp: m.exp
+    })),
+    milestoneCyber,
+    milestoneExp
   };
 }
 
