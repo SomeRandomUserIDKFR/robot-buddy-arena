@@ -1,8 +1,9 @@
 /**
  * Selectable buddy identity / character.
  *
- * Combat AI mind (Flash/Balanced/…) stays separate. Characters change voice,
- * default name, and post-match flavor — not aim or movement presets.
+ * Combat AI mind (Flash/Balanced/…) and fight style (Rusher/Defender/…) stay
+ * separate. Characters change voice, default name, and post-match flavor —
+ * plus a soft suggested fight style (never locked).
  */
 
 export const BUDDY_CHARACTERS = Object.freeze([
@@ -11,6 +12,7 @@ export const BUDDY_CHARACTERS = Object.freeze([
     name: "Pixel",
     blurb: "Bright rookie scout. Celebrates small gains.",
     accent: "#42dff5",
+    suggestedFightStyle: "balanced",
     voice: Object.freeze({
       tone: "upbeat",
       catchphrases: Object.freeze(["Nice read.", "Solid.", "Ooh, noted."]),
@@ -24,6 +26,7 @@ export const BUDDY_CHARACTERS = Object.freeze([
     name: "Atlas",
     blurb: "Calm protector. Talks in we, keeps the line steady.",
     accent: "#7ddca9",
+    suggestedFightStyle: "defender",
     voice: Object.freeze({
       tone: "steady",
       catchphrases: Object.freeze(["Steady.", "I've got your flank.", "We hold."]),
@@ -37,6 +40,7 @@ export const BUDDY_CHARACTERS = Object.freeze([
     name: "Quip",
     blurb: "Dry tactician. Softens losses without mocking you.",
     accent: "#ffb020",
+    suggestedFightStyle: "coverer",
     voice: Object.freeze({
       tone: "dry",
       catchphrases: Object.freeze(["Rough.", "That tracks.", "Noted, regrettably."]),
@@ -50,6 +54,7 @@ export const BUDDY_CHARACTERS = Object.freeze([
     name: "Nova",
     blurb: "Arena firebrand. Punchy, loud, always pushing.",
     accent: "#ff6b5a",
+    suggestedFightStyle: "rusher",
     voice: Object.freeze({
       tone: "fiery",
       catchphrases: Object.freeze(["Light it up!", "Let's go!", "More of that!"]),
@@ -63,6 +68,7 @@ export const BUDDY_CHARACTERS = Object.freeze([
     name: "Sage",
     blurb: "Patient analyst. Precise, evidence-first.",
     accent: "#9a8cff",
+    suggestedFightStyle: "coverer",
     voice: Object.freeze({
       tone: "precise",
       catchphrases: Object.freeze(["Assessment:", "Observation:", "Data point:"]),
@@ -76,6 +82,7 @@ export const BUDDY_CHARACTERS = Object.freeze([
     name: "Patch",
     blurb: "Friendly wrench. Treats practice like tune-ups.",
     accent: "#3dff7a",
+    suggestedFightStyle: "support",
     voice: Object.freeze({
       tone: "warm",
       catchphrases: Object.freeze(["Quick tune-up.", "Easy fix.", "We'll recalibrate."]),
@@ -89,6 +96,7 @@ export const BUDDY_CHARACTERS = Object.freeze([
     name: "Rook",
     blurb: "Disciplined squadmate. Short calls, no fluff.",
     accent: "#c9dde6",
+    suggestedFightStyle: "support",
     voice: Object.freeze({
       tone: "terse",
       catchphrases: Object.freeze(["Status:", "Copy.", "On it."]),
@@ -102,6 +110,7 @@ export const BUDDY_CHARACTERS = Object.freeze([
     name: "Echo",
     blurb: "Curious mirror. Reflects your habits back at you.",
     accent: "#2ab8c8",
+    suggestedFightStyle: "balanced",
     voice: Object.freeze({
       tone: "curious",
       catchphrases: Object.freeze(["What I'm seeing…", "Interesting.", "Pattern noted."]),
@@ -160,6 +169,11 @@ export function ensureBuddyCharacter(profile, random = Math.random, options = {}
       profile.botName = character.name;
     }
   }
+  // First identity assign: soft-seed fight style from the character suggestion
+  // when the player has not picked a style yet (null / missing).
+  if (assigned && (profile.fightStyle == null || profile.fightStyle === "")) {
+    profile.fightStyle = character.suggestedFightStyle || "balanced";
+  }
   return character;
 }
 
@@ -175,6 +189,16 @@ export function selectBuddyCharacter(profile, characterId, options = {}) {
     const stockNames = new Set(BUDDY_CHARACTERS.map((c) => c.name));
     if (!profile.botName || stockNames.has(profile.botName) || profile.botName === previous.name) {
       profile.botName = character.name;
+    }
+  }
+  // Soft style follow: only nudge when still on the previous character's
+  // suggestion (or unset). A manual fight-style pick is left alone.
+  if (options.syncFightStyle !== false) {
+    const prevSuggested = previous.suggestedFightStyle || "balanced";
+    const nextSuggested = character.suggestedFightStyle || "balanced";
+    const current = profile.fightStyle;
+    if (current == null || current === "" || current === prevSuggested) {
+      profile.fightStyle = nextSuggested;
     }
   }
   return true;

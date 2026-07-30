@@ -70,6 +70,8 @@ export const DEFAULT_PROFILE = {
   // Buddy mind + Mimic dial (persisted; migrated for older saves).
   aiMode: "balanced",
   mimicIntensity: "quite",
+  // Tactical posture (rusher/defender/…); null → seed from character suggestion.
+  fightStyle: null,
   settings: {
     visual: {
       modularMorphStyle: "fold",

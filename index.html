@@ -36,14 +36,19 @@
           <div class="buddy-character-picker" aria-label="Buddy character">
             <strong class="buddy-character-heading">Buddy character</strong>
             <div id="buddyCharacterList" class="buddy-character-list" role="radiogroup" aria-label="Buddy character"></div>
-            <small id="buddyCharacterHint">Voice and default name. Mind below still controls fight style.</small>
+            <small id="buddyCharacterHint">Voice and default name. Fight style and mind stay separate.</small>
+          </div>
+          <div class="fight-style-picker" aria-label="Fight style">
+            <strong class="buddy-character-heading">Fight style</strong>
+            <div id="fightStyleList" class="fight-style-list" role="radiogroup" aria-label="Fight style"></div>
+            <small id="fightStyleHint">Tactical posture — independent of mind tempo and character voice.</small>
           </div>
           <label>Buddy mind
             <select id="aiMode">
               <option value="flash">Flash — fast, impulsive</option>
               <option value="balanced" selected>Balanced — adaptable</option>
               <option value="thinker">Thinker — slow, deliberate</option>
-              <option value="mimic">Mimic — copy your style</option>
+              <option value="mimic">Mimic — copy your habits</option>
             </select>
             <div id="mimicControls" class="mimic-controls hidden">
               <strong>Mimic intensity</strong>

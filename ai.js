@@ -41,6 +41,7 @@ import {
 } from "./trapper.js";
 import { angleDiff, clamp, dist, formatTime, lerp } from "./utils.js";
 import { crateVisibleToTeam } from "./powerups.js";
+import { fightStyleSpacingBias } from "./fight-styles.js";
 import { hpAtLeast, hpBelow, optimizeIllusionsEnabled, scaleHealthAmount } from "./settings.js";
 import { hasLineOfSight, visibleToSelf, visibleToTeam } from "./vision.js";
 import { Fighter } from "./combat.js";
@@ -835,7 +836,11 @@ export function updateAiReconjurer(fighter, state, game, visible, target) {
   }
 
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
-  const pressured = hpBelow(fighter, 240) || (foe && dist(fighter, foe) < 280);
+  // Coverer/support styles conjure earlier; rushers wait for real heat.
+  const coverEager = clamp(Number(state.fightStyleCoverEager) || 0, -1, 1);
+  const hpThresh = 240 + coverEager * 70;
+  const foeRange = 280 + coverEager * 90;
+  const pressured = hpBelow(fighter, hpThresh) || (foe && dist(fighter, foe) < foeRange);
   if (!pressured) return;
   const tank = materialEjectionTank(fighter);
   const canPay = tank.length > 0 || (fighter.nanobotFree || 0) >= RECONJURER_BOT_COST;
@@ -1558,6 +1563,18 @@ export function updateAI(fighter, dt, game, profile) {
       protect = lerp(protect, lerp(.45, .95, lowHp), mimicBlend * lowHpKnowledge);
     }
   }
+  // Fight style posture (independent of mind / Mimic / character voice).
+  // Applied before coaching so chat directives still win situationally.
+  const styleBias = fighter.buddy
+    ? fightStyleSpacingBias(profile?.fightStyle, fighter.weapon)
+    : fightStyleSpacingBias("balanced", fighter.weapon);
+  desired += styleBias.desiredDelta;
+  protect = clamp(protect + styleBias.protectDelta, 0, 1);
+  state.fightStyleCoverEager = styleBias.coverEager;
+  state.fightStyleId = fighter.buddy
+    ? (profile?.fightStyle || "balanced")
+    : null;
+
   desired -= coachingBias("rush") * (fighter.weapon === "gun" ? 130 : 45);
   desired += coachingBias("safer") * 150;
   desired -= coachingBias("stayClose") * 70;
@@ -1595,11 +1612,11 @@ export function updateAI(fighter, dt, game, profile) {
     }
     const ping = game.pings[game.pings.length - 1];
     if (ping && ping.life > 1.5) {
-      const pingPriority = coachingBias("focusTargets");
-      goalX = lerp(goalX, ping.x, .45 + pingPriority * .55);
+      const pingPriority = coachingBias("focusTargets") + styleBias.pingBoost;
+      goalX = lerp(goalX, ping.x, .45 + clamp(pingPriority, 0, 1) * .55);
       state.plan = "answering ping";
     }
-    const followBias = coachingBias("stayClose");
+    const followBias = Math.max(coachingBias("stayClose"), styleBias.followPlayer);
     if (followBias && dist(fighter, player) > lerp(460, 260, followBias)) {
       goalX = lerp(goalX, player.x, followBias);
     }
@@ -1614,6 +1631,7 @@ export function updateAI(fighter, dt, game, profile) {
   let retreatHp = fighter.buddy
     ? lerp(105, 130, evidenceReliability(learned.habits.lowHpBehavior))
       + coachingBias("safer") * 90
+      + styleBias.retreatHpDelta
     : 130;
   if (isMimic && mimicBlend > 0 && lowHpKnowledge > .2
     && learned.habits.lowHpBehavior.estimate !== null) {
@@ -1969,11 +1987,13 @@ export function updateAI(fighter, dt, game, profile) {
 
   // Enemy trainers stay on the baseline tactical shield policy (bias 0).
   // Buddies blend toward player shieldUse; Mimic scales by intensity blend.
+  // Fight style then nudges willingness (defender up, rusher down).
   let shieldBias = 0;
   if (fighter.buddy) {
     const shieldEst = learned.habits.shieldUse.estimate;
     const styleBlend = isMimic ? mimicBlend : 1;
     shieldBias = shieldStyleBias(shieldEst, shieldKnowledge, styleBlend);
+    shieldBias = clamp(shieldBias + styleBias.shield, -1, 1);
   }
   state.shieldStyleBias = shieldBias;
   state.shieldCompetence = fighter.buddy ? shieldKnowledge : 1;

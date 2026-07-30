@@ -1033,6 +1033,44 @@ button span { opacity: .6; font-size: 11px; }
 }
 #buddyCharacterHint { min-height: 0; margin: 0; font-size: 10px; }
 
+.fight-style-picker {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+.fight-style-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.fight-style-card {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid #2a4452;
+  background: rgba(10, 24, 32, .72);
+  color: #c9dde6;
+}
+.fight-style-card strong {
+  color: #e7f9ff;
+  font-size: 12px;
+}
+.fight-style-card span {
+  color: #8aa0ab;
+  font-size: 10px;
+  line-height: 1.25;
+}
+.fight-style-card.active {
+  border-color: var(--cyan);
+  box-shadow: inset 0 0 0 1px rgba(72, 232, 255, .4);
+}
+.fight-style-card.suggested:not(.active) {
+  border-color: rgba(72, 232, 255, .35);
+}
+#fightStyleHint { min-height: 0; margin: 0; font-size: 10px; }
+
 .segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 7px; }
 .segmented button { margin: 0; padding: 8px 4px; font-size: 9px; }
 .segmented button.active { color: #061116; border-color: var(--cyan); background: var(--cyan); }

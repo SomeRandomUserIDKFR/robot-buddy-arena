@@ -45,6 +45,9 @@ import {
 import {
   ensureBuddyCharacter, getBuddyCharacter, listBuddyCharacters, personalizeResultLines
 } from "./buddy-characters.js";
+import {
+  ensureFightStyle, getFightStyle, listFightStyles
+} from "./fight-styles.js";
 import { applySfxSettings } from "./sfx.js";
 import { normalizeTrapType, trapTypeLabel } from "./trapper.js";
 import { isSpellbook, normalizeSpellType, spellManaCost, spellTypeLabel } from "./spellbook.js";
@@ -62,6 +65,8 @@ export const ui = {
   nameError: $("#nameError"),
   buddyCharacterList: $("#buddyCharacterList"),
   buddyCharacterHint: $("#buddyCharacterHint"),
+  fightStyleList: $("#fightStyleList"),
+  fightStyleHint: $("#fightStyleHint"),
   aiMode: $("#aiMode"),
   mimicControls: $("#mimicControls"),
   mimicIntensity: $("#mimicIntensity"),
@@ -272,9 +277,11 @@ function refreshProgression(profile) {
 
 export function refreshMenu(profile) {
   ensureBuddyCharacter(profile);
+  ensureFightStyle(profile);
   ui.name.value = profile.botName || "Pixel";
   ui.buddyColumnName.textContent = profile.botName || "Pixel";
   refreshBuddyCharacters(profile);
+  refreshFightStyles(profile);
   const weaponType = weaponKind(profile.equipment.player.weapon);
   const data = profile.weapons[weaponType];
   ui.readiness.textContent = readiness(data);
@@ -309,9 +316,35 @@ function refreshBuddyCharacters(profile) {
     `;
   }).join("");
   if (ui.buddyCharacterHint) {
+    const suggested = selected.suggestedFightStyle || "balanced";
     ui.buddyCharacterHint.textContent = (
-      `${selected.name} — ${selected.blurb} Mind below still controls fight style.`
+      `${selected.name} — ${selected.blurb} Suggested style: ${suggested}.`
     );
+  }
+}
+
+function refreshFightStyles(profile) {
+  if (!ui.fightStyleList) return;
+  ensureFightStyle(profile);
+  const selected = getFightStyle(profile);
+  const suggestedId = getBuddyCharacter(profile).suggestedFightStyle || "balanced";
+  ui.fightStyleList.innerHTML = listFightStyles().map((style) => {
+    const active = style.id === selected.id;
+    const suggested = style.id === suggestedId;
+    return `
+      <button type="button" class="fight-style-card${active ? " active" : ""}${suggested ? " suggested" : ""}"
+        data-fight-style="${escapeHtml(style.id)}"
+        role="radio" aria-checked="${active ? "true" : "false"}">
+        <strong>${escapeHtml(style.name)}</strong>
+        <span>${escapeHtml(style.blurb)}</span>
+      </button>
+    `;
+  }).join("");
+  if (ui.fightStyleHint) {
+    const tip = suggestedId !== selected.id
+      ? `${selected.name} — ${selected.blurb} (${getBuddyCharacter(profile).name} suggests ${suggestedId}.)`
+      : `${selected.name} — ${selected.blurb}`;
+    ui.fightStyleHint.textContent = tip;
   }
 }
 
@@ -1752,6 +1785,11 @@ export function bindUi(handlers) {
     const character = event.target.closest("[data-buddy-character]");
     if (character) {
       handlers.buddyCharacter?.(character.dataset.buddyCharacter);
+      return;
+    }
+    const fightStyle = event.target.closest("[data-fight-style]");
+    if (fightStyle) {
+      handlers.fightStyle?.(fightStyle.dataset.fightStyle);
       return;
     }
     const mode = event.target.closest("[data-mode]");

@@ -34,6 +34,7 @@ import {
   survivalHudLine, tickSurvival
 } from "./survival.js";
 import { selectBuddyCharacter } from "./buddy-characters.js";
+import { ensureFightStyle, selectFightStyle } from "./fight-styles.js";
 import { cycleSpellType, isSpellbook, tickSpellbookWorld } from "./spellbook.js";
 import { tickGroundDebris } from "./debris.js";
 import { tickThrowBreakable } from "./throw-breakable.js";
@@ -122,6 +123,7 @@ function makeGame(mode) {
   if (mind === "mimic" && mimicUnlockLevel(learned) === "locked") mind = "balanced";
   profile.aiMode = mind;
   ui.aiMode.value = mind;
+  ensureFightStyle(profile);
   saveProfile();
   if (profile.equipment.buddyMode === "choice") setBuddyMode(profile, "choice");
   if (profile.buddyPerkAutonomy === "choice") setBuddyPerkAutonomy(profile, "choice");
@@ -783,6 +785,12 @@ bindUi({
   },
   buddyCharacter(characterId) {
     if (!selectBuddyCharacter(profile, characterId)) return;
+    ensureFightStyle(profile);
+    saveProfile();
+    refreshMenu(profile);
+  },
+  fightStyle(styleId) {
+    if (!selectFightStyle(profile, styleId)) return;
     saveProfile();
     refreshMenu(profile);
   },
