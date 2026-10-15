@@ -52,6 +52,10 @@ import {
   isSpellbook, tickSpellbookFighter
 } from "./spellbook.js";
 import { angleDiff, clamp, dist, lerp, segmentHitsBox } from "./utils.js";
+import {
+  damageDisguise, DISGUISE_SPEED_MULT, endDisguise, fighterHitbox, fighterHitPoint,
+  syncDisguisePosition, tickDisguise
+} from "./disguise.js";
 
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
 bindExplosiveBarrelPowerCrateDamager(damagePowerCrate);
@@ -177,6 +181,12 @@ function hit(target, source, damage, angle, game, extras = {}) {
     target.vy += Math.sin(angle) * 20 - 12;
     return { phantom: true };
   }
+  if (target.disguiseProp) {
+    damageDisguise(target, damage, game, extras);
+    target.lastHitAt = game.elapsed;
+    if (target.human) game.lastShotAtPlayer = game.elapsed;
+    return { disguise: true };
+  }
   // Snapshot before shield-break may clear raised — melee and projectile alike.
   const counterEligible = !extras.fromCounterSlash
     && !!target.shieldRaised
@@ -230,7 +240,7 @@ function hit(target, source, damage, angle, game, extras = {}) {
       return;
     }
   }
-  applyHpDamage(target, dealt, game, { alreadyScaled: true });
+  applyHpDamage(target, dealt, game, { alreadyScaled: true, source });
   target.hitFlash = .12;
   target.hitFace = .35;
   target.lastHitAt = game.elapsed;
@@ -333,7 +343,7 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct = 1) {
         && !isIllusionFighter(enemy)
       ))
       .map((enemy) => ({
-        x: enemy.x, y: enemy.y, w: SIZE, h: SIZE, kind: "fighter", enemy
+        ...fighterHitbox(enemy), kind: "fighter", enemy
       }))
   ];
   const hitPoint = raycastFirst(ox, oy, ex, ey, boxes);
@@ -423,6 +433,7 @@ export function attack(fighter, game, random = Math.random) {
   if (fighter.shieldRaised && !fighter.shieldBroken) return;
   if (weaponAttackLocked(fighter)) return;
   if (!canNanotechAttack(fighter)) return;
+  endDisguise(fighter, game);
   if (isShieldSteal(fighter)) {
     // Continuous drain is handled in stepFighter while attack is held.
     return;
@@ -519,8 +530,12 @@ export function attack(fighter, game, random = Math.random) {
     });
     let slashedFighter = false;
     for (const enemy of game.fighters) {
-      if (!enemy.dead && enemy.team !== fighter.team && dist(fighter, enemy) < fighter.weaponReach) {
-        const angle = Math.atan2(enemy.y - fighter.y, enemy.x - fighter.x);
+      const cx = fighter.x + SIZE / 2;
+      const cy = fighter.y + SIZE / 2;
+      const point = fighterHitPoint(enemy, cx, cy);
+      const distance = enemy.disguiseProp ? Math.hypot(point.x - cx, point.y - cy) : dist(fighter, enemy);
+      if (!enemy.dead && enemy.team !== fighter.team && distance < fighter.weaponReach) {
+        const angle = Math.atan2(point.y - cy, point.x - cx);
         if (Math.abs(angleDiff(angle, fighter.aim)) < .85) {
           hit(enemy, fighter, swingDmg, fighter.aim, game);
           slashedFighter = true;
@@ -608,6 +623,7 @@ export function stepJetFuel(fighter, jetHeld, wantsThrust, dt) {
 }
 
 export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
+  tickDisguise(fighter, game, dt);
   if (fighter.dead) {
     if (fighter.human) setJetpackThrusting(false);
     return;
@@ -626,7 +642,9 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   tickModularWeapon(fighter, dt);
   tickAdaptiveWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
-  if (!decoy && !clone) tickTrapperFighter(fighter, dt);
+  if (!decoy && (!clone || fighter.cloneVariant === "split")) {
+    tickTrapperFighter(fighter, dt);
+  }
   tickSpellbookFighter(fighter, dt);
   tickIllusionistFighter(fighter, dt, game);
   tickCombatCloneFighter(fighter, dt);
@@ -652,6 +670,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
       ? getHumanIntent(fighter)
       : updateAI(fighter, dt, game, profile);
   }
+  if (fighter.shieldRaised) endDisguise(fighter, game);
   applyTrapLockToIntent(fighter, intent);
   applyIcePinToIntent(fighter, intent);
   fighter.nanotechWantFire = !!intent.attack;
@@ -676,6 +695,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
     * retractableSpeedMultiplier(fighter)
     * moveSpeedBuffMult(fighter)
     * iceSlowMult(fighter)
+    * (fighter.disguiseProp ? DISGUISE_SPEED_MULT : 1)
     * (isTrapLocked(fighter) ? 0.35 : 1);
   // Hookshot reel / hang / drag owns velocity — walk friction was cancelling the pull.
   const reeling = !!fighter.hookReel;
@@ -758,12 +778,14 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   fighter.materialEjectHeld = !!intent.ejectVacuum;
   fighter.materialBeamHeld = !!(intent.chuck && fighter.materialConsumer);
   fighter.shieldStealHeld = !!(intent.attack && isShieldSteal(fighter));
+  if (intent.chuck || fighter.shieldStealHeld) endDisguise(fighter, game);
   if (intent.chuck) chuckMaterialConsumerScrap(fighter, game);
   if (fighter.shieldStealHeld) {
     tickShieldStealBeam(fighter, game, dt);
   } else if (intent.attack) {
     attack(fighter, game);
   }
+  syncDisguisePosition(fighter);
 }
 
 export function stepBullets(game, dt) {
@@ -799,7 +821,8 @@ export function stepBullets(game, dt) {
     let stopped = false;
     for (const enemy of game.fighters) {
       if (enemy.dead || enemy.team === bullet.owner.team || enemy === bullet.owner) continue;
-      if (!segmentHitsBox(bullet.px, bullet.py, bullet.x, bullet.y, enemy.x, enemy.y, SIZE, SIZE)) {
+      const box = fighterHitbox(enemy);
+      if (!segmentHitsBox(bullet.px, bullet.py, bullet.x, bullet.y, box.x, box.y, box.w, box.h)) {
         continue;
       }
       const dropoff = bullet.dropoff;

@@ -170,8 +170,11 @@ export function getCodeFactsPack() {
 
 function scoreChunk(query, chunk) {
   let best = overlapScore(query, chunk.text);
+  const queryTerms = contentTerms(query);
   for (const alias of chunk.aliases || []) {
-    if (normalize(query).includes(normalize(alias))) best = Math.max(best, 0.48);
+    // A short generic alias must not validate a mostly unknown question.
+    if (contentTerms(alias).length < Math.max(1, queryTerms.length / 2)) continue;
+    if (containsWord(query, alias)) best = Math.max(best, 0.48);
     best = Math.max(best, overlapScore(query, alias) * 0.9);
   }
   if (chunk.topic && containsWord(query, chunk.topic)) best = Math.max(best, 0.4);

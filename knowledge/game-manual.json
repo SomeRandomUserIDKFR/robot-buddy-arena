@@ -8,6 +8,18 @@
       "text": "Player controls: A/D move, W or Space jump (hold airborne to jet), Shift jetpack thrust, C dodge/dash with brief invulnerability, Q raise/lower shield, F deploy/retract Retractable Armor or Shell, E cycle Mechanical Modularity modes (Sword → Shield → Pulse Rifle), mouse aim, left click fire/swing, G ping buddy, Escape pause."
     },
     {
+      "id": "manual-clone-extensions",
+      "topic": "equipment",
+      "aliases": ["shadow clone", "split", "linked damage", "body switching", "twins"],
+      "text": "Shadow Clone (280 Cyber): 3 spawns up to two real 25 HP shadows, 5s cooldown. Actual HP damage and existing power-up/ice/trap effects are shared with the owner; one status clock and Overcharge pool, no recursive damage sharing. Split (300 Cyber): 3 spawns up to two persistent 25 HP twins, 30s cooldown. H cycles control with 3s cooldown. Stored player HP and normal kit follow control with a 25 HP minimum; the abandoned body gets pre-switch HP capped at 25 (10 HP becomes a controlled 25 and an abandoned 10). Fuel, position, buffs, and debuffs stay with physical bodies. Neither extension's twins add armor HP, nest-spawn, survive the owner, or hold match victory."
+    },
+    {
+      "id": "manual-disguise",
+      "topic": "equipment",
+      "aliases": ["disguise", "borrow prop", "relocate cover", "reveal disguise"],
+      "text": "Disguise (240 Cyber): 3 borrows an eligible real map breakable within 100 units, removing it from map cover and using its full appearance/hitbox. Walking is 55% speed. Remaining prop HP/bracing protects robot HP. Press 3, attack/use a weapon, or raise a shield to reveal and place that same prop at current feet. Breaking it reveals the robot and creates real debris there, never back at the original spot. Final-hit overkill does not spill into robot HP; barrel explosions still work. Five-second cooldown after reveal, no duration limit. No loot crates, illusions, held props, armor dummies, glare nodes, or Reconjurer-created props. Enemies see only the prop; allies see a subtle tell. AI can suspect repeated visible horizontal prop movement and test the observed position, without knowing hidden identity. Stationary disguises remain concealed; walls, visibility gaps, and stopping break or decay suspicion."
+    },
+    {
       "id": "manual-jetpack",
       "topic": "jetpack",
       "aliases": ["fuel", "thrust", "exhausted", "ceiling", "boost"],

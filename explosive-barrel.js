@@ -4,6 +4,7 @@
  * Chain reactions are allowed (each barrel detonates once).
  */
 import { SIZE } from "./config.js";
+import { fighterHitPoint } from "./disguise.js";
 
 export const RED_BARREL_KIND = "redBarrel";
 export const OIL_BARREL_KIND = "oilBarrel";
@@ -102,8 +103,9 @@ export function detonateExplosiveBarrel(prop, game, ix, iy, damagePropFn) {
   if (typeof hitFn === "function" && Array.isArray(game.fighters)) {
     for (const fighter of game.fighters) {
       if (!fighter || fighter.dead) continue;
-      const fx = fighter.x + SIZE / 2;
-      const fy = fighter.y + SIZE / 2;
+      const point = fighterHitPoint(fighter, cx, cy);
+      const fx = point.x;
+      const fy = point.y;
       const d = Math.hypot(fx - cx, fy - cy);
       const mult = blastFalloff(d, radius);
       if (!(mult > 0)) continue;

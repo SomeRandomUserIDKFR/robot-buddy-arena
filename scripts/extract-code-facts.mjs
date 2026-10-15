@@ -14,6 +14,9 @@ const OUT = join(ROOT, "knowledge", "code-facts.json");
 const ALLOWLIST = [
   "config.js",
   "equipment.js",
+  "combat-clone.js",
+  "disguise.js",
+  "illusionist.js",
   "powerups.js",
   "conquest.js",
   "maps.js",
@@ -131,6 +134,7 @@ function topicFor(file, name) {
     return "config";
   }
   if (file === "equipment.js") return /REWARD|CYBER|EXP/.test(name) ? "conquest" : "equipment";
+  if (file === "combat-clone.js" || file === "illusionist.js" || file === "disguise.js") return "equipment";
   if (file === "powerups.js") return "powerups";
   if (file === "conquest.js") return "conquest";
   if (file === "maps.js") return "maps";

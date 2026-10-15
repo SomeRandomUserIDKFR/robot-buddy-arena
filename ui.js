@@ -25,6 +25,12 @@ import {
 } from "./power.js";
 import { listTimedBuffs } from "./powerups.js";
 import {
+  DISGUISE_COOLDOWN, DISGUISE_SPEED_MULT, findDisguiseProp
+} from "./disguise.js";
+import {
+  cloneGearName, cloneSpawnCooldown, listCombatClones, SPLIT_SWITCH_COOLDOWN
+} from "./combat-clone.js";
+import {
   ensureProgressionProfile, getPerk, perkTradeoffLines
 } from "./perks.js";
 import { escapeHtml, formatTime } from "./utils.js";
@@ -504,17 +510,18 @@ export function updateHud(game) {
     const showTrap = !!player?.trapper && !player.dead;
     const showIllu = !!player?.illusionist && !player.dead;
     const showDoppel = !!player?.combatCloneGear && !player.dead;
+    const showDisguise = !!player?.disguiseGear && !player.dead;
     const showSpell = !!player && isSpellbook(player) && !player.dead
-      && !showTrap && !showIllu && !showDoppel;
+      && !showTrap && !showIllu && !showDoppel && !showDisguise;
     const showTool = !player?.dead
-      && !showTrap && !showIllu && !showDoppel && !showSpell
+      && !showTrap && !showIllu && !showDoppel && !showDisguise && !showSpell
       && (!!player?.toolSecondary || !!player?.heldToolPickup);
     ui.trapHud.classList.toggle(
       "hidden",
-      !showTrap && !showIllu && !showDoppel && !showSpell && !showTool
+      !showTrap && !showIllu && !showDoppel && !showDisguise && !showSpell && !showTool
     );
     ui.trapHud.classList.toggle("illusion", showIllu);
-    ui.trapHud.classList.toggle("doppel", showDoppel && !showIllu);
+    ui.trapHud.classList.toggle("doppel", (showDoppel || showDisguise) && !showIllu);
     ui.trapHud.classList.toggle("spell", showSpell);
     const clearTrapHudKinds = () => {
       ui.trapHud.classList.toggle("fake", false);
@@ -526,7 +533,30 @@ export function updateHud(game) {
       ui.trapHud.classList.toggle("fire", false);
       ui.trapHud.classList.toggle("lightning", false);
     };
-    if (showIllu) {
+    if (showDisguise) {
+      clearTrapHudKinds();
+      const prop = player.disguiseProp;
+      const cd = player.disguiseCd || 0;
+      const nearby = prop || findDisguiseProp(player, game);
+      if (ui.trapHudKicker) {
+        ui.trapHudKicker.textContent = prop ? "DISGUISE · 3 REVEAL"
+          : cd > 0 ? "DISGUISE · COOLDOWN" : "DISGUISE · PRESS 3";
+      }
+      if (ui.trapHudType) {
+        ui.trapHudType.textContent = prop
+          ? prop.kind.replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase()
+          : cd > 0 ? `${Math.ceil(cd)}s` : "READY";
+      }
+      if (ui.trapHudSub) {
+        ui.trapHudSub.textContent = prop
+          ? `${Math.ceil((prop.hp || 0) + (prop.braceHp || 0))} prop HP · 55% move`
+          : player.shieldRaised ? "Lower shield first"
+            : player.heldProp ? "Drop held prop first"
+              : player.hookReel || player.hookHang || player.hookDrag ? "Release hook first"
+                : nearby ? `Nearby ${nearby.kind} · 3 borrow` : "Find nearby map cover";
+        ui.trapHudSub.classList.remove("hidden", "metal");
+      }
+    } else if (showIllu) {
       const t = player.illusionistType === "prop"
         ? "prop"
         : player.illusionistType === "platform"
@@ -552,15 +582,20 @@ export function updateHud(game) {
     } else if (showDoppel) {
       clearTrapHudKinds();
       const cd = player.combatCloneCd || 0;
+      const count = listCombatClones(game).filter((c) => c.cloneOwner === player).length;
+      const name = cloneGearName(player).toUpperCase();
       if (ui.trapHudKicker) {
-        ui.trapHudKicker.textContent = cd > 0 ? "DOPPEL · COOLDOWN" : "DOPPEL · PRESS 3";
+        ui.trapHudKicker.textContent = cd > 0 ? `${name} · COOLDOWN` : `${name} · PRESS 3`;
       }
       if (ui.trapHudType) {
-        ui.trapHudType.textContent = cd > 0 ? `${Math.ceil(cd)}s` : "READY";
+        ui.trapHudType.textContent = cd > 0 ? `${Math.ceil(cd)}s` : count >= 2 ? "FULL" : "READY";
       }
       if (ui.trapHudSub) {
-        ui.trapHudSub.textContent = "";
-        ui.trapHudSub.classList.add("hidden");
+        const switchCd = player.splitSwitchCd || 0;
+        ui.trapHudSub.textContent = player.splitGear
+          ? `${count}/2 twins · H ${switchCd > 0 ? `${Math.ceil(switchCd)}s` : "switch"}`
+          : player.shadowCloneGear ? `${count}/2 shadows · linked HP / effects` : `${count}/2 twins`;
+        ui.trapHudSub.classList.remove("hidden", "metal");
       }
     } else if (showTrap) {
       const type = normalizeTrapType(player.trapperType);
@@ -621,7 +656,8 @@ export function updateHud(game) {
     }
   }
   ui.teamBars.innerHTML = (() => {
-    const real = game.fighters.filter((f) => !f.illusion && !f.combatClone);
+    const real = game.fighters.filter((f) => !f.illusion && !f.combatClone
+      && (!f.disguiseProp || f.team === player.team));
     const shown = game.mode === "survival"
       ? real.filter((f) => f.team === 0 || (!f.survivalSwarm && f.team === 1))
       : real;
@@ -1339,6 +1375,17 @@ function modifierMarkup(gear) {
         "<span class=\"stat-down\">Does not replace 1/2 secondary</span>"
       ].join("");
     }
+    if (gear.disguise) {
+      return [
+        "<span>Extension · 3 borrow / reveal</span>",
+        "<span class=\"stat-up\">Wear nearby real map cover · remaining prop HP</span>",
+        `<span class="stat-down">${Math.round(DISGUISE_SPEED_MULT * 100)}% movement speed</span>`,
+        "<span>Attack or raise shield to reveal</span>",
+        "<span>Leaves the same prop at your reveal position</span>",
+        "<span>Broken disguise becomes debris there</span>",
+        `<span>${DISGUISE_COOLDOWN}s cooldown after reveal · no duration limit</span>`
+      ].join("");
+    }
     if (gear.trapper) {
       return [
         "<span>Extension · T cycle · 3 plant</span>",
@@ -1355,6 +1402,24 @@ function modifierMarkup(gear) {
       ].join("");
     }
     if (gear.combatClone) {
+      if (gear.shadowClone || gear.split) {
+        const cooldown = cloneSpawnCooldown({ shadowCloneGear: !!gear.shadowClone });
+        return [
+          "<span>Extension · press 3 to spawn</span>",
+          "<span class=\"stat-up\">Real twin · 25 HP while uncontrolled</span>",
+          `<span>Max 2 alive · ${cooldown}s spawn cooldown</span>`,
+          gear.shadowClone
+            ? "<span class=\"stat-down\">Shared HP damage, buffs and debuffs</span>"
+            : `<span class="stat-up">H cycles bodies · ${SPLIT_SWITCH_COOLDOWN}s switch cooldown</span>`,
+          gear.split
+            ? "<span>Stored player HP follows you · minimum 25 on switch</span>"
+            : "<span>Full weapon damage · effects use one shared clock</span>",
+          gear.split
+            ? "<span>Left body keeps pre-switch HP, capped at 25</span>"
+            : "",
+          "<span>Persistent until killed · dies with you</span>"
+        ].join("");
+      }
       return [
         "<span>Extension · press 3 to spawn</span>",
         "<span class=\"stat-up\">Real twin · looks like an illusion fighter</span>",

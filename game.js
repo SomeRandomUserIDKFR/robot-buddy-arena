@@ -6,7 +6,7 @@ import {
 } from "./combat.js";
 import {
   isCombatClone, isCombatCloneGear, refreshCombatCloneCaches, tickCombatCloneWorld,
-  tryCombatCloneSpawn
+  SPLIT_SWITCH_KEY, tryCombatCloneSpawn, trySplitSwitch
 } from "./combat-clone.js";
 import {
   cycleIllusionistType, cycleIllusionPropKind, isIllusionFighter, isIllusionist,
@@ -39,6 +39,7 @@ import {
   survivalHudLine, tickSurvival
 } from "./survival.js";
 import { selectBuddyCharacter } from "./buddy-characters.js";
+import { finishTacticalLearning } from "./ai-tactics.js";
 import { ensureFightStyle, selectFightStyle } from "./fight-styles.js";
 import { cycleSpellType, isSpellbook, tickSpellbookWorld } from "./spellbook.js";
 import { tickGroundDebris } from "./debris.js";
@@ -90,6 +91,7 @@ import {
   showMenu, showPause, showResults, showSettings, ui, updateHud
 } from "./ui.js";
 import { capitalize, clamp, formatTime, thoughtReason } from "./utils.js";
+import { isDisguiseGear, tryDisguise } from "./disguise.js";
 
 const canvas = document.querySelector("#game");
 const renderer = createRenderer(canvas);
@@ -215,6 +217,7 @@ function makeGame(mode) {
         : "veteran";
   const gameState = {
     id: `${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`,
+    seed: crypto.getRandomValues(new Uint32Array(1))[0],
     mode,
     difficulty,
     encounter: mode === "conquest" || mode === "campaign"
@@ -492,7 +495,10 @@ function update(dt) {
     // Doppels skip secondary/extension world ticks — they only fight.
     // Illusion decoys still tick Throw Breakable so fake held props track the hand
     // and ghosted cover restores when they fade.
-    if (isCombatClone(fighter)) continue;
+    if (isCombatClone(fighter)) {
+      if (fighter.cloneVariant === "split") tickFighterPowerBuffs(fighter, dt);
+      continue;
+    }
     if (isIllusionFighter(fighter)) {
       tickThrowBreakable(fighter, game, dt);
       continue;
@@ -508,6 +514,7 @@ function update(dt) {
   stepBullets(game, dt);
   stepThrownProps(game, dt);
   tickToolProjectiles(game, dt);
+  finishTacticalLearning(game, profile, true);
   tickToolPickups(game, dt);
   tickPowerCrateSpawns(game, dt);
   trackTraining(game, dt);
@@ -541,6 +548,7 @@ function update(dt) {
     if (buddy && !buddy.dead && game.thoughts.length < 6) {
       game.thoughts.push(
         `${formatTime(game.elapsed)} — ${capitalize(buddy.aiState.plan)}: ${thoughtReason(buddy.aiState.plan)}`
+        + (buddy.tacticalState?.trial ? ` (testing ${buddy.tacticalState.trial.strategy} tactics)` : "")
       );
     }
     game.thoughtClock = 10 + Math.random() * 8;
@@ -575,6 +583,7 @@ function update(dt) {
 function finish(win) {
   if (!game || game.over) return;
   game.over = true;
+  finishTacticalLearning(game, profile);
   profile.matches++;
   let practiceLines = [];
   let learningChanged = [];
@@ -644,6 +653,9 @@ function handleKeyDown(event) {
       cycleAdaptiveMode(player);
     }
   }
+  if (event.code === SPLIT_SWITCH_KEY && !event.repeat) {
+    trySplitSwitch(game.fighters[0], game);
+  }
   if (event.code === "Digit1" && !event.repeat) {
     selectWeaponSlot(game.fighters[0], "weapon");
   }
@@ -652,7 +664,8 @@ function handleKeyDown(event) {
   }
   if (event.code === "Digit3" && !event.repeat) {
     const player = game.fighters[0];
-    if (isIllusionist(player)) tryIllusionistPlant(player, game, Fighter);
+    if (isDisguiseGear(player)) tryDisguise(player, game);
+    else if (isIllusionist(player)) tryIllusionistPlant(player, game, Fighter);
     else if (isCombatCloneGear(player)) tryCombatCloneSpawn(player, game, Fighter);
     else if (isTrapper(player)) tryTrapperPlant(player, game);
     else if (isLightCondensation(player)) tryLightCondensation(player, game);

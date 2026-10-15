@@ -798,11 +798,12 @@ export function absorbBraceShell(prop, amount, game, impactX, impactY) {
  */
 export function damageProp(prop, amount, game, impactX, impactY, opts = null) {
   if (!prop || prop.destroyed || !prop.breakable) return false;
+  prop.onDisguiseHit?.();
   const scale = game?.healthScale
     || (game?.settings?.visual?.useClassic100Hp ? 0.2 : 1);
   amount = Math.max(0, amount) * scale;
-  const ix = impactX ?? prop.x + prop.w / 2;
-  const iy = impactY ?? prop.y + prop.h / 2;
+  const ix = prop.disguisedBy ? prop.x + prop.w / 2 : impactX ?? prop.x + prop.w / 2;
+  const iy = prop.disguisedBy ? prop.y + prop.h / 2 : impactY ?? prop.y + prop.h / 2;
   if (opts?.fromExplosion) noteOilIgnition(prop, "explosion");
   if (opts?.fromFire) noteOilIgnition(prop, "fire");
   if (opts?.fromImpact) noteOilIgnition(prop, "impact");
@@ -831,6 +832,7 @@ export function damageProp(prop, amount, game, impactX, impactY, opts = null) {
     prop.solid = false;
     prop.blocksProjectiles = false;
     prop.blocksSight = false;
+    prop.onDisguiseBreak?.();
     if (game?.effects) {
       game.effects.push({
         type: "debris",

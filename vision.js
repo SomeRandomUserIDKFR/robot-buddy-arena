@@ -86,6 +86,15 @@ export function visibleToSelf(observer, target, game = null) {
   return hasLineOfSight(game, observer, target);
 }
 
+export function propVisibleToSelf(observer, prop, game) {
+  const probe = { x: prop.x + prop.w / 2 - SIZE / 2, y: prop.y + prop.h / 2 - SIZE / 2 };
+  const sight = (observer.sight || SIGHT) * gimmickSightMult(game);
+  if (dist(observer, probe) > sight && !inDirectionalSight(observer, probe, game)) return false;
+  return !cachedSightBlockers(game).some((box) => box !== prop
+    && segmentHitsBox(observer.x + SIZE / 2, observer.y + SIZE / 2,
+      probe.x + SIZE / 2, probe.y + SIZE / 2, box.x, box.y, box.w, box.h));
+}
+
 /**
  * Whether the viewer should render `fighter`.
  * - Conquest (and any ally): same-team fighters always see each other — the

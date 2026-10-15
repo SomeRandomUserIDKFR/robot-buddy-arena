@@ -1,14 +1,69 @@
 /**
- * Doppel — Extension (key 3).
- * Spawns a real fighter clone that looks like an Illusionist decoy (same face,
- * color, kit silhouette) but deals / takes real damage. 25% of your max HP,
- * max 2 alive, 30s cooldown. Priced under Illusionist.
+ * Real clone Extensions (key 3): Doppel, Shadow Clone, and Split.
+ * Doppel uses 25% max HP and a 30s cooldown. Shadow Clone links damage/status
+ * across 25-HP twins with Illusionist's cooldown. Split exchanges physical
+ * bodies while retaining the controller's normal kit and stored health.
  */
 import { SIZE, WORLD } from "./config.js";
-import { applyLoadout, GEAR_BY_ID, NO_EXTENSION_ID } from "./equipment.js";
+import {
+  applyLoadout, GEAR_BY_ID, NO_EXTENSION_ID, SHADOW_CLONE_ID, SPLIT_ID,
+  syncNanotechDisplayedHp
+} from "./equipment.js";
+import { ILLUSIONIST_COOLDOWN } from "./illusionist.js";
 import { clamp } from "./utils.js";
 
 export const COMBAT_CLONE_ID = "doppel";
+export { SHADOW_CLONE_ID, SPLIT_ID };
+export const LINKED_CLONE_HP = 25;
+export const SPLIT_SWITCH_COOLDOWN = 3;
+export const SPLIT_SWITCH_KEY = "KeyH";
+
+const SHARED_STATUS_FIELDS = [
+  "trapLockT", "trapLockKind", "signalRevealT", "signalRevealTeam",
+  "icePinT", "iceSlowT"
+];
+
+const BODY_FIELDS = [
+  "x", "y", "vx", "vy", "grounded", "facing", "aim", "fuel", "jetLocked",
+  "jetReleased", "thrusting", "powerBuffs", ...SHARED_STATUS_FIELDS
+];
+
+export function cloneSpawnCooldown(fighter) {
+  return fighter?.shadowCloneGear ? ILLUSIONIST_COOLDOWN : COMBAT_CLONE_COOLDOWN;
+}
+
+export function cloneGearName(fighter) {
+  return fighter?.shadowCloneGear ? "Shadow Clone" : fighter?.splitGear ? "Split" : "Doppel";
+}
+
+export function isSplitGear(fighter) {
+  return fighter?.splitGear === true || fighter?.loadout?.extensionSecondary === SPLIT_ID;
+}
+
+function linkShadowClone(owner, clone) {
+  if (!owner.shadowLink) {
+    const status = Object.fromEntries(SHARED_STATUS_FIELDS.map((key) => [key, owner[key]]));
+    owner.shadowLink = { owner, members: new Set([owner]), status };
+    bindShadowStatus(owner, owner.shadowLink);
+  }
+  const link = owner.shadowLink;
+  clone.shadowLink = link;
+  clone.powerBuffs = owner.powerBuffs;
+  link.members.add(clone);
+  bindShadowStatus(clone, link);
+}
+
+function bindShadowStatus(fighter, link) {
+  // One status clock for the group; existing spell/trap setters work on any body.
+  for (const key of SHARED_STATUS_FIELDS) {
+    Object.defineProperty(fighter, key, {
+      configurable: true,
+      enumerable: true,
+      get: () => link.status[key],
+      set: (value) => { link.status[key] = value; }
+    });
+  }
+}
 
 /** Plant cooldown (s). */
 export const COMBAT_CLONE_COOLDOWN = 30;
@@ -18,7 +73,9 @@ export const COMBAT_CLONE_MAX_ACTIVE = 2;
 export const COMBAT_CLONE_HP_FRAC = 0.25;
 
 export function isCombatCloneGear(fighterOrId) {
-  if (typeof fighterOrId === "string") return fighterOrId === COMBAT_CLONE_ID;
+  if (typeof fighterOrId === "string") {
+    return fighterOrId === COMBAT_CLONE_ID || fighterOrId === SHADOW_CLONE_ID || fighterOrId === SPLIT_ID;
+  }
   if (fighterOrId?.combatCloneGear === true) return true;
   const id = fighterOrId?.loadout?.extensionSecondary;
   return id === COMBAT_CLONE_ID || GEAR_BY_ID[id]?.combatClone === true;
@@ -89,34 +146,78 @@ export function createCombatClone(owner, FighterCtor) {
   clone.buddy = false;
   clone.combatClone = true;
   clone.cloneOwner = owner;
+  clone.cloneVariant = owner.loadout.extensionSecondary;
   clone.aim = owner.aim;
   clone.facing = owner.facing || 1;
   const minHp = 40 * (owner.healthScale || 1);
-  const maxHp = Math.max(minHp, Math.round((owner.maxHp || 500 * (owner.healthScale || 1)) * COMBAT_CLONE_HP_FRAC));
+  const fixedHp = clone.cloneVariant === SHADOW_CLONE_ID || clone.cloneVariant === SPLIT_ID;
+  const maxHp = fixedHp ? LINKED_CLONE_HP
+    : Math.max(minHp, Math.round((owner.maxHp || 500 * (owner.healthScale || 1)) * COMBAT_CLONE_HP_FRAC));
   clone.maxHp = maxHp;
   clone.hp = maxHp;
+  if (fixedHp) {
+    clone.coreMaxHp = maxHp;
+    clone.coreHp = maxHp;
+    clone.retractableMax = 0;
+    clone.retractableHp = 0;
+    clone.retractableDeployed = false;
+    clone.nanobotArmor = 0;
+  }
   clone.fuel = Math.min(1, owner.fuel ?? 1);
+  if (clone.cloneVariant === SHADOW_CLONE_ID) linkShadowClone(owner, clone);
   // Look like an Illusionist decoy at a glance: no special name tag.
   return clone;
 }
 
 /**
- * Press 3: spawn a real doppel along aim.
+ * Press 3: spawn a real twin along aim.
  * @param {Function} [FighterCtor]
  * @returns {object|null}
  */
 export function tryCombatCloneSpawn(fighter, game, FighterCtor = null) {
   if (!fighter || fighter.dead || !game) return null;
+  if ((fighter.shadowCloneGear || fighter.splitGear) && (game.paused || game.over)) return null;
   if (!isCombatCloneGear(fighter)) return null;
   if ((fighter.combatCloneCd || 0) > 0) return null;
   if (ownCloneCount(game, fighter) >= COMBAT_CLONE_MAX_ACTIVE) return null;
   const clone = createCombatClone(fighter, FighterCtor);
   if (!clone) return null;
   game.fighters.push(clone);
-  fighter.combatCloneCd = COMBAT_CLONE_COOLDOWN;
+  fighter.combatCloneCd = cloneSpawnCooldown(fighter);
   fighter.combatCloneFlash = 0.18;
   refreshCombatCloneCaches(game);
   return clone;
+}
+
+export function trySplitSwitch(fighter, game) {
+  if (!fighter || fighter.dead || !isSplitGear(fighter) || !game
+    || game.paused || game.over || (fighter.splitSwitchCd || 0) > 0) return null;
+  const bodies = listCombatClones(game).filter((c) => c.cloneOwner === fighter && !c.dead);
+  if (!bodies.length) return null;
+  const index = (fighter.splitNextBody || 0) % bodies.length;
+  const body = bodies[index];
+  const abandonedHp = Math.min(LINKED_CLONE_HP, fighter.hp);
+  // Keep the player object (profile, kit, cooldowns, scoring) and exchange bodies.
+  for (const key of BODY_FIELDS) {
+    const value = fighter[key];
+    fighter[key] = body[key];
+    body[key] = value;
+  }
+  body.hp = abandonedHp;
+  body.coreHp = abandonedHp;
+  fighter.coreHp = (fighter.coreHp ?? fighter.hp) + Math.max(0, LINKED_CLONE_HP - fighter.hp);
+  syncNanotechDisplayedHp(fighter);
+  fighter.splitSwitchCd = SPLIT_SWITCH_COOLDOWN;
+  fighter.splitNextBody = (index + 1) % bodies.length;
+  fighter.hitFlash = 0.18;
+  body.hitFlash = 0.18;
+  fighter.aiState.target = null;
+  fighter.aiState.lastKnown = null;
+  fighter.aiState.timer = 0;
+  body.aiState.target = null;
+  body.aiState.lastKnown = null;
+  body.aiState.timer = 0;
+  return body;
 }
 
 export function tickCombatCloneFighter(fighter, dt) {
@@ -127,6 +228,9 @@ export function tickCombatCloneFighter(fighter, dt) {
   }
   if (fighter.combatCloneFlash > 0) {
     fighter.combatCloneFlash = Math.max(0, fighter.combatCloneFlash - step);
+  }
+  if (fighter.splitSwitchCd > 0) {
+    fighter.splitSwitchCd = Math.max(0, fighter.splitSwitchCd - step);
   }
 }
 
@@ -143,9 +247,9 @@ export function tickCombatCloneWorld(game) {
     }
   }
   for (const f of game.fighters) {
+    if (f.shadowLink && f.dead) f.shadowLink.members.delete(f);
     if (isCombatClone(f) && f.dead) {
       drop = true;
-      break;
     }
   }
   if (drop) {

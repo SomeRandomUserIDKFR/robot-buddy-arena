@@ -78,10 +78,109 @@ npm run smoke:analyzer
 - **Q** — raise/lower equipped shield (blocks frontal attacks; cannot fire while raised). With **Mechanical Modularity** in shield mode, Q raises the modular plate the same way.
 - **F** — deploy/retract **Retractable Armor** or **Retractable Shell** (separate armor HP pool; ~10% slower while on; morph style follows Settings → Visual)
 - **E** — cycle **Mechanical Modularity** modes (Sword → Shield → Pulse Rifle) with a short morph animation; cannot attack mid-morph
+- **3** — use the equipped Extension, including Doppel, Shadow Clone, Split, or Disguise
+- **H** — with **Split**, cycle control between living bodies (3s cooldown)
 - **Mouse** — aim
 - **Left mouse button** — fire gun / swing saber
 - **G** — ping the cursor location for your buddy
 - **Escape** — pause
+
+## Shadow Clone and Split
+
+Both are shop-unlocked Extension tools, available to the player and buddy
+(Campaign adds them alongside Doppel in the final-stage shop). Press
+**3** to spawn a real AI twin with your kit and full weapon damage; at most two
+twins can live at once. They do not spawn more twins or keep a lost match alive,
+and disappear when their owner dies.
+
+- **Shadow Clone (280¢):** each shadow has exactly **25 HP**, including with
+  Classic 100 HP enabled. Spawn cooldown is **5s**, matching Illusionist. Actual
+  HP lost after shields/armor is also applied to every living linked body,
+  without another damage-resistance calculation or recursive sharing. Overkill
+  shares only the HP actually lost. Separate hits (including attacks hitting
+  multiple linked bodies) can each share damage. Existing power-up buffs and
+  ice/trap/snare/reveal debuffs are shared; durations and Overcharge charges use
+  one group clock/pool, not multiplied stacks. Instant loot benefits apply to
+  every living member. New shadows inherit active timed buffs and debuffs.
+- **Split (300¢):** spawn cooldown is **30s**, matching Doppel. Twins persist
+  until killed and have **25 HP** while uncontrolled. **H** cycles through
+  living bodies with a **3s** switch cooldown. Your normal kit, stored player
+  HP, and combat cooldowns follow control. Switching raises player HP to a
+  minimum of **25**, while the body left behind keeps pre-switch HP capped at
+  25: leaving at 10 HP gives you 25 HP and leaves a 10-HP twin. Position,
+  motion, fuel, buffs, and debuffs stay with the physical bodies; damage and
+  effects are not linked. Switching does not refill shields, mana, or weapons.
+  Buddy/enemy AI builds a Split team even before combat and uses Split to escape below
+  25 HP when a living twin and the switch cooldown allow it.
+
+Uncontrolled Shadow/Split bodies cannot add retractable/nanotech armor HP on top
+of their 25-HP pool. Ally outlines identify linked shadows in purple and Split
+twins in green. The Extension HUD shows spawn availability, living twins, and
+Split's switch cooldown. Existing Doppel mechanics are unchanged.
+
+## Disguise
+
+**Disguise (240¢)** is an Extension. Press **3** within **100 units** of a real
+map breakable to borrow that exact prop. It temporarily leaves the map's cover
+collection and becomes your full-size appearance and attack hitbox. Walking
+speed is **55%** of normal. There is no duration limit.
+
+Press **3** again, fire/swing/use a weapon (including secondary beams), or raise
+your shield to reveal. The same prop is placed at your current feet, not back
+at its original location, keeping its remaining HP, bracing, canopy, and normal
+cover behavior. Cooldown is **5s after revealing**.
+
+While disguised, incoming damage spends the prop's remaining durability instead
+of robot HP. When it breaks, you reveal and that real prop breaks at your current
+position, producing normal debris there. The final hit does not overflow into
+robot HP; explosive barrels still explode and can hurt the revealed robot.
+Death also releases the prop at your current position.
+
+Loot crates, illusions, held/in-flight props, armor dummies, glare nodes, and
+Reconjurer-created props cannot be borrowed. Lower your shield and release any
+held prop/grapple before activating. Enemies see only the prop, without robot
+gear, name, health bar, or enemy-direction arrow; allies have a subtle outline.
+AI cannot identify it as a fighter, but stray shots and area attacks can still
+break it. Buddy/enemy AI prioritizes borrowing nearby cover below 180 standard
+HP (36 in Classic mode), suppressing weapon/shield use while hidden even with a
+close foe. Healthy AI can disguise while repositioning and reveal for close
+combat. Campaign makes Disguise available alongside Illusionist.
+
+All eight usable Extensions have buddy/enemy AI behavior when equipped:
+Reconjurer rebuilds or creates cover; Light Condensation scouts/blinds lanes;
+Trapper chooses bear traps for grounded foes, fake platforms for airborne foes,
+spring pads against close threats when hurt, signal tripwires for unseen tracked
+foes, and mines against clustered visible enemies. Illusionist uses combat decoys
+and false cover/ledges; Doppel and Shadow Clone add attackers during combat;
+Split maintains persistent teammates; Disguise conceals wounded fighters.
+Ability cooldowns, costs, and active-object limits still apply.
+
+## AI tactical experiments and deduction
+
+Each match has a random `seed`. It seeds each AI's tactical preferences and
+exploration, not the entire physics/gameplay simulation. AIs try four related
+postures: balanced spacing, pressure, caution, and flanking opposite a teammate.
+They hold a trial for about four seconds rather than rerolling every frame.
+Existing weapon range, mind competence, fight styles, coaching, retreat safety,
+and equipment rules still apply; these experiments do not grant better aim.
+
+Real HP dealt/taken (including owned clones and traps) provides bounded outcome
+feedback. Good damage trades strengthen a strategy; costly trades and deaths
+weaken it. Cautious escapes can earn partial credit for creating separation.
+Idle time does not count as success. Evidence is contextual to weapon category,
+equipped Extension, and hurt/outnumbered/duel situations. AIs keep an 18% chance
+to explore, so one lucky result does not permanently lock their behavior.
+The buddy's evidence is saved with the profile across completed matches; enemies
+start fresh each match and learn only during that match. Learning Lock prevents
+new tactical evidence, including during the tutorial.
+
+An AI can suspect a disguise after repeatedly seeing a prop move horizontally
+in its own sight and line of sight. It investigates/shoots the observed prop
+position, not a secretly identified fighter. A stationary disguise remains
+concealed; walls, visibility gaps, and stopping break or decay the evidence.
+Real moving props may also attract suspicion: this is a fallible deduction, not
+omniscient detection. Visible identified foes take priority over suspicion.
+This uses lightweight outcome-based learning, not a neural network.
 
 ## Equipment bay and Shop
 

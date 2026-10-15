@@ -7,6 +7,7 @@
  * use packs (rarer packs look bulkier). Click spends one charge.
  */
 import { SIZE, WORLD } from "./config.js";
+import { fighterHitbox, fighterHitPoint } from "./disguise.js";
 
 /** Late-bound damagers (avoids import cycles with equipment / maps / powerups). */
 let applyHpDamageFn = null;
@@ -359,9 +360,10 @@ function rayHit(game, owner, ox, oy, aim, range) {
     // Allies and enemies both latch — damage is decided at fire time.
     for (const other of livingFighters(game)) {
       if (other === owner) continue;
+      const box = fighterHitbox(other);
       if (
-        x >= other.x && x <= other.x + SIZE
-        && y >= other.y && y <= other.y + SIZE
+        x >= box.x && x <= box.x + box.w
+        && y >= box.y && y <= box.y + box.h
       ) {
         if (d < bestFighterD) {
           bestFighterD = d;
@@ -641,9 +643,8 @@ function pinHookHang(fighter) {
 }
 
 function circleHitsFighter(x, y, r, foe) {
-  const fx = foe.x + SIZE / 2;
-  const fy = foe.y + SIZE / 2;
-  return Math.hypot(fx - x, fy - y) <= r + SIZE * 0.35;
+  const point = fighterHitPoint(foe, x, y);
+  return Math.hypot(point.x - x, point.y - y) <= r + (foe.disguiseProp ? 0 : SIZE * 0.35);
 }
 
 function bounceOrStick(proj, game, stick) {

@@ -1,16 +1,19 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-21T22:18:09.140Z",
+  "generatedAt": "2026-10-15T02:05:27.257Z",
   "allowlist": [
     "config.js",
     "equipment.js",
+    "combat-clone.js",
+    "disguise.js",
+    "illusionist.js",
     "powerups.js",
     "conquest.js",
     "maps.js",
     "perks.js",
     "power.js"
   ],
-  "contentHash": "1d33c8b416edaab4",
+  "contentHash": "1e915a76358339c9",
   "entries": [
     {
       "id": "code-config-ceiling",
@@ -124,7 +127,7 @@
         "bands",
         "league bands"
       ],
-      "text": "conquest.js: LEAGUE_BANDS = Object.freeze([ { id: \"rookie\", name: \"Rookie\", min: 0, max: 150, rewardTier: \"rookie\", trainerAi: \"rookie\", followerAi: \"recruit\", training: \"Green\" }, { id: \"contender\", name: …"
+      "text": "conquest.js: LEAGUE_BANDS = Object.freeze([ { id: \"rookie\", name: \"Rookie\", min: 0, max: 150, rewardTier: \"rookie\", trainerAi: \"rookie\", followerAi: \"recruit\", training: \"Green\" }, { id: \"contender\",…"
     },
     {
       "id": "code-conquest-leagues",
@@ -343,7 +346,7 @@
         "defs",
         "powerup defs"
       ],
-      "text": "powerups.js: POWERUP_DEFS = Object.freeze({ fireRate: { id: \"fireRate\", label: \"Fire Rate!\", short: \"RATE\", color: \"#ffb040\", timed: true, duration: FIRE_RATE_DURATION, meleeOnly: false }, heal:…"
+      "text": "powerups.js: POWERUP_DEFS = Object.freeze({ fireRate: { id: \"fireRate\", label: \"Fire Rate!\", short: \"RATE\", color: \"#ffb040\", timed: true, duration: FIRE_RATE_DURATION, meleeOnly: false }…"
     },
     {
       "id": "code-powerups-regen_duration",
@@ -414,6 +417,106 @@
       "text": "powerups.js: SPEED_SURGE_MULT = 1.18"
     },
     {
+      "id": "code-combat-clone-combat_clone_cooldown",
+      "source": "combat-clone.js",
+      "name": "COMBAT_CLONE_COOLDOWN",
+      "topic": "equipment",
+      "aliases": [
+        "combat_clone_cooldown",
+        "combat",
+        "clone",
+        "cooldown",
+        "combat clone cooldown"
+      ],
+      "text": "combat-clone.js: COMBAT_CLONE_COOLDOWN = 30"
+    },
+    {
+      "id": "code-combat-clone-combat_clone_hp_frac",
+      "source": "combat-clone.js",
+      "name": "COMBAT_CLONE_HP_FRAC",
+      "topic": "equipment",
+      "aliases": [
+        "combat_clone_hp_frac",
+        "combat",
+        "clone",
+        "hp",
+        "frac",
+        "combat clone hp frac"
+      ],
+      "text": "combat-clone.js: COMBAT_CLONE_HP_FRAC = 0.25"
+    },
+    {
+      "id": "code-combat-clone-combat_clone_id",
+      "source": "combat-clone.js",
+      "name": "COMBAT_CLONE_ID",
+      "topic": "equipment",
+      "aliases": [
+        "combat_clone_id",
+        "combat",
+        "clone",
+        "id",
+        "combat clone id"
+      ],
+      "text": "combat-clone.js: COMBAT_CLONE_ID = \"doppel\""
+    },
+    {
+      "id": "code-combat-clone-combat_clone_max_active",
+      "source": "combat-clone.js",
+      "name": "COMBAT_CLONE_MAX_ACTIVE",
+      "topic": "equipment",
+      "aliases": [
+        "combat_clone_max_active",
+        "combat",
+        "clone",
+        "max",
+        "active",
+        "combat clone max active"
+      ],
+      "text": "combat-clone.js: COMBAT_CLONE_MAX_ACTIVE = 2"
+    },
+    {
+      "id": "code-combat-clone-linked_clone_hp",
+      "source": "combat-clone.js",
+      "name": "LINKED_CLONE_HP",
+      "topic": "equipment",
+      "aliases": [
+        "linked_clone_hp",
+        "linked",
+        "clone",
+        "hp",
+        "linked clone hp"
+      ],
+      "text": "combat-clone.js: LINKED_CLONE_HP = 25"
+    },
+    {
+      "id": "code-combat-clone-split_switch_cooldown",
+      "source": "combat-clone.js",
+      "name": "SPLIT_SWITCH_COOLDOWN",
+      "topic": "equipment",
+      "aliases": [
+        "split_switch_cooldown",
+        "split",
+        "switch",
+        "cooldown",
+        "split switch cooldown"
+      ],
+      "text": "combat-clone.js: SPLIT_SWITCH_COOLDOWN = 3"
+    },
+    {
+      "id": "code-combat-clone-split_switch_key",
+      "source": "combat-clone.js",
+      "name": "SPLIT_SWITCH_KEY",
+      "topic": "equipment",
+      "aliases": [
+        "split_switch_key",
+        "split",
+        "switch",
+        "key",
+        "split switch key"
+      ],
+      "text": "combat-clone.js: SPLIT_SWITCH_KEY = \"KeyH\""
+    },
+    {
       "id": "code-config-ai_presets",
       "source": "config.js",
       "name": "AI_PRESETS",
@@ -424,7 +527,7 @@
         "presets",
         "ai presets"
       ],
-      "text": "config.js: AI_PRESETS = { flash: { reaction: .10, aim: .16, prediction: .08, fuelCare: .22, change: .12, aimTurnRate: 60 }, balanced: { reaction: .25, aim: .10, prediction: .35, fuelCare: .58, change: .5, aimTurnRate: 40…"
+      "text": "config.js: AI_PRESETS = { flash: { reaction: .10, aim: .16, prediction: .08, fuelCare: .22, change: .12, aimTurnRate: 60 }, balanced: { reaction: .25, aim: .10, prediction: .35, fuelCare: .58, change: .5, aimTurnRate: …"
     },
     {
       "id": "code-config-default_profile",
@@ -437,7 +540,7 @@
         "profile",
         "default profile"
       ],
-      "text": "config.js: DEFAULT_PROFILE = { botName: \"Pixel\", matches: 0, cyber: 120, ranking: 100, level: 1, exp: 0, expToNext: 100, unlockedPerks: [], pendingPerkPicks: [], buddyPerkAutonomy: \"user\", perkSuggestion: nu…"
+      "text": "config.js: DEFAULT_PROFILE = { botName: \"Pixel\", buddyCharacterId: null, matches: 0, cyber: 120, ranking: 100, level: 1, exp: 0, expToNext: 100, unlockedPerks: [], pendingPerkPicks: [], buddyP…"
     },
     {
       "id": "code-config-gravity",
@@ -494,6 +597,129 @@
       "text": "config.js: WORLD = { w: 3600, h: 1600 }"
     },
     {
+      "id": "code-disguise-disguise_cooldown",
+      "source": "disguise.js",
+      "name": "DISGUISE_COOLDOWN",
+      "topic": "equipment",
+      "aliases": [
+        "disguise_cooldown",
+        "disguise",
+        "cooldown",
+        "disguise cooldown"
+      ],
+      "text": "disguise.js: DISGUISE_COOLDOWN = 5"
+    },
+    {
+      "id": "code-disguise-disguise_id",
+      "source": "disguise.js",
+      "name": "DISGUISE_ID",
+      "topic": "equipment",
+      "aliases": [
+        "disguise_id",
+        "disguise",
+        "id",
+        "disguise id"
+      ],
+      "text": "disguise.js: DISGUISE_ID = \"disguise\""
+    },
+    {
+      "id": "code-disguise-disguise_range",
+      "source": "disguise.js",
+      "name": "DISGUISE_RANGE",
+      "topic": "equipment",
+      "aliases": [
+        "disguise_range",
+        "disguise",
+        "range",
+        "disguise range"
+      ],
+      "text": "disguise.js: DISGUISE_RANGE = 100"
+    },
+    {
+      "id": "code-disguise-disguise_speed_mult",
+      "source": "disguise.js",
+      "name": "DISGUISE_SPEED_MULT",
+      "topic": "equipment",
+      "aliases": [
+        "disguise_speed_mult",
+        "disguise",
+        "speed",
+        "mult",
+        "disguise speed mult"
+      ],
+      "text": "disguise.js: DISGUISE_SPEED_MULT = 0.55"
+    },
+    {
+      "id": "code-equipment-adaptive_mode_cooldown",
+      "source": "equipment.js",
+      "name": "ADAPTIVE_MODE_COOLDOWN",
+      "topic": "equipment",
+      "aliases": [
+        "adaptive_mode_cooldown",
+        "adaptive",
+        "mode",
+        "cooldown",
+        "adaptive mode cooldown"
+      ],
+      "text": "equipment.js: ADAPTIVE_MODE_COOLDOWN = 0.42"
+    },
+    {
+      "id": "code-equipment-adaptive_mode_order",
+      "source": "equipment.js",
+      "name": "ADAPTIVE_MODE_ORDER",
+      "topic": "equipment",
+      "aliases": [
+        "adaptive_mode_order",
+        "adaptive",
+        "mode",
+        "order",
+        "adaptive mode order"
+      ],
+      "text": "equipment.js: ADAPTIVE_MODE_ORDER = Object.freeze([\"sword\", \"rifle\", \"sniper\"])"
+    },
+    {
+      "id": "code-equipment-adaptive_morph_duration",
+      "source": "equipment.js",
+      "name": "ADAPTIVE_MORPH_DURATION",
+      "topic": "equipment",
+      "aliases": [
+        "adaptive_morph_duration",
+        "adaptive",
+        "morph",
+        "duration",
+        "adaptive morph duration"
+      ],
+      "text": "equipment.js: ADAPTIVE_MORPH_DURATION = 0.32"
+    },
+    {
+      "id": "code-equipment-adaptive_nanotech_id",
+      "source": "equipment.js",
+      "name": "ADAPTIVE_NANOTECH_ID",
+      "topic": "equipment",
+      "aliases": [
+        "adaptive_nanotech_id",
+        "adaptive",
+        "nanotech",
+        "id",
+        "adaptive nanotech id"
+      ],
+      "text": "equipment.js: ADAPTIVE_NANOTECH_ID = \"adaptive-nanotech-unit\""
+    },
+    {
+      "id": "code-equipment-combat_clone_id",
+      "source": "equipment.js",
+      "name": "COMBAT_CLONE_ID",
+      "topic": "equipment",
+      "aliases": [
+        "combat_clone_id",
+        "combat",
+        "clone",
+        "id",
+        "combat clone id"
+      ],
+      "text": "equipment.js: COMBAT_CLONE_ID = \"doppel\""
+    },
+    {
       "id": "code-equipment-default_loadout",
       "source": "equipment.js",
       "name": "DEFAULT_LOADOUT",
@@ -504,7 +730,20 @@
         "loadout",
         "default loadout"
       ],
-      "text": "equipment.js: DEFAULT_LOADOUT = { body: \"field-frame\", helmet: \"survey-visor\", weapon: \"pulse-rifle\", jetpack: \"vector-pack\", shield: \"no-shield\" }"
+      "text": "equipment.js: DEFAULT_LOADOUT = { body: \"field-frame\", helmet: \"survey-visor\", weapon: \"pulse-rifle\", secondaryWeapon: NO_SECONDARY_ID, extensionSecondary: NO_EXTENSION_ID, jetpack: \"vector-pack\", shield: \"no-shield\" }"
+    },
+    {
+      "id": "code-equipment-disguise_id",
+      "source": "equipment.js",
+      "name": "DISGUISE_ID",
+      "topic": "equipment",
+      "aliases": [
+        "disguise_id",
+        "disguise",
+        "id",
+        "disguise id"
+      ],
+      "text": "equipment.js: DISGUISE_ID = \"disguise\""
     },
     {
       "id": "code-equipment-gear",
@@ -514,7 +753,7 @@
       "aliases": [
         "gear"
       ],
-      "text": "equipment.js: GEAR = [ item(\"field-frame\", \"body\", \"Field Frame\", \"Balanced protection and mobility.\", {}), item(\"scout-frame\", \"body\", \"Scout Frame\", \"Faster, but lighter and more exposed.\", { hp: .88, speed: 1.1…"
+      "text": "equipment.js: GEAR = [ item(\"field-frame\", \"body\", \"Field Frame\", \"Balanced protection and mobility.\", {}), item(\"scout-frame\", \"body\", \"Scout Frame\", \"Faster, but lighter and more exposed.\", { hp: .88, speed: …"
     },
     {
       "id": "code-equipment-gear_by_id",
@@ -529,6 +768,169 @@
         "gear by id"
       ],
       "text": "equipment.js: GEAR_BY_ID = Object.fromEntries(GEAR.map((gear) => [gear.id, gear]))"
+    },
+    {
+      "id": "code-equipment-illusionist_id",
+      "source": "equipment.js",
+      "name": "ILLUSIONIST_ID",
+      "topic": "equipment",
+      "aliases": [
+        "illusionist_id",
+        "illusionist",
+        "id",
+        "illusionist id"
+      ],
+      "text": "equipment.js: ILLUSIONIST_ID = \"illusionist\""
+    },
+    {
+      "id": "code-equipment-light_condensation_id",
+      "source": "equipment.js",
+      "name": "LIGHT_CONDENSATION_ID",
+      "topic": "equipment",
+      "aliases": [
+        "light_condensation_id",
+        "light",
+        "condensation",
+        "id",
+        "light condensation id"
+      ],
+      "text": "equipment.js: LIGHT_CONDENSATION_ID = \"light-condensation\""
+    },
+    {
+      "id": "code-equipment-material_consumer_beam_rpm",
+      "source": "equipment.js",
+      "name": "MATERIAL_CONSUMER_BEAM_RPM",
+      "topic": "equipment",
+      "aliases": [
+        "material_consumer_beam_rpm",
+        "material",
+        "consumer",
+        "beam",
+        "rpm",
+        "material consumer beam rpm"
+      ],
+      "text": "equipment.js: MATERIAL_CONSUMER_BEAM_RPM = 480"
+    },
+    {
+      "id": "code-equipment-material_consumer_bots_per_piece",
+      "source": "equipment.js",
+      "name": "MATERIAL_CONSUMER_BOTS_PER_PIECE",
+      "topic": "equipment",
+      "aliases": [
+        "material_consumer_bots_per_piece",
+        "material",
+        "consumer",
+        "bots",
+        "per",
+        "piece",
+        "material consumer bots per piece"
+      ],
+      "text": "equipment.js: MATERIAL_CONSUMER_BOTS_PER_PIECE = 4"
+    },
+    {
+      "id": "code-equipment-material_consumer_chuck_damage",
+      "source": "equipment.js",
+      "name": "MATERIAL_CONSUMER_CHUCK_DAMAGE",
+      "topic": "equipment",
+      "aliases": [
+        "material_consumer_chuck_damage",
+        "material",
+        "consumer",
+        "chuck",
+        "damage",
+        "material consumer chuck damage"
+      ],
+      "text": "equipment.js: MATERIAL_CONSUMER_CHUCK_DAMAGE = 10"
+    },
+    {
+      "id": "code-equipment-material_consumer_chuck_speed",
+      "source": "equipment.js",
+      "name": "MATERIAL_CONSUMER_CHUCK_SPEED",
+      "topic": "equipment",
+      "aliases": [
+        "material_consumer_chuck_speed",
+        "material",
+        "consumer",
+        "chuck",
+        "speed",
+        "material consumer chuck speed"
+      ],
+      "text": "equipment.js: MATERIAL_CONSUMER_CHUCK_SPEED = 1100"
+    },
+    {
+      "id": "code-equipment-material_consumer_ejection_tank_cap",
+      "source": "equipment.js",
+      "name": "MATERIAL_CONSUMER_EJECTION_TANK_CAP",
+      "topic": "equipment",
+      "aliases": [
+        "material_consumer_ejection_tank_cap",
+        "material",
+        "consumer",
+        "ejection",
+        "tank",
+        "cap",
+        "material consumer ejection tank cap"
+      ],
+      "text": "equipment.js: MATERIAL_CONSUMER_EJECTION_TANK_CAP = 160"
+    },
+    {
+      "id": "code-equipment-material_consumer_id",
+      "source": "equipment.js",
+      "name": "MATERIAL_CONSUMER_ID",
+      "topic": "equipment",
+      "aliases": [
+        "material_consumer_id",
+        "material",
+        "consumer",
+        "id",
+        "material consumer id"
+      ],
+      "text": "equipment.js: MATERIAL_CONSUMER_ID = \"material-consumer-nanotech\""
+    },
+    {
+      "id": "code-equipment-material_consumer_reform_key",
+      "source": "equipment.js",
+      "name": "MATERIAL_CONSUMER_REFORM_KEY",
+      "topic": "equipment",
+      "aliases": [
+        "material_consumer_reform_key",
+        "material",
+        "consumer",
+        "reform",
+        "key",
+        "material consumer reform key"
+      ],
+      "text": "equipment.js: MATERIAL_CONSUMER_REFORM_KEY = \"KeyB\""
+    },
+    {
+      "id": "code-equipment-material_consumer_tip_reach",
+      "source": "equipment.js",
+      "name": "MATERIAL_CONSUMER_TIP_REACH",
+      "topic": "equipment",
+      "aliases": [
+        "material_consumer_tip_reach",
+        "material",
+        "consumer",
+        "tip",
+        "reach",
+        "material consumer tip reach"
+      ],
+      "text": "equipment.js: MATERIAL_CONSUMER_TIP_REACH = 61"
+    },
+    {
+      "id": "code-equipment-material_consumer_vacuum_radius",
+      "source": "equipment.js",
+      "name": "MATERIAL_CONSUMER_VACUUM_RADIUS",
+      "topic": "equipment",
+      "aliases": [
+        "material_consumer_vacuum_radius",
+        "material",
+        "consumer",
+        "vacuum",
+        "radius",
+        "material consumer vacuum radius"
+      ],
+      "text": "equipment.js: MATERIAL_CONSUMER_VACUUM_RADIUS = 150"
     },
     {
       "id": "code-equipment-modular_mode_cooldown",
@@ -587,6 +989,224 @@
       "text": "equipment.js: MODULAR_WEAPON_ID = \"mechanical-modularity\""
     },
     {
+      "id": "code-equipment-nanotech_armor_bot_cap",
+      "source": "equipment.js",
+      "name": "NANOTECH_ARMOR_BOT_CAP",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_armor_bot_cap",
+        "nanotech",
+        "armor",
+        "bot",
+        "cap",
+        "nanotech armor bot cap"
+      ],
+      "text": "equipment.js: NANOTECH_ARMOR_BOT_CAP = 500"
+    },
+    {
+      "id": "code-equipment-nanotech_armor_press",
+      "source": "equipment.js",
+      "name": "NANOTECH_ARMOR_PRESS",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_armor_press",
+        "nanotech",
+        "armor",
+        "press",
+        "nanotech armor press"
+      ],
+      "text": "equipment.js: NANOTECH_ARMOR_PRESS = 100"
+    },
+    {
+      "id": "code-equipment-nanotech_armor_spawn_duration",
+      "source": "equipment.js",
+      "name": "NANOTECH_ARMOR_SPAWN_DURATION",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_armor_spawn_duration",
+        "nanotech",
+        "armor",
+        "spawn",
+        "duration",
+        "nanotech armor spawn duration"
+      ],
+      "text": "equipment.js: NANOTECH_ARMOR_SPAWN_DURATION = 0.22"
+    },
+    {
+      "id": "code-equipment-nanotech_bots_per_hp",
+      "source": "equipment.js",
+      "name": "NANOTECH_BOTS_PER_HP",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_bots_per_hp",
+        "nanotech",
+        "bots",
+        "per",
+        "hp",
+        "nanotech bots per hp"
+      ],
+      "text": "equipment.js: NANOTECH_BOTS_PER_HP = 2"
+    },
+    {
+      "id": "code-equipment-nanotech_channel_rate",
+      "source": "equipment.js",
+      "name": "NANOTECH_CHANNEL_RATE",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_channel_rate",
+        "nanotech",
+        "channel",
+        "rate",
+        "nanotech channel rate"
+      ],
+      "text": "equipment.js: NANOTECH_CHANNEL_RATE = NANOTECH_RECALL_RATE"
+    },
+    {
+      "id": "code-equipment-nanotech_damage_mult",
+      "source": "equipment.js",
+      "name": "NANOTECH_DAMAGE_MULT",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_damage_mult",
+        "nanotech",
+        "damage",
+        "mult",
+        "nanotech damage mult"
+      ],
+      "text": "equipment.js: NANOTECH_DAMAGE_MULT = 1.25"
+    },
+    {
+      "id": "code-equipment-nanotech_f_hold_threshold",
+      "source": "equipment.js",
+      "name": "NANOTECH_F_HOLD_THRESHOLD",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_f_hold_threshold",
+        "nanotech",
+        "f",
+        "hold",
+        "threshold",
+        "nanotech f hold threshold"
+      ],
+      "text": "equipment.js: NANOTECH_F_HOLD_THRESHOLD = 0.18"
+    },
+    {
+      "id": "code-equipment-nanotech_recall_rate",
+      "source": "equipment.js",
+      "name": "NANOTECH_RECALL_RATE",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_recall_rate",
+        "nanotech",
+        "recall",
+        "rate",
+        "nanotech recall rate"
+      ],
+      "text": "equipment.js: NANOTECH_RECALL_RATE = 50"
+    },
+    {
+      "id": "code-equipment-nanotech_regen_hit_delay",
+      "source": "equipment.js",
+      "name": "NANOTECH_REGEN_HIT_DELAY",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_regen_hit_delay",
+        "nanotech",
+        "regen",
+        "hit",
+        "delay",
+        "nanotech regen hit delay"
+      ],
+      "text": "equipment.js: NANOTECH_REGEN_HIT_DELAY = 2"
+    },
+    {
+      "id": "code-equipment-nanotech_slow_regen",
+      "source": "equipment.js",
+      "name": "NANOTECH_SLOW_REGEN",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_slow_regen",
+        "nanotech",
+        "slow",
+        "regen",
+        "nanotech slow regen"
+      ],
+      "text": "equipment.js: NANOTECH_SLOW_REGEN = 55"
+    },
+    {
+      "id": "code-equipment-nanotech_sword_absorb_duration",
+      "source": "equipment.js",
+      "name": "NANOTECH_SWORD_ABSORB_DURATION",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_sword_absorb_duration",
+        "nanotech",
+        "sword",
+        "absorb",
+        "duration",
+        "nanotech sword absorb duration"
+      ],
+      "text": "equipment.js: NANOTECH_SWORD_ABSORB_DURATION = 0.42"
+    },
+    {
+      "id": "code-equipment-nanotech_sword_dissolve_duration",
+      "source": "equipment.js",
+      "name": "NANOTECH_SWORD_DISSOLVE_DURATION",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_sword_dissolve_duration",
+        "nanotech",
+        "sword",
+        "dissolve",
+        "duration",
+        "nanotech sword dissolve duration"
+      ],
+      "text": "equipment.js: NANOTECH_SWORD_DISSOLVE_DURATION = 0.18"
+    },
+    {
+      "id": "code-equipment-nanotech_sword_reform_duration",
+      "source": "equipment.js",
+      "name": "NANOTECH_SWORD_REFORM_DURATION",
+      "topic": "equipment",
+      "aliases": [
+        "nanotech_sword_reform_duration",
+        "nanotech",
+        "sword",
+        "reform",
+        "duration",
+        "nanotech sword reform duration"
+      ],
+      "text": "equipment.js: NANOTECH_SWORD_REFORM_DURATION = 0.2"
+    },
+    {
+      "id": "code-equipment-no_extension_id",
+      "source": "equipment.js",
+      "name": "NO_EXTENSION_ID",
+      "topic": "equipment",
+      "aliases": [
+        "no_extension_id",
+        "no",
+        "extension",
+        "id",
+        "no extension id"
+      ],
+      "text": "equipment.js: NO_EXTENSION_ID = \"no-extension\""
+    },
+    {
+      "id": "code-equipment-no_secondary_id",
+      "source": "equipment.js",
+      "name": "NO_SECONDARY_ID",
+      "topic": "equipment",
+      "aliases": [
+        "no_secondary_id",
+        "no",
+        "secondary",
+        "id",
+        "no secondary id"
+      ],
+      "text": "equipment.js: NO_SECONDARY_ID = \"no-secondary\""
+    },
+    {
       "id": "code-equipment-ranking_floor",
       "source": "equipment.js",
       "name": "RANKING_FLOOR",
@@ -598,6 +1218,20 @@
         "ranking floor"
       ],
       "text": "equipment.js: RANKING_FLOOR = 0"
+    },
+    {
+      "id": "code-equipment-reconjurer_builder_id",
+      "source": "equipment.js",
+      "name": "RECONJURER_BUILDER_ID",
+      "topic": "equipment",
+      "aliases": [
+        "reconjurer_builder_id",
+        "reconjurer",
+        "builder",
+        "id",
+        "reconjurer builder id"
+      ],
+      "text": "equipment.js: RECONJURER_BUILDER_ID = \"reconjurer-builder\""
     },
     {
       "id": "code-equipment-retractable_armor_speed",
@@ -628,6 +1262,20 @@
       "text": "equipment.js: RETRACTABLE_MORPH_DURATION = 0.32"
     },
     {
+      "id": "code-equipment-shadow_clone_id",
+      "source": "equipment.js",
+      "name": "SHADOW_CLONE_ID",
+      "topic": "equipment",
+      "aliases": [
+        "shadow_clone_id",
+        "shadow",
+        "clone",
+        "id",
+        "shadow clone id"
+      ],
+      "text": "equipment.js: SHADOW_CLONE_ID = \"shadow-clone\""
+    },
+    {
       "id": "code-equipment-slot_labels",
       "source": "equipment.js",
       "name": "SLOT_LABELS",
@@ -638,7 +1286,7 @@
         "labels",
         "slot labels"
       ],
-      "text": "equipment.js: SLOT_LABELS = { body: \"Main Armor\", helmet: \"Helmet\", weapon: \"Weapon\", jetpack: \"Jetpack\", shield: \"Shield\" }"
+      "text": "equipment.js: SLOT_LABELS = { body: \"Main Armor\", helmet: \"Helmet\", weapon: \"Weapon\", secondaryWeapon: \"Secondary Weapon\", extensionSecondary: \"Extension\", jetpack: \"Jetpack\", shield: \"Shield\" }"
     },
     {
       "id": "code-equipment-slot_order",
@@ -651,7 +1299,33 @@
         "order",
         "slot order"
       ],
-      "text": "equipment.js: SLOT_ORDER = [\"body\", \"helmet\", \"weapon\", \"jetpack\", \"shield\"]"
+      "text": "equipment.js: SLOT_ORDER = [ \"body\", \"helmet\", \"weapon\", \"secondaryWeapon\", \"extensionSecondary\", \"jetpack\", \"shield\" ]"
+    },
+    {
+      "id": "code-equipment-spellbook_id",
+      "source": "equipment.js",
+      "name": "SPELLBOOK_ID",
+      "topic": "equipment",
+      "aliases": [
+        "spellbook_id",
+        "spellbook",
+        "id",
+        "spellbook id"
+      ],
+      "text": "equipment.js: SPELLBOOK_ID = \"spellbook\""
+    },
+    {
+      "id": "code-equipment-split_id",
+      "source": "equipment.js",
+      "name": "SPLIT_ID",
+      "topic": "equipment",
+      "aliases": [
+        "split_id",
+        "split",
+        "id",
+        "split id"
+      ],
+      "text": "equipment.js: SPLIT_ID = \"split\""
     },
     {
       "id": "code-equipment-starter_gear",
@@ -664,7 +1338,7 @@
         "gear",
         "starter gear"
       ],
-      "text": "equipment.js: STARTER_GEAR = [ \"field-frame\", \"scout-frame\", \"survey-visor\", \"wideband-array\", \"pulse-rifle\", \"arc-saber\", \"vector-pack\", \"sprinter-pack\", \"no-shield\", \"light-buckler\" ]"
+      "text": "equipment.js: STARTER_GEAR = [ \"field-frame\", \"scout-frame\", \"survey-visor\", \"wideband-array\", \"pulse-rifle\", \"arc-saber\", \"vector-pack\", \"sprinter-pack\", \"no-shield\", \"light-buckler\", NO_SECONDARY_ID, NO_EXTENSION_ID ]"
     },
     {
       "id": "code-equipment-starting_ranking",
@@ -680,6 +1354,226 @@
       "text": "equipment.js: STARTING_RANKING = 100"
     },
     {
+      "id": "code-equipment-trapper_id",
+      "source": "equipment.js",
+      "name": "TRAPPER_ID",
+      "topic": "equipment",
+      "aliases": [
+        "trapper_id",
+        "trapper",
+        "id",
+        "trapper id"
+      ],
+      "text": "equipment.js: TRAPPER_ID = \"trapper\""
+    },
+    {
+      "id": "code-illusionist-illusion_break_life",
+      "source": "illusionist.js",
+      "name": "ILLUSION_BREAK_LIFE",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_break_life",
+        "illusion",
+        "break",
+        "life",
+        "illusion break life"
+      ],
+      "text": "illusionist.js: ILLUSION_BREAK_LIFE = 0.72"
+    },
+    {
+      "id": "code-illusionist-illusion_fighter_hits",
+      "source": "illusionist.js",
+      "name": "ILLUSION_FIGHTER_HITS",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_fighter_hits",
+        "illusion",
+        "fighter",
+        "hits",
+        "illusion fighter hits"
+      ],
+      "text": "illusionist.js: ILLUSION_FIGHTER_HITS = 10"
+    },
+    {
+      "id": "code-illusionist-illusion_fighter_life",
+      "source": "illusionist.js",
+      "name": "ILLUSION_FIGHTER_LIFE",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_fighter_life",
+        "illusion",
+        "fighter",
+        "life",
+        "illusion fighter life"
+      ],
+      "text": "illusionist.js: ILLUSION_FIGHTER_LIFE = 22"
+    },
+    {
+      "id": "code-illusionist-illusion_metal_prop",
+      "source": "illusionist.js",
+      "name": "ILLUSION_METAL_PROP",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_metal_prop",
+        "illusion",
+        "metal",
+        "prop",
+        "illusion metal prop"
+      ],
+      "text": "illusionist.js: ILLUSION_METAL_PROP = \"metal\""
+    },
+    {
+      "id": "code-illusionist-illusion_phantom_damage",
+      "source": "illusionist.js",
+      "name": "ILLUSION_PHANTOM_DAMAGE",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_phantom_damage",
+        "illusion",
+        "phantom",
+        "damage",
+        "illusion phantom damage"
+      ],
+      "text": "illusionist.js: ILLUSION_PHANTOM_DAMAGE = 40"
+    },
+    {
+      "id": "code-illusionist-illusion_phantom_decay",
+      "source": "illusionist.js",
+      "name": "ILLUSION_PHANTOM_DECAY",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_phantom_decay",
+        "illusion",
+        "phantom",
+        "decay",
+        "illusion phantom decay"
+      ],
+      "text": "illusionist.js: ILLUSION_PHANTOM_DECAY = 6"
+    },
+    {
+      "id": "code-illusionist-illusion_platform_h",
+      "source": "illusionist.js",
+      "name": "ILLUSION_PLATFORM_H",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_platform_h",
+        "illusion",
+        "platform",
+        "h",
+        "illusion platform h"
+      ],
+      "text": "illusionist.js: ILLUSION_PLATFORM_H = 26"
+    },
+    {
+      "id": "code-illusionist-illusion_platform_w",
+      "source": "illusionist.js",
+      "name": "ILLUSION_PLATFORM_W",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_platform_w",
+        "illusion",
+        "platform",
+        "w",
+        "illusion platform w"
+      ],
+      "text": "illusionist.js: ILLUSION_PLATFORM_W = 160"
+    },
+    {
+      "id": "code-illusionist-illusion_prop_h",
+      "source": "illusionist.js",
+      "name": "ILLUSION_PROP_H",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_prop_h",
+        "illusion",
+        "prop",
+        "h",
+        "illusion prop h"
+      ],
+      "text": "illusionist.js: ILLUSION_PROP_H = 44"
+    },
+    {
+      "id": "code-illusionist-illusion_prop_life",
+      "source": "illusionist.js",
+      "name": "ILLUSION_PROP_LIFE",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_prop_life",
+        "illusion",
+        "prop",
+        "life",
+        "illusion prop life"
+      ],
+      "text": "illusionist.js: ILLUSION_PROP_LIFE = 28"
+    },
+    {
+      "id": "code-illusionist-illusion_prop_w",
+      "source": "illusionist.js",
+      "name": "ILLUSION_PROP_W",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_prop_w",
+        "illusion",
+        "prop",
+        "w",
+        "illusion prop w"
+      ],
+      "text": "illusionist.js: ILLUSION_PROP_W = 44"
+    },
+    {
+      "id": "code-illusionist-illusion_types",
+      "source": "illusionist.js",
+      "name": "ILLUSION_TYPES",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_types",
+        "illusion",
+        "types",
+        "illusion types"
+      ],
+      "text": "illusionist.js: ILLUSION_TYPES = Object.freeze([\"fighter\", \"prop\", \"platform\"])"
+    },
+    {
+      "id": "code-illusionist-illusionist_cooldown",
+      "source": "illusionist.js",
+      "name": "ILLUSIONIST_COOLDOWN",
+      "topic": "equipment",
+      "aliases": [
+        "illusionist_cooldown",
+        "illusionist",
+        "cooldown",
+        "illusionist cooldown"
+      ],
+      "text": "illusionist.js: ILLUSIONIST_COOLDOWN = 5"
+    },
+    {
+      "id": "code-illusionist-illusionist_id",
+      "source": "illusionist.js",
+      "name": "ILLUSIONIST_ID",
+      "topic": "equipment",
+      "aliases": [
+        "illusionist_id",
+        "illusionist",
+        "id",
+        "illusionist id"
+      ],
+      "text": "illusionist.js: ILLUSIONIST_ID = \"illusionist\""
+    },
+    {
+      "id": "code-illusionist-illusionist_max_active",
+      "source": "illusionist.js",
+      "name": "ILLUSIONIST_MAX_ACTIVE",
+      "topic": "equipment",
+      "aliases": [
+        "illusionist_max_active",
+        "illusionist",
+        "max",
+        "active",
+        "illusionist max active"
+      ],
+      "text": "illusionist.js: ILLUSIONIST_MAX_ACTIVE = 2"
+    },
+    {
       "id": "code-maps-map_by_id",
       "source": "maps.js",
       "name": "MAP_BY_ID",
@@ -692,6 +1586,20 @@
         "map by id"
       ],
       "text": "maps.js: MAP_BY_ID = Object.freeze( Object.fromEntries(MAPS.map((map) => [map.id, map])) )"
+    },
+    {
+      "id": "code-maps-map_prop_kinds",
+      "source": "maps.js",
+      "name": "MAP_PROP_KINDS",
+      "topic": "maps",
+      "aliases": [
+        "map_prop_kinds",
+        "map",
+        "prop",
+        "kinds",
+        "map prop kinds"
+      ],
+      "text": "maps.js: MAP_PROP_KINDS = Object.freeze(Object.keys(PROP_PRESETS))"
     },
     {
       "id": "code-maps-platforms",
@@ -751,7 +1659,7 @@
       "aliases": [
         "perks"
       ],
-      "text": "perks.js: PERKS = [ perk(\"glass-sprint\", \"Glass Sprint\", \"Faster move, lower max HP.\", { speed: 1.12, hp: .88 }), perk(\"bastion-brace\", \"Bastion Brace\", \"More shield durability, slower while raised.\", …"
+      "text": "perks.js: PERKS = [ perk(\"glass-sprint\", \"Glass Sprint\", \"Faster move, lower max HP.\", { speed: 1.12, hp: .88 }), perk(\"bastion-brace\", \"Bastion Brace\", \"More shield durability, slower while raised…"
     },
     {
       "id": "code-perks-perks_by_id",

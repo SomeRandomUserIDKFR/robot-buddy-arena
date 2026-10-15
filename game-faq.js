@@ -67,7 +67,8 @@ const GAME_TOPIC_TERMS = new Set([
   "exp", "experience", "milestone", "tradeoff", "map", "maps", "battlefield",
   "desert", "forest", "city", "docks", "ruins", "yard", "cover", "breakable",
   "cactus", "tree", "crate", "powerup", "power-up", "buff", "loot",
-  "code", "source", "constant", "gemma", "manual", "snippet", "deep"
+  "code", "source", "constant", "gemma", "manual", "snippet", "deep",
+  "doppel", "shadow", "clone", "clones", "split", "extension", "debuff", "disguise"
 ]);
 
 let packCache = null;

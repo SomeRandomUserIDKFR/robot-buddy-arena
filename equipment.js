@@ -21,6 +21,8 @@ import {
   grantExp, normalizeEquippedPerk, perkCombatExtras
 } from "./perks.js";
 import { healthScale as resolveHealthScale } from "./settings.js";
+import { damageDisguise, endDisguise } from "./disguise.js";
+import { recordTacticalDamage } from "./ai-tactics.js";
 
 const item = (id, slot, name, tradeoff, modifiers = {}, extra = {}) => ({
   id, slot, name, tradeoff, modifiers, ...extra
@@ -120,6 +122,9 @@ export const LIGHT_CONDENSATION_ID = "light-condensation";
 export const TRAPPER_ID = "trapper";
 export const ILLUSIONIST_ID = "illusionist";
 export const COMBAT_CLONE_ID = "doppel";
+export const SHADOW_CLONE_ID = "shadow-clone";
+export const SPLIT_ID = "split";
+export const DISGUISE_ID = "disguise";
 export const SPELLBOOK_ID = "spellbook";
 
 /** World position of the Material Consumer blade tip (aim-aligned). */
@@ -457,7 +462,7 @@ export const GEAR = [
     NO_EXTENSION_ID,
     "extensionSecondary",
     "No Extension",
-    "No extension tool — unlock Reconjurer, Light Condensation, Trapper, Doppel, or Illusionist to bind ability key 3.",
+    "No extension tool — equip an Extension to bind ability key 3.",
     {},
     { price: 0 }
   ),
@@ -507,6 +512,44 @@ export const GEAR = [
       price: 260,
       extensionSecondary: true,
       combatClone: true
+    }
+  ),
+  item(
+    SHADOW_CLONE_ID,
+    "extensionSecondary",
+    "Shadow Clone",
+    "Press 3 to spawn a real 25 HP twin, max 2 alive, 5s cooldown like Illusionist. Actual HP damage, buffs, and debuffs are shared between you and all shadows. Full weapon damage. Shadows die with you.",
+    {},
+    {
+      price: 280,
+      extensionSecondary: true,
+      combatClone: true,
+      shadowClone: true
+    }
+  ),
+  item(
+    SPLIT_ID,
+    "extensionSecondary",
+    "Split",
+    "Press 3 to spawn up to 2 persistent real twins (30s cooldown). Press H to cycle bodies (3s switch cooldown). Uncontrolled bodies have 25 HP. Your normal kit and stored player HP follow control, raised to at least 25 on switching; the body you leave has your pre-switch HP capped at 25. No shared damage or effects. Twins die with you.",
+    {},
+    {
+      price: 300,
+      extensionSecondary: true,
+      combatClone: true,
+      split: true
+    }
+  ),
+  item(
+    DISGUISE_ID,
+    "extensionSecondary",
+    "Disguise",
+    "Press 3 near real map cover to borrow it as a disguise. Move at 55% speed; the prop's remaining HP protects you. Press 3 again, attack, or raise a shield to reveal and leave the same prop at your current position. Breaking the disguise reveals you and breaks that prop there. 5s cooldown after revealing.",
+    {},
+    {
+      price: 240,
+      extensionSecondary: true,
+      disguise: true
     }
   ),
   item(
@@ -1119,6 +1162,7 @@ export function toggleShieldRaise(fighter) {
     fighter.shieldRaised = false;
     return false;
   }
+  if (!fighter.shieldRaised) endDisguise(fighter);
   fighter.shieldRaised = !fighter.shieldRaised;
   return true;
 }
@@ -1171,6 +1215,9 @@ export function hasNanotechGear(fighter) {
 }
 
 export function hasNanotechChestplate(fighter) {
+  if (fighter?.combatClone && (
+    fighter.cloneVariant === SHADOW_CLONE_ID || fighter.cloneVariant === SPLIT_ID
+  )) return false;
   return !!fighter?.hasNanotechChestplate
     || fighter?.loadout?.body === "nanotech-chestplate";
 }
@@ -2255,6 +2302,35 @@ export function tickRetractableArmor(fighter, dt) {
 
 /** Damage after shield block: nano armor, then retractable pool while deployed, then core. */
 export function applyHpDamage(fighter, dealt, game = null, extras = {}) {
+  if (fighter.disguiseProp) return damageDisguise(fighter, dealt, game || fighter.disguiseGame, extras);
+  const before = fighter.hp;
+  const result = damageFighterHp(fighter, dealt, game, extras);
+  const lost = Math.max(0, before - fighter.hp);
+  recordTacticalDamage(fighter, extras.source, lost);
+  if (fighter.shadowLink && lost > 0) {
+    for (const member of fighter.shadowLink.members) {
+      if (member !== fighter && !member.dead) {
+        const memberBefore = member.hp;
+        damageFighterHp(member, lost, game, { alreadyScaled: true });
+        recordTacticalDamage(member, null, Math.max(0, memberBefore - member.hp));
+        member.hitFlash = .12;
+        member.hitFace = .35;
+        member.lastHitAt = game?.elapsed ?? 0;
+        if (member.human && game) game.lastShotAtPlayer = game.elapsed;
+      }
+      if ((member.coreHp ?? member.hp) <= 0) {
+        member.dead = true;
+        member.hp = 0;
+        member.coreHp = 0;
+        member.vx = 0;
+        member.vy = 0;
+      }
+    }
+  }
+  return result;
+}
+
+function damageFighterHp(fighter, dealt, game, extras) {
   let left = Math.max(0, dealt);
   if (!extras.alreadyScaled) {
     left *= (fighter?.healthScale || resolveHealthScale(game) || 1);
@@ -2547,7 +2623,7 @@ export function suggestBuddyLoadout(profile) {
   ];
   const extensionPrefs = [
     NO_EXTENSION_ID, TRAPPER_ID, LIGHT_CONDENSATION_ID, RECONJURER_BUILDER_ID,
-    COMBAT_CLONE_ID, ILLUSIONIST_ID
+    COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID, DISGUISE_ID, ILLUSIONIST_ID
   ];
   const preferences = style === "ranged"
     ? {
@@ -2560,7 +2636,7 @@ export function suggestBuddyLoadout(profile) {
       ],
       secondaryWeapon: secondaryPrefs,
       extensionSecondary: [
-        ILLUSIONIST_ID, COMBAT_CLONE_ID, LIGHT_CONDENSATION_ID, TRAPPER_ID,
+        ILLUSIONIST_ID, DISGUISE_ID, COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID, LIGHT_CONDENSATION_ID, TRAPPER_ID,
         NO_EXTENSION_ID, RECONJURER_BUILDER_ID
       ],
       jetpack: [
@@ -2584,7 +2660,7 @@ export function suggestBuddyLoadout(profile) {
           THROWING_SPEAR_ID, BOLAS_SNARE_ID, NO_SECONDARY_ID
         ],
         extensionSecondary: [
-          ILLUSIONIST_ID, COMBAT_CLONE_ID, TRAPPER_ID, RECONJURER_BUILDER_ID,
+          ILLUSIONIST_ID, COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID, DISGUISE_ID, TRAPPER_ID, RECONJURER_BUILDER_ID,
           LIGHT_CONDENSATION_ID, NO_EXTENSION_ID
         ],
         jetpack: [
@@ -2811,8 +2887,16 @@ export function applyLoadout(fighter, loadout, opts = {}) {
   fighter.phantomDamage = 0;
   fighter.phantomDecayT = 0;
   fighter.combatCloneGear = !!extension?.combatClone;
+  fighter.shadowCloneGear = !!extension?.shadowClone;
+  fighter.splitGear = !!extension?.split;
   fighter.combatCloneCd = 0;
   fighter.combatCloneFlash = 0;
+  fighter.splitSwitchCd = 0;
+  fighter.splitNextBody = 0;
+  fighter.disguiseGear = !!extension?.disguise;
+  fighter.disguiseCd = 0;
+  fighter.disguiseProp = null;
+  fighter.disguiseGame = null;
   if (weapon.id === ADAPTIVE_NANOTECH_ID) {
     applyAdaptiveCombatStats(fighter, "sword");
     syncAdaptiveNanotechCosts(fighter, "sword");

@@ -219,7 +219,7 @@ export const CAMPAIGN_STAGES = Object.freeze([
       })
     }),
     shopAdds: Object.freeze([
-      "mechanical-modularity", "gattler", "throwing-spear", "illusionist", "sticky-charge"
+      "mechanical-modularity", "gattler", "throwing-spear", "illusionist", "disguise", "sticky-charge"
     ])
   }),
   Object.freeze({
@@ -300,7 +300,7 @@ export const CAMPAIGN_STAGES = Object.freeze([
     }),
     follower: null,
     shopAdds: Object.freeze([
-      "strong-sniper", "doppel", "light-condensation", "adaptive-nanotech-unit"
+      "strong-sniper", "doppel", "shadow-clone", "split", "light-condensation", "adaptive-nanotech-unit"
     ])
   })
 ]);

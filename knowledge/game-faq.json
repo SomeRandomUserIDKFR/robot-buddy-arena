@@ -501,6 +501,53 @@
       "answer": "Illusionist is the most expensive Extension (320¢). Press T to cycle FIGHTER / PROP / PLAT (top-right HUD), then 3 to plant. Strictly deception: no world cues, no collision, no sight block. Fighter decoys are AI clones with your exact loadout and a fake health bar that chips when shot (10 hits to fade). Their hits only gaslight — bars and numbers drop by at least 40 phantom damage, real HP is untouched. Their projectiles vanish on impact. When a real shot 'hits' an illusion it looks like it disappears, but the round keeps traveling invisible and can still hurt whatever is behind. Prop and platform illusions look real and punish focus, not bodies — unlike Trapper, which actually hurts. AI cannot tell decoys from real fighters."
     },
     {
+      "id": "equipment-shadow-clone",
+      "tags": ["equipment", "extension", "shadow clone", "linked", "buff", "debuff"],
+      "questions": [
+        "what is shadow clone",
+        "how does shadow clone work",
+        "do shadow clones share damage",
+        "do shadow clones share buffs and debuffs"
+      ],
+      "answer": "Shadow Clone costs 280 Cyber and is an Extension. Press 3 to spawn a real 25 HP twin with full weapon damage; max 2 alive, 5s spawn cooldown like Illusionist. Actual HP lost is shared between you and every living shadow, including damage to you; overkill shares only HP actually lost. Separate hits can each share damage. Power-up buffs and ice, trap, snare, and reveal debuffs are shared with one duration clock and one Overcharge charge pool. Instant power-ups benefit all living members, and new shadows inherit active effects. Shadows cannot add armor HP beyond 25, do not keep a match alive, and die with you."
+    },
+    {
+      "id": "equipment-split",
+      "tags": ["equipment", "extension", "split", "body", "switch", "clone", "h"],
+      "questions": [
+        "what is split",
+        "how does split work",
+        "how do I switch split bodies",
+        "what does H do",
+        "split health when switching"
+      ],
+      "answer": "Split costs 300 Cyber and is an Extension. Press 3 to spawn up to 2 real twins with a 30s spawn cooldown. They persist until killed and have 25 HP while uncontrolled. Press H to cycle through living bodies, with a 3s switch cooldown. Your normal kit and stored player HP follow control; switching gives you at least 25 HP. The body you leave keeps your pre-switch HP capped at 25: leaving at 10 HP gives you 25 and leaves a 10-HP twin. Position, motion, fuel, buffs, and debuffs stay with each physical body, without shared damage or effects. Switching does not reset combat cooldowns or refill shields, mana, or weapons. Uncontrolled bodies cannot add armor HP, do not hold the win condition, and die with you."
+    },
+    {
+      "id": "equipment-disguise",
+      "tags": ["equipment", "extension", "disguise", "borrow", "prop"],
+      "questions": [
+        "what is disguise",
+        "how does disguise work",
+        "how do I reveal from disguise",
+        "what happens when disguise breaks",
+        "where does the disguised prop go"
+      ],
+      "answer": "Disguise costs 240 Cyber and is an Extension. Press 3 within 100 units of real map cover to borrow that exact prop as your appearance and hitbox. It keeps its remaining HP and bracing; walking is 55% speed. Press 3 again, attack/use a weapon, or raise a shield to reveal, placing the same prop at your current feet, never at its original spot. Incoming damage spends prop durability instead of robot HP. If it breaks, you reveal and it breaks there with real debris; the final hit does not overflow, but explosive barrels still explode. Cooldown is 5s after reveal with no duration limit. Loot crates, illusions, held props, armor dummies, glare nodes, and Reconjurer-created cover are ineligible. Enemies see a prop without robot name, HP, or gear; allies get a subtle outline. AI does not magically identify you, but can suspect and shoot a prop after repeatedly seeing it move horizontally in its own line of sight. Staying still, walls, and visibility gaps decay or break that evidence; stray hits can still break the disguise."
+    },
+    {
+      "id": "ai-tactical-learning",
+      "tags": ["ai", "buddy", "strategy", "seed", "learning", "critical thinking", "disguise"],
+      "questions": [
+        "does the AI learn strategies",
+        "does my buddy remember successful tactics",
+        "what does the match seed do",
+        "can AI deduce a moving prop is a disguise",
+        "does tactical learning use a neural network"
+      ],
+      "answer": "AI uses lightweight tactical experiments, not a neural network. The match seed gives each AI repeatable tactical preferences and exploration; it does not seed the whole simulation. Four-second trials try balanced spacing, pressure, caution, or teammate flanking. Real HP trades and cautious escapes provide bounded feedback; idle time is not success. Evidence is separated by weapon category, Extension, and hurt/outnumbered/duel context, with an 18% exploration chance. Your buddy remembers evidence across completed matches; enemies only learn within the current match. Learning Lock prevents new evidence. Existing coaching, mind competence, weapon and safety rules still apply. Repeated visible horizontal prop movement can make AI investigate that prop's observed position as a possible disguise, without knowing its hidden identity. Stationary props are not automatically detected, and walls, visibility gaps, and stopping break or decay suspicion."
+    },
+    {
       "id": "equipment-material-consumer",
       "tags": ["equipment", "nanotech", "secondary", "material consumer", "debris", "sword", "ejection"],
       "questions": [
@@ -532,17 +579,18 @@
     },
     {
       "id": "equipment-ai-secondaries",
-      "tags": ["equipment", "ai", "buddy", "secondary", "extension", "material consumer", "throw", "reconjurer"],
+      "tags": ["equipment", "ai", "buddy", "secondary", "extension", "material consumer", "throw", "reconjurer", "shadow clone", "split", "disguise"],
       "questions": [
         "does my buddy use material consumer",
         "does the buddy use throw breakable",
         "does AI use reconjurer",
         "will the buddy swap to secondary",
         "does buddy use key 3",
+        "can AI use all extensions",
         "AI secondary weapons",
         "buddy debris beam"
       ],
-      "answer": "Yes. When Material Consumer, Throw Breakable, Reconjurer / Builder, Light Condensation, Trapper, or Illusionist is equipped, buddies and other AI use them: they swap to Material Consumer to vacuum debris or fire the scrap beam, hold V when the nanobot pool is full near scraps, grab and throw breakables, rebuild or conjure with Reconjurer under pressure, plant or break Light Condensation glare nodes for vision, lay bear traps or fake platforms with Trapper, and cast fighter/prop/platform illusions with Illusionist. AI cannot distinguish Illusionist decoys from real fighters. Conquest trainers do not start with these tools by default."
+      "answer": "Yes. Buddies and enemy AI can use all eight usable Extensions when equipped: Reconjurer rebuilds or conjures cover; Light Condensation scouts/blinds lanes and AI shoots enemy glare nodes; Trapper uses bear traps for grounded foes, fake platforms for airborne foes, spring pads against close threats when hurt, signal tripwires for unseen tracked foes, and mines for clustered visible foes; Illusionist casts fighter/prop/platform illusions; Doppel and Shadow Clone summon attackers during combat; Split builds a persistent team even before combat and switches below 25 HP; Disguise prioritizes nearby cover below 180 standard HP (36 Classic), stops weapon/shield use while hidden, and only reveals for close combat when healthy. AI cannot distinguish Illusionist decoys from real fighters. Cooldowns, costs, and active-object limits still apply. AI also swaps to equipped Material Consumer to vacuum debris or fire its scrap beam, holds V when the nanobot pool is full near scraps, and grabs/throws breakables with Throw Breakable. Equipping these tools is required; checking AI support does not change enemy loadouts."
     },
     {
       "id": "equipment-nanotech",

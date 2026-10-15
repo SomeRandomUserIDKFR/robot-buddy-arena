@@ -57,10 +57,20 @@ export function thoughtReason(plan) {
     "breaking glare": "an enemy light node was cutting vision",
     "setting bear trap": "a mobility lock would pin the lane",
     "laying fake platform": "a false ledge would punish a landing",
+    "setting spring pad": "a launch pad can push a close threat away",
+    "setting signal tripwire": "a tripwire can reveal a foe returning through this lane",
+    "setting land mine": "clustered enemies are vulnerable to splash damage",
     "casting fighter illusion": "a kit-matched decoy would steal focus",
     "casting prop illusion": "a false cover prop would bait shots",
     "casting platform illusion": "a false ledge would waste a landing",
     "spawning doppel": "a real twin would split their focus",
+    "spawning shadow clone": "linked twins can attack from more angles, but share the risk",
+    "spawning split": "another body gives me a place to switch to",
+    "switching split": "a fresh position and the 25 HP minimum could keep me alive",
+    "borrowing cover": "a nearby prop can hide me while I reposition",
+    "moving disguised": "I can carry this cover without showing my robot",
+    "hiding wounded": "this prop can conceal and protect me while I retreat",
+    "investigating moving prop": "I saw this prop move; it might be a disguise",
     "stealing shield": "their raised shield could be siphoned"
   })[plan] || "no clean engagement was visible";
 }

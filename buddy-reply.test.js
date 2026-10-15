@@ -58,6 +58,12 @@ assert.equal(invent.path, "unknown");
 const inventReply = composeDeepReply(invent, { responseVariants: {} });
 assert.match(inventReply.reply, /not sure|do not want to invent|outside my local|code-facts pack/i);
 
+for (const name of ["LINKED_CLONE_HP", "SPLIT_SWITCH_COOLDOWN", "ILLUSIONIST_COOLDOWN"]) {
+  const result = retrieveKnowledge(`From the code what is ${name}`, { forceCode: true });
+  assert.equal(result.path, "code");
+  assert.ok(result.hits.some((hit) => hit.text.includes(name)));
+}
+
 // Stitcher must not invent: only uses provided hits.
 const stitched = stitchSnippets([
   { text: "config.js: JET_BURN_TIME = 3", source: "code" },

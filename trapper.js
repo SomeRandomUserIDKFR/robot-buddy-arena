@@ -274,7 +274,7 @@ function applyBearTrap(trap, victim, game) {
     && (victim.shieldDurability || 0) > 0;
   const dmg = BEAR_TRAP_DAMAGE * (shielded ? BEAR_TRAP_SHIELD_DAMAGE_MULT : 1);
   const lock = BEAR_TRAP_LOCK * (shielded ? BEAR_TRAP_SHIELD_LOCK_MULT : 1);
-  applyHpDamage(victim, dmg, game);
+  applyHpDamage(victim, dmg, game, { source: trap.owner });
   victim.trapLockT = lock;
   victim.trapLockKind = "bear";
   victim.hitFlash = Math.max(victim.hitFlash || 0, 0.2);
@@ -302,7 +302,7 @@ function applyFakePlatform(trap, victim, game) {
   if (isIllusionFighter(victim)) {
     fadeIllusionFighter(victim, game);
   } else {
-    applyHpDamage(victim, FAKE_PLATFORM_DAMAGE, game);
+    applyHpDamage(victim, FAKE_PLATFORM_DAMAGE, game, { source: trap.owner });
     victim.hitFlash = Math.max(victim.hitFlash || 0, 0.14);
   }
   if (game?.effects) {
@@ -358,7 +358,7 @@ function applySpringPad(trap, victim, game) {
     // Decoys get launched for free — no use spent, not killed.
     springLaunchAwayFromTrapper(trap, victim);
   } else {
-    applyHpDamage(victim, SPRING_PAD_DAMAGE, game);
+    applyHpDamage(victim, SPRING_PAD_DAMAGE, game, { source: trap.owner });
     springLaunchAwayFromTrapper(trap, victim);
     victim.hitFlash = Math.max(victim.hitFlash || 0, 0.16);
     trap.usesLeft = Math.max(0, (trap.usesLeft ?? SPRING_PAD_USES) - 1);
@@ -396,7 +396,7 @@ function applySignalTripwire(trap, victim, game) {
   // Illusions neither trip nor die on signal wires.
   if (isIllusionFighter(victim)) return false;
   if (SIGNAL_TRIPWIRE_DAMAGE > 0) {
-    applyHpDamage(victim, SIGNAL_TRIPWIRE_DAMAGE, game);
+    applyHpDamage(victim, SIGNAL_TRIPWIRE_DAMAGE, game, { source: trap.owner });
   }
   victim.trapLockT = Math.max(victim.trapLockT || 0, SIGNAL_TRIPWIRE_SNARE);
   victim.trapLockKind = "signal";
@@ -459,7 +459,7 @@ function applyLandMine(trap, triggerVictim, game) {
       continue;
     }
     const damage = LAND_MINE_BLAST_DAMAGE * mult;
-    applyHpDamage(fighter, damage, game);
+    applyHpDamage(fighter, damage, game, { source: trap.owner });
     const angle = Math.atan2(fy - cy, fx - cx);
     fighter.vx += Math.cos(angle) * 70 * mult;
     fighter.vy += Math.sin(angle) * 45 * mult - 20 * mult;
@@ -606,6 +606,7 @@ export function tickTrapperWorld(game, dt, oldYByFighter = null) {
 
 export function tickTrapperFighter(fighter, dt) {
   if (!fighter) return;
+  if (fighter.shadowLink && fighter.shadowLink.owner !== fighter) return;
   const step = dt || 0;
   if (fighter.trapperCd > 0) {
     fighter.trapperCd = Math.max(0, fighter.trapperCd - step);

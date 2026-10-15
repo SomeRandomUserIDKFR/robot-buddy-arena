@@ -67,6 +67,7 @@ export const DEFAULT_PROFILE = {
   perkSuggestion: null,
   // When true, Training still fights but writes no learning / practice evidence.
   learningLocked: false,
+  tacticalMemory: { contexts: {} },
   // Buddy mind + Mimic dial (persisted; migrated for older saves).
   aiMode: "balanced",
   mimicIntensity: "quite",

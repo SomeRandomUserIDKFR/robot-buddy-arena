@@ -31,6 +31,9 @@ const routeCases = [
   ["What is Cyber?", "question"],
   ["explain readiness", "question"],
   ["Flash vs Balanced vs Thinker?", "question"],
+  ["How does Shadow Clone work?", "question"],
+  ["How do I switch Split bodies?", "question"],
+  ["How does Disguise work?", "question"],
   ["stay close to me", "coaching"],
   ["play safer next time", "coaching"],
   ["could you push with me more", "coaching"],
@@ -85,7 +88,13 @@ const faqCases = [
   ["What does E do?", "controls-modular"],
   ["how does mechanical modularity work", "weapons-mechanical-modularity"],
   ["How do I win a match?", "match-win"],
-  ["Is the language analyzer offline?", "analyzer-offline"]
+  ["Is the language analyzer offline?", "analyzer-offline"],
+  ["What is Shadow Clone?", "equipment-shadow-clone"],
+  ["Do shadow clones share buffs and debuffs?", "equipment-shadow-clone"],
+  ["What is Split?", "equipment-split"],
+  ["What does H do?", "equipment-split"],
+  ["What is Disguise?", "equipment-disguise"],
+  ["What happens when disguise breaks?", "equipment-disguise"]
 ];
 
 for (const [text, expectedId] of faqCases) {

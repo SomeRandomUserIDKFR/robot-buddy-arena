@@ -14,6 +14,7 @@ import {
   attackToolSecondary, findToolPickupNear, tryGrabToolPickup
 } from "./tool-secondaries.js";
 import { clamp } from "./utils.js";
+import { fighterHitbox } from "./disguise.js";
 
 export const THROW_BREAKABLE_ID = "throw-breakable";
 export const THROW_BREAKABLE_GRAB_RANGE = 100;
@@ -97,7 +98,7 @@ export function isIllusionGhostedProp(prop) {
 export function canGrabIllusionProp(prop) {
   if (!isPlantedIllusionProp(prop)) return false;
   if (prop.destroyed || !(prop.life == null || prop.life > 0)) return false;
-  if (prop.heldBy || prop.thrownInFlight) return false;
+  if (prop.heldBy || prop.thrownInFlight || prop.disguisedBy) return false;
   // Metal / power-crate looks are still bait — never apply the ≤50% HP gate.
   return true;
 }
@@ -105,7 +106,7 @@ export function canGrabIllusionProp(prop) {
 /** Whether Throw Breakable may pick up this prop / metal power crate. */
 export function canGrabBreakable(prop) {
   if (!prop || prop.destroyed) return false;
-  if (prop.heldBy || prop.thrownInFlight) return false;
+  if (prop.heldBy || prop.thrownInFlight || prop.disguisedBy) return false;
   if (prop.armorDummy || prop.forgeHidden || prop.illusionGhosted) return false;
   if (prop.illusionHeldProp) return false;
   // Planted illusion bait (any owner/team, including metal crate looks) first —
@@ -876,7 +877,8 @@ export function stepThrownBreakables(game, dt, onFighterHit = null) {
     for (const enemy of game.fighters || []) {
       if (enemy.dead || enemy === thrown.owner) continue;
       if (enemy.team === thrown.owner?.team) continue;
-      if (rectsOverlap(prop.x, prop.y, prop.w, prop.h, enemy.x, enemy.y, SIZE, SIZE)) {
+      const box = fighterHitbox(enemy);
+      if (rectsOverlap(prop.x, prop.y, prop.w, prop.h, box.x, box.y, box.w, box.h)) {
         finish(thrown.x, thrown.y, enemy);
         impacted = true;
         break;

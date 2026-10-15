@@ -54,6 +54,10 @@ function freshProfile(overrides = {}) {
   for (const id of early) assert.ok(late.includes(id));
   assert.ok(late.includes("mechanical-modularity"));
   assert.ok(!early.includes("mechanical-modularity"));
+  for (const id of ["shadow-clone", "split"]) {
+    assert.ok(late.includes(id), "new clone extensions join Doppel in the final-stage shop");
+    assert.ok(!early.includes(id));
+  }
 }
 
 // Stage encounter is fixed (no jitter) with map + power.

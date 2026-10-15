@@ -295,6 +295,7 @@ function conjureSelectedBreakable(fighter, game, random) {
     const yBottom = stand.targetY + probe.h * 0.5;
     if (!spendBots(fighter, botCost)) return null;
     spawned = createMapProp(kind, x, yBottom);
+    spawned.reconjurerCreated = true;
     spawned.x = clamp(spawned.x, 0, WORLD.w - spawned.w);
     game.props ||= [];
     game.props.push(spawned);

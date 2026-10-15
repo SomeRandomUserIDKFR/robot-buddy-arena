@@ -21,6 +21,7 @@ import {
 } from "./tool-secondaries.js";
 import { clamp, dist } from "./utils.js";
 import { fighterVisibleToViewer, visibleToSelf, visibleToTeam } from "./vision.js";
+import { syncDisguisePosition } from "./disguise.js";
 
 /**
  * Weapon silhouette map — simple aim-aligned rects (length × width, gripOffset from center).
@@ -1038,6 +1039,7 @@ export function createRenderer(canvas) {
     }
     for (const fighter of game.fighters) {
       if (!fighterVisibleToViewer(game, player, fighter)) continue;
+      if (fighter.disguiseProp) continue;
       drawHeldToolPickup(fighter);
       drawHookAnchorCable(fighter);
     }
@@ -1893,6 +1895,26 @@ export function createRenderer(canvas) {
     winningTeamHint = null,
     optimizeIllusionsHint = null
   ) {
+    if (fighter.disguiseProp && !fighter.dead) {
+      syncDisguisePosition(fighter);
+      const prop = fighter.disguiseProp;
+      context.save();
+      drawPropBody(prop, 1);
+      if (prop.canopy) drawCanopy(prop, 1);
+      if (viewer?.team === fighter.team) {
+        context.strokeStyle = "rgba(100,255,190,.65)";
+        context.lineWidth = 1.5;
+        context.setLineDash([4, 4]);
+        context.strokeRect(prop.x - 2, prop.y - 2, prop.w + 4, prop.h + 4);
+        context.setLineDash([]);
+        context.fillStyle = "#64ffbe";
+        context.font = "bold 10px ui-monospace,Consolas";
+        context.textAlign = "center";
+        context.fillText("DISGUISE", prop.x + prop.w / 2, prop.y - 8);
+      }
+      context.restore();
+      return;
+    }
     if (fighter.iframe > 0 && Math.floor(fighter.iframe * 80) % 2) return;
     const centerX = fighter.x + SIZE / 2;
     const centerY = fighter.y + SIZE / 2;
@@ -1942,12 +1964,23 @@ export function createRenderer(canvas) {
       && viewer
       && viewer.team === fighter.team
     ) {
-      context.strokeStyle = "rgba(160,220,255,.75)";
+      context.strokeStyle = fighter.cloneVariant === "shadow-clone"
+        ? "rgba(210,160,255,.85)"
+        : fighter.cloneVariant === "split"
+          ? "rgba(100,255,190,.85)"
+          : "rgba(160,220,255,.75)";
       context.lineWidth = 1.5;
       context.setLineDash([3, 4]);
       context.strokeRect(fighter.x - 3, fighter.y - 3, SIZE + 6, SIZE + 6);
       context.setLineDash([]);
       context.lineWidth = 1;
+      if (fighter.cloneVariant === "shadow-clone" || fighter.cloneVariant === "split") {
+        context.fillStyle = fighter.cloneVariant === "shadow-clone" ? "#d2a0ff" : "#64ffbe";
+        context.font = "bold 10px ui-monospace,Consolas";
+        context.textAlign = "center";
+        context.fillText(fighter.cloneVariant === "split" ? "SPLIT" : "LINKED",
+          fighter.x + SIZE / 2, fighter.y - 18);
+      }
     }
     context.fillStyle = fighter.hitFlash > 0 ? "#fff" : fighter.color;
     context.fillRect(fighter.x, fighter.y, SIZE, SIZE);
@@ -3343,7 +3376,7 @@ export function createRenderer(canvas) {
     const camera = game.camera;
     for (const enemy of game.fighters) {
       if (
-        enemy.dead || enemy.team === 0
+        enemy.dead || enemy.disguiseProp || enemy.team === 0
         || !visibleToTeam(game, game.fighters[0], enemy)
         || visibleToSelf(game.fighters[0], enemy)
       ) {

@@ -11,7 +11,8 @@ import { fadeIllusionFighter, isIllusionFighter } from "./illusionist.js";
 import { noteOilIgnition } from "./explosive-barrel.js";
 import { damageProp } from "./maps.js";
 import { damagePowerCrate } from "./powerups.js";
-import { clamp } from "./utils.js";
+import { clamp, segmentHitsBox } from "./utils.js";
+import { fighterHitbox, fighterHitPoint } from "./disguise.js";
 
 export const SPELLBOOK_ID = "spellbook";
 export const SPELL_TYPES = Object.freeze(["ice", "fire", "lightning"]);
@@ -209,7 +210,11 @@ function castIce(fighter, game) {
     t = clamp(t, 0, 1);
     const px = ox + dx * t;
     const py = oy + dy * t;
-    if (Math.hypot(ex - px, ey - py) > ICE_HALF_WIDTH + SIZE * 0.35) continue;
+    if (enemy.disguiseProp) {
+      const box = fighterHitbox(enemy);
+      if (!segmentHitsBox(ox, oy, tipX, tipY, box.x - ICE_HALF_WIDTH,
+        box.y - ICE_HALF_WIDTH, box.w + ICE_HALF_WIDTH * 2, box.h + ICE_HALF_WIDTH * 2)) continue;
+    } else if (Math.hypot(ex - px, ey - py) > ICE_HALF_WIDTH + SIZE * 0.35) continue;
 
     if (isIllusionFighter(enemy)) {
       fadeIllusionFighter(enemy, game);
@@ -265,8 +270,9 @@ function castFire(fighter, game) {
   for (const enemy of game.fighters || []) {
     if (!enemy || enemy.dead || enemy === fighter) continue;
     if (enemy.team === fighter.team) continue;
-    const ex = enemy.x + SIZE / 2;
-    const ey = enemy.y + SIZE / 2;
+    const point = fighterHitPoint(enemy, cx, cy);
+    const ex = point.x;
+    const ey = point.y;
     if (Math.hypot(ex - cx, ey - cy) > FIRE_RADIUS) continue;
     if (isIllusionFighter(enemy)) {
       fadeIllusionFighter(enemy, game);
@@ -432,16 +438,19 @@ export function tickSpellbookFighter(fighter, dt) {
       fighter.mana = Math.min(max, (fighter.mana || 0) + SPELLBOOK_MANA_REGEN * step);
     }
   }
+  const sharedClock = fighter.shadowLink && fighter.shadowLink.owner !== fighter;
   if (fighter.icePinT > 0) {
-    fighter.icePinT = Math.max(0, fighter.icePinT - step);
     fighter.vx = 0;
     fighter.vy = 0;
+  }
+  if (!sharedClock && fighter.icePinT > 0) {
+    fighter.icePinT = Math.max(0, fighter.icePinT - step);
     if (fighter.icePinT <= 0) {
       // Melt → slow.
       fighter.iceSlowT = Math.max(fighter.iceSlowT || 0, ICE_SLOW);
     }
   }
-  if (fighter.iceSlowT > 0) {
+  if (!sharedClock && fighter.iceSlowT > 0) {
     fighter.iceSlowT = Math.max(0, fighter.iceSlowT - step);
   }
 }
@@ -527,6 +536,6 @@ function spellHit(target, source, damage, angle, game, extras) {
     hitFn(target, source, damage, angle, game, extras || {});
     return;
   }
-  applyHpDamage(target, damage * (target.damageTaken || 1), game);
+  applyHpDamage(target, damage * (target.damageTaken || 1), game, { source });
   target.hitFlash = Math.max(target.hitFlash || 0, 0.14);
 }

@@ -18,9 +18,11 @@ import { isCombatClone } from "./combat-clone.js";
 import { AI_PRESETS, DEFAULT_PROFILE, SIZE, WORLD } from "./config.js";
 import { spawnPropDebris } from "./debris.js";
 import {
-  applyLoadout, COMBAT_CLONE_ID, DEFAULT_LOADOUT, ILLUSIONIST_ID, isPrecisionAimWeapon,
+  applyLoadout, COMBAT_CLONE_ID, DEFAULT_LOADOUT, DISGUISE_ID, GEAR_BY_ID,
+  ILLUSIONIST_ID, isPrecisionAimWeapon,
   LIGHT_CONDENSATION_ID, MATERIAL_CONSUMER_ID, RECONJURER_BUILDER_ID,
-  RETRACTABLE_MORPH_DURATION, selectWeaponSlot, SHIELD_STEAL_ID, tickRetractableArmor,
+  RETRACTABLE_MORPH_DURATION, selectWeaponSlot, SHADOW_CLONE_ID, SHIELD_STEAL_ID,
+  SPLIT_ID, tickRetractableArmor,
   trainerLoadout, TRAPPER_ID
 } from "./equipment.js";
 import { createLightCondensationProp } from "./light-condensation.js";
@@ -28,7 +30,8 @@ import { isIllusionFighter } from "./illusionist.js";
 import {
   ensureLearningProfile, PRECISION_AIM_MAX_REDUCTION, precisionAimErrorScale, recordEvidence
 } from "./learning.js";
-import { createMapRuntime } from "./maps.js";
+import { createMapProp, createMapRuntime } from "./maps.js";
+import { TRAP_TYPES } from "./trapper.js";
 import { createPowerCrate } from "./powerups.js";
 import { THROW_BREAKABLE_ID } from "./throw-breakable.js";
 import { angleDiff, dist, lerp, thoughtReason } from "./utils.js";
@@ -1536,7 +1539,68 @@ console.log("Light Condensation AI suite passed.");
   assert.ok(buddy.trapperCd > 0);
 }
 
+for (const initialType of TRAP_TYPES) {
+  for (const want of TRAP_TYPES) {
+    const buddy = applyLoadout(new Fighter({
+      x: 500, y: 700, team: 0, grounded: true, aim: 0
+    }), { ...DEFAULT_LOADOUT, extensionSecondary: TRAPPER_ID });
+    buddy.trapperType = initialType;
+    const enemy = new Fighter({ x: 720, y: 700, team: 1, grounded: true });
+    const visible = [enemy];
+    if (want === "fakePlatform") enemy.grounded = false;
+    if (want === "springPad") buddy.hp = buddy.coreHp = 100;
+    if (want === "signalTripwire") visible.length = 0;
+    if (want === "landMine") {
+      visible.push(new Fighter({ x: 750, y: 700, team: 1, grounded: true }));
+    }
+    const game = { fighters: [buddy, ...visible], traps: [], effects: [] };
+    updateAiTrapper(buddy, buddy.aiState, game, visible, enemy);
+    assert.equal(game.traps.length, 1);
+    assert.equal(game.traps[0].trapType, want, `${initialType} must select ${want} before planting`);
+  }
+}
+
 console.log("Trapper AI suite passed.");
+
+{
+  const extensionChecks = {
+    [RECONJURER_BUILDER_ID]: (fighter, game) => game.props.some((p) => p.reconjurerCreated)
+      || (game.powerCrates || []).length > 0,
+    [LIGHT_CONDENSATION_ID]: (fighter, game) => game.props.some((p) => p.lightCondensation),
+    [TRAPPER_ID]: (fighter, game) => game.traps.length > 0,
+    [ILLUSIONIST_ID]: (fighter, game) => game.fighters.some(isIllusionFighter),
+    [COMBAT_CLONE_ID]: (fighter, game) => game.fighters.some(isCombatClone),
+    [SHADOW_CLONE_ID]: (fighter, game) => game.fighters.some((f) => f.cloneVariant === SHADOW_CLONE_ID),
+    [SPLIT_ID]: (fighter, game) => game.fighters.some((f) => f.cloneVariant === SPLIT_ID),
+    [DISGUISE_ID]: (fighter) => !!fighter.disguiseProp
+  };
+  assert.deepEqual(Object.keys(extensionChecks).sort(), Object.values(GEAR_BY_ID)
+    .filter((gear) => gear.slot === "extensionSecondary" && gear.id !== "no-extension")
+    .map((gear) => gear.id).sort(), "every usable Extension has an AI integration test");
+  for (const buddy of [true, false]) {
+    for (const [id, used] of Object.entries(extensionChecks)) {
+      const player = new Fighter({ x: 100, y: 700, human: true, team: 0 });
+      const fighter = applyLoadout(new Fighter({
+        x: 500, y: 700, team: 1, buddy, ai: "balanced", grounded: true, aim: 0
+      }), { ...DEFAULT_LOADOUT, extensionSecondary: id });
+      fighter.hp = fighter.coreHp = 100;
+      fighter.nanobotFree = 100;
+      fighter.aiState.timer = 0;
+      const enemy = new Fighter({ x: 700, y: 700, team: 0, grounded: true });
+      const game = {
+        mode: "conquest", elapsed: 1, lastShotAtPlayer: -99,
+        fighters: [player, fighter, enemy], pings: [], thoughts: [], bullets: [],
+        traps: [], illusions: [], effects: [], groundDebris: [],
+        props: id === DISGUISE_ID ? [createMapProp("crate", 550, 700 + SIZE)] : [],
+        platforms: [{ x: 0, y: 700 + SIZE, w: WORLD.w, h: 40 }]
+      };
+      updateAI(fighter, .05, game, clone(DEFAULT_PROFILE));
+      assert.ok(used(fighter, game), `${buddy ? "buddy" : "enemy"} AI must use ${id} through updateAI`);
+    }
+  }
+}
+
+console.log("All Extension AI integration suite passed.");
 
 // --- Illusionist AI ---
 {
@@ -1668,4 +1732,3 @@ console.log("Doppel AI suite passed.");
 }
 
 console.log("Shield Steal AI suite passed.");
-

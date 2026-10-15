@@ -30,14 +30,16 @@ import {
   canGrabBreakable, isThrowBreakable, THROW_BREAKABLE_GRAB_RANGE, THROW_BREAKABLE_ID
 } from "./throw-breakable.js";
 import {
-  isCombatClone, isCombatCloneGear, listCombatClones, tryCombatCloneSpawn
+  cloneGearName, isCombatClone, isCombatCloneGear, listCombatClones,
+  tryCombatCloneSpawn, trySplitSwitch
 } from "./combat-clone.js";
 import {
   cycleIllusionistType, isIllusionFighter, isIllusionist, listIllusionFighters,
   listIllusionObjects, tryIllusionistPlant
 } from "./illusionist.js";
 import {
-  cycleTrapperType, isTrapper, listTrapperTraps, tryTrapperPlant
+  cycleTrapperType, isTrapper, LAND_MINE_BLAST_RADIUS, listTrapperTraps,
+  normalizeTrapType, TRAP_TYPES, tryTrapperPlant
 } from "./trapper.js";
 import { angleDiff, clamp, dist, formatTime, lerp } from "./utils.js";
 import { crateVisibleToTeam } from "./powerups.js";
@@ -45,6 +47,8 @@ import { fightStyleSpacingBias } from "./fight-styles.js";
 import { hpAtLeast, hpBelow, optimizeIllusionsEnabled, scaleHealthAmount } from "./settings.js";
 import { hasLineOfSight, visibleToSelf, visibleToTeam } from "./vision.js";
 import { Fighter } from "./combat.js";
+import { endDisguise, findDisguiseProp, isDisguiseGear, tryDisguise } from "./disguise.js";
+import { chooseTacticalStrategy, observeSuspiciousProps } from "./ai-tactics.js";
 
 function isTeamMode(game) {
   return game?.mode === "conquest"
@@ -948,7 +952,7 @@ export function updateAiLightCondensation(fighter, state, game, visible, target)
 }
 
 /**
- * Trapper (T cycle / key 3 plant): bear on ground lanes, fake plat under airborne foes.
+ * Trapper: choose lane control, retreat, scouting, or splash traps for the threat.
  */
 export function updateAiTrapper(fighter, state, game, visible, target) {
   if (!isTrapper(fighter) || fighter.dead || !game) return;
@@ -960,17 +964,23 @@ export function updateAiTrapper(fighter, state, game, visible, target) {
   const engaged = !!target && !target.dead;
   if (!foe && !engaged && hpAtLeast(fighter, 260)) return;
 
-  // Pick type: airborne / above → fake platform; else bear.
   let want = "bear";
-  if (foe) {
+  if (foe && hpBelow(fighter, 180) && dist(fighter, foe) < 240) {
+    want = "springPad";
+  } else if (foe) {
     const airborne = !foe.grounded || foe.y < fighter.y - 40;
     const above = foe.y + SIZE < fighter.y - 20;
     if (airborne || above) want = "fakePlatform";
+    else if (visible.some((enemy) => enemy !== foe && !enemy.dead
+      && enemy.team !== fighter.team && !enemy.disguiseProp
+      && dist(enemy, foe) <= LAND_MINE_BLAST_RADIUS)) want = "landMine";
   } else if (target && target.y < fighter.y - 60) {
     want = "fakePlatform";
+  } else if (engaged) {
+    want = "signalTripwire";
   }
-  if (normalizeTrapTypeSafe(fighter) !== want) {
-    // At most one cycle per decision — two types only.
+  for (let i = 0; i < TRAP_TYPES.length - 1; i++) {
+    if (normalizeTrapType(fighter.trapperType) === want) break;
     cycleTrapperType(fighter);
   }
 
@@ -982,12 +992,14 @@ export function updateAiTrapper(fighter, state, game, visible, target) {
     );
   }
   if (tryTrapperPlant(fighter, game)) {
-    state.plan = want === "fakePlatform" ? "laying fake platform" : "setting bear trap";
+    state.plan = {
+      bear: "setting bear trap",
+      fakePlatform: "laying fake platform",
+      springPad: "setting spring pad",
+      signalTripwire: "setting signal tripwire",
+      landMine: "setting land mine"
+    }[want];
   }
-}
-
-function normalizeTrapTypeSafe(fighter) {
-  return fighter?.trapperType === "fakePlatform" ? "fakePlatform" : "bear";
 }
 
 /**
@@ -1348,9 +1360,10 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
 
   let target = null;
   let best = Infinity;
+  const suspicious = observeSuspiciousProps(fighter, game);
   // Prefer real foes; fall back to any living enemy (including other decoys).
   for (const enemy of game.fighters) {
-    if (!enemy || enemy.dead || enemy.team === fighter.team || enemy === fighter) continue;
+    if (!enemy || enemy.dead || enemy.disguiseProp || enemy.team === fighter.team || enemy === fighter) continue;
     const d = dist(fighter, enemy);
     const weight = (isIllusionFighter(enemy) || isCombatClone(enemy)) ? d + 80 : d;
     if (weight < best) {
@@ -1358,6 +1371,7 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
       target = enemy;
     }
   }
+  if (!target) target = suspicious;
 
   const reach = fighter.weaponReach || (fighter.weapon === "saber" ? 120 : 920);
   const desired = fighter.weapon === "saber" ? 80 : Math.min(420, reach * 0.4);
@@ -1376,7 +1390,7 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
     const needLift = target.y < fighter.y - 90;
     state.jet = !fighter.grounded && needLift && fighter.fuel > 0.18 && !fighter.jetLocked;
     state.jetHeld = state.jet;
-    state.plan = `${planPrefix} pressing`;
+    state.plan = target.suspectedProp ? "investigating moving prop" : `${planPrefix} pressing`;
   } else {
     state.attack = false;
     state.mx = 0;
@@ -1406,22 +1420,27 @@ export function updateAIDecoy(fighter, dt, game) {
 export function updateAIClone(fighter, dt, game) {
   return updateAISummon(fighter, dt, game, {
     plantIllusions: false,
-    planPrefix: "doppel"
+    planPrefix: fighter.cloneVariant === "shadow-clone" ? "shadow"
+      : fighter.cloneVariant === "split" ? "split twin" : "doppel"
   });
 }
 
 /**
- * Owner AI: spawn Doppel twins when pressed or when a visible foe is mid-range.
+ * Owner AI: build a persistent Split team; use other twins under combat pressure.
  */
 export function updateAiCombatClone(fighter, state, game, visible, target) {
   if (!isCombatCloneGear(fighter) || fighter.dead || !game) return;
+  if (fighter.splitGear && fighter.hp < 25 && trySplitSwitch(fighter, game)) {
+    state.plan = "switching split";
+    return;
+  }
   if ((fighter.combatCloneCd || 0) > 0) return;
   const owned = listCombatClones(game).filter((c) => c.cloneOwner === fighter).length;
   if (owned >= 2) return;
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
   const pressed = hpBelow(fighter, 280);
   const midFight = !!foe && dist(fighter, foe) < 720;
-  if (!pressed && !midFight) return;
+  if (!fighter.splitGear && !pressed && !midFight) return;
   if (foe || target) {
     const aimAt = foe || target;
     state.desiredAim = Math.atan2(
@@ -1430,7 +1449,34 @@ export function updateAiCombatClone(fighter, state, game, visible, target) {
     );
   }
   if (tryCombatCloneSpawn(fighter, game, Fighter)) {
-    state.plan = "spawning doppel";
+    state.plan = `spawning ${cloneGearName(fighter).toLowerCase()}`;
+  }
+}
+
+export function updateAiDisguise(fighter, state, game, visible, target) {
+  if (!isDisguiseGear(fighter) || fighter.dead || !game) return;
+  const foe = target && visible.includes(target) ? target : null;
+  const hurt = hpBelow(fighter, 180);
+  if (fighter.disguiseProp) {
+    if (!hurt && foe && dist(fighter, foe) < 180) {
+      endDisguise(fighter, game);
+      return;
+    }
+    state.attack = false;
+    state.chuck = false;
+    fighter.shieldRaised = false;
+    state.plan = hurt ? "hiding wounded" : "moving disguised";
+  } else if (hurt || (!foe && !state.attack && !fighter.shieldRaised)) {
+    if (hurt && (fighter.disguiseCd || 0) <= 0 && !fighter.heldProp
+      && !fighter.hookReel && !fighter.hookHang && !fighter.hookDrag
+      && !game.paused && !game.over && findDisguiseProp(fighter, game)) {
+      fighter.shieldRaised = false;
+    }
+    if (tryDisguise(fighter, game)) {
+      state.attack = false;
+      state.chuck = false;
+      state.plan = hurt ? "hiding wounded" : "borrowing cover";
+    }
   }
 }
 
@@ -1443,6 +1489,11 @@ export function updateAI(fighter, dt, game, profile) {
     return updateAIClone(fighter, dt, game);
   }
   const state = fighter.aiState;
+  if (state.target?.disguiseProp && state.target.team !== fighter.team) {
+    state.target = null;
+    state.attack = false;
+    state.timer = 0;
+  }
   const priorRetreatDecision = state.plan === "covering retreat";
   const basePreset = AI_PRESETS[fighter.ai] || AI_PRESETS.balanced;
   const player = game.fighters[0];
@@ -1491,7 +1542,7 @@ export function updateAI(fighter, dt, game, profile) {
       : 0;
   state.timer = preset.reaction * (reactionJitter > 0 ? 1 + reactionJitter * Math.random() : 1);
 
-  const enemies = game.fighters.filter((enemy) => !enemy.dead && enemy.team !== fighter.team);
+  const enemies = game.fighters.filter((enemy) => !enemy.dead && !enemy.disguiseProp && enemy.team !== fighter.team);
   const visible = enemies.filter((enemy) => visibleToTeam(game, fighter, enemy));
   const latestPing = game.pings[game.pings.length - 1];
   let target = visible.sort((a, b) => {
@@ -1501,6 +1552,13 @@ export function updateAI(fighter, dt, game, profile) {
       : 0;
     return dist(fighter, a) - dist(fighter, b) + hpBias + pingBias;
   })[0];
+  const suspicious = observeSuspiciousProps(fighter, game);
+  if (!target && suspicious) {
+    target = suspicious;
+    visible.push(suspicious);
+  }
+  const strategy = chooseTacticalStrategy(fighter, game, profile, visible, target);
+  state.tacticalStrategy = strategy;
 
   if (target) {
     state.target = target;
@@ -1575,6 +1633,10 @@ export function updateAI(fighter, dt, game, profile) {
     ? (profile?.fightStyle || "balanced")
     : null;
 
+  // Learned experiments nudge posture; explicit coaching and safety still win.
+  if (strategy === "pressure") desired *= .82;
+  if (strategy === "cautious") desired *= 1.18;
+
   desired -= coachingBias("rush") * (fighter.weapon === "gun" ? 130 : 45);
   desired += coachingBias("safer") * 150;
   desired -= coachingBias("stayClose") * 70;
@@ -1642,6 +1704,8 @@ export function updateAI(fighter, dt, game, profile) {
       + coachingBias("safer") * 90
       + styleBias.retreatHpDelta
     : 130;
+  if (strategy === "cautious") retreatHp += 35;
+  if (strategy === "pressure") retreatHp -= 15;
   if (isMimic && mimicBlend > 0 && lowHpKnowledge > .2
     && learned.habits.lowHpBehavior.estimate !== null) {
     // High estimate = player keeps fighting when hurt → lower retreat threshold.
@@ -1656,6 +1720,12 @@ export function updateAI(fighter, dt, game, profile) {
     const distance = dist(fighter, target);
     const idealX = target.x - Math.sign(dx || 1) * desired;
     if (Math.abs(distance - desired) > 45) goalX = idealX;
+    if (strategy === "flank") {
+      const ally = game.fighters.find((other) => other !== fighter && !other.dead
+        && other.team === fighter.team && !isIllusionFighter(other)
+        && dist(other, target) < 700);
+      if (ally) goalX = clamp(target.x + Math.sign(target.x - ally.x || fighter.facing) * desired, 0, WORLD.w - SIZE);
+    }
     const flankBias = coachingBias("flankScout");
     if (flankBias && isTeamMode(game) && dist(fighter, player) < 700) {
       goalX += Math.sign(target.x - player.x || fighter.facing) * 180 * flankBias;
@@ -2011,6 +2081,10 @@ export function updateAI(fighter, dt, game, profile) {
     fighter, state, game, visible, target, fighter.ai || "balanced"
   );
   updateAiNanotech(fighter, state, game, visible, target);
+  updateAiDisguise(fighter, state, game, visible, target);
+  if (target?.suspectedProp && state.plan !== "hiding wounded" && !fighter.disguiseProp) {
+    state.plan = "investigating moving prop";
+  }
   stepAimSmoothing(fighter, dt, turnRate);
   return state;
 }
