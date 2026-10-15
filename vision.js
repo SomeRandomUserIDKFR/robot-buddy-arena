@@ -47,6 +47,7 @@ export function hasLineOfSight(game, from, to) {
   const y2 = to.y + SIZE / 2;
   const blockers = cachedSightBlockers(game);
   for (const box of blockers) {
+    if (isCombatClone(from) && box.heldBy === from) continue;
     if (segmentHitsBox(x1, y1, x2, y2, box.x, box.y, box.w, box.h)) return false;
   }
   return true;
@@ -91,6 +92,7 @@ export function propVisibleToSelf(observer, prop, game) {
   const sight = (observer.sight || SIGHT) * gimmickSightMult(game);
   if (dist(observer, probe) > sight && !inDirectionalSight(observer, probe, game)) return false;
   return !cachedSightBlockers(game).some((box) => box !== prop
+    && !(isCombatClone(observer) && box.heldBy === observer)
     && segmentHitsBox(observer.x + SIZE / 2, observer.y + SIZE / 2,
       probe.x + SIZE / 2, probe.y + SIZE / 2, box.x, box.y, box.w, box.h));
 }

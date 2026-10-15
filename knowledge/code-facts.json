@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-15T02:05:27.257Z",
+  "generatedAt": "2026-10-15T02:47:32.208Z",
   "allowlist": [
     "config.js",
     "equipment.js",
@@ -13,7 +13,7 @@
     "perks.js",
     "power.js"
   ],
-  "contentHash": "1e915a76358339c9",
+  "contentHash": "a730e67bfdc34503",
   "entries": [
     {
       "id": "code-config-ceiling",
@@ -515,6 +515,20 @@
         "split switch key"
       ],
       "text": "combat-clone.js: SPLIT_SWITCH_KEY = \"KeyH\""
+    },
+    {
+      "id": "code-combat-clone-split_twin_hp",
+      "source": "combat-clone.js",
+      "name": "SPLIT_TWIN_HP",
+      "topic": "equipment",
+      "aliases": [
+        "split_twin_hp",
+        "split",
+        "twin",
+        "hp",
+        "split twin hp"
+      ],
+      "text": "combat-clone.js: SPLIT_TWIN_HP = 100"
     },
     {
       "id": "code-config-ai_presets",

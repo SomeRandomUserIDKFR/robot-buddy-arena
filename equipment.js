@@ -531,7 +531,7 @@ export const GEAR = [
     SPLIT_ID,
     "extensionSecondary",
     "Split",
-    "Press 3 to spawn up to 2 persistent real twins (30s cooldown). Press H to cycle bodies (3s switch cooldown). Uncontrolled bodies have 25 HP. Your normal kit and stored player HP follow control, raised to at least 25 on switching; the body you leave has your pre-switch HP capped at 25. No shared damage or effects. Twins die with you.",
+    "Press 3 to spawn up to 2 persistent real twins (30s cooldown). Press H to cycle bodies (3s switch cooldown). Uncontrolled bodies have 100 HP. Your normal kit and stored player HP follow control, raised to at least 100 on switching; the body you leave has your pre-switch HP capped at 100. No shared damage or effects. Twins die with you.",
     {},
     {
       price: 300,

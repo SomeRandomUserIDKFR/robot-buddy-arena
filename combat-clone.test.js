@@ -1,17 +1,24 @@
 import assert from "node:assert/strict";
-import { Fighter, hit } from "./combat.js";
+import { Fighter, hit, stepFighter } from "./combat.js";
+import { DEFAULT_PROFILE, SIZE } from "./config.js";
 import {
   COMBAT_CLONE_COOLDOWN, COMBAT_CLONE_HP_FRAC, COMBAT_CLONE_ID, COMBAT_CLONE_MAX_ACTIVE,
   createCombatClone, isCombatClone, isCombatCloneGear, LINKED_CLONE_HP, listCombatClones,
-  SHADOW_CLONE_ID, SPLIT_ID, SPLIT_SWITCH_COOLDOWN, SPLIT_SWITCH_KEY,
+  SHADOW_CLONE_ID, SPLIT_ID, SPLIT_SWITCH_COOLDOWN, SPLIT_SWITCH_KEY, SPLIT_TWIN_HP,
   tickCombatCloneFighter, tickCombatCloneWorld, tryCombatCloneSpawn, trySplitSwitch
 } from "./combat-clone.js";
 import {
-  applyHpDamage, applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID, hasNanotechChestplate,
-  hasRetractableArmor, syncNanotechDisplayedHp, tickNanotech
+  ADAPTIVE_NANOTECH_ID, applyHpDamage, applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID,
+  hasNanotechChestplate, hasRetractableArmor, MATERIAL_CONSUMER_ID, MODULAR_WEAPON_ID,
+  nanotechArmorHp, nanotechFormPct, selectWeaponSlot, SHIELD_STEAL_ID,
+  syncNanotechDisplayedHp, tickNanotech
 } from "./equipment.js";
 import { isRealCombatant } from "./illusionist.js";
-import { updateAiCombatClone } from "./ai.js";
+import { updateAI, updateAIClone, updateAIDecoy, updateAiCombatClone } from "./ai.js";
+import { createFighterIllusion } from "./illusionist.js";
+import { createMapProp } from "./maps.js";
+import { attackThrowBreakable, THROW_BREAKABLE_ID, tickThrowBreakable } from "./throw-breakable.js";
+import { THROWING_SPEAR_ID } from "./tool-secondaries.js";
 import { ILLUSIONIST_COOLDOWN } from "./illusionist.js";
 import {
   awardPowerup, consumeOvercharge, FIRE_RATE_DURATION, REGEN_DURATION,
@@ -133,10 +140,11 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
   assert.ok(isCombatCloneGear(id));
   for (const scale of [1, 0.2]) {
     const { owner, enemy, game, a, b } = cloneFixture(id, {}, scale);
-    assert.equal(a.hp, 25, "new clones have exactly 25 HP in either health mode");
-    assert.equal(a.coreHp, 25);
-    assert.equal(a.coreMaxHp, 25);
-    assert.equal(a.maxHp, LINKED_CLONE_HP);
+    const expectedHp = id === SPLIT_ID ? SPLIT_TWIN_HP : LINKED_CLONE_HP;
+    assert.equal(a.hp, expectedHp, "new clones have their fixed HP in either health mode");
+    assert.equal(a.coreHp, expectedHp);
+    assert.equal(a.coreMaxHp, expectedHp);
+    assert.equal(a.maxHp, expectedHp);
     assert.ok(isCombatClone(a));
     assert.equal(isRealCombatant(a), false);
     assert.equal(a.loadout.extensionSecondary, "no-extension");
@@ -265,7 +273,8 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
   assert.equal(hasRetractableArmor(a), false);
   assert.equal(hasNanotechChestplate(a), false);
   tickNanotech(a, 1);
-  assert.equal(a.hp, 25, "nanotech ticks must not restore owner-sized HP");
+  assert.equal(a.hp, id === SPLIT_ID ? SPLIT_TWIN_HP : LINKED_CLONE_HP,
+    "nanotech ticks must not restore owner-sized HP");
   owner.dead = true;
   tickCombatCloneWorld(game);
   assert.equal(game.fighters.filter(isCombatClone).length, 0, "all twins die with owner");
@@ -273,6 +282,40 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
 
 assert.equal(SPLIT_SWITCH_KEY, "KeyH");
 assert.equal(SPLIT_SWITCH_COOLDOWN, 3);
+assert.equal(SPLIT_TWIN_HP, 100);
+
+for (const scale of [1, .2]) {
+  for (const hp of [10, 60, 99, 100, ...(scale === 1 ? [150] : [])]) {
+    const { owner, game, a } = cloneFixture(SPLIT_ID, {}, scale);
+    owner.hp = owner.coreHp = hp;
+    trySplitSwitch(owner, game);
+    assert.equal(owner.hp, Math.max(100, hp), "switching has an absolute 100-HP floor");
+    assert.equal(a.hp, Math.min(100, hp), "abandoned HP is preserved up to the 100-HP cap");
+    assert.equal(a.maxHp, 100);
+    assert.equal(owner.maxHp, 500 * scale, "normal controlled stats are retained");
+  }
+}
+
+{
+  const { owner, game, a } = cloneFixture(SPLIT_ID, { body: "retractable-armor" });
+  owner.retractableDeployed = true;
+  owner.retractableHp = 50;
+  owner.coreHp = 10;
+  syncNanotechDisplayedHp(owner);
+  trySplitSwitch(owner, game);
+  assert.equal(owner.hp, 100, "armor counts toward the switching minimum");
+  assert.equal(owner.coreHp, 50, "only the missing 40 HP is added to core health");
+  assert.equal(a.hp, 60, "the abandoned body keeps total pre-switch HP");
+}
+
+for (const hp of [99, 100]) {
+  const { owner, enemy, game, a } = cloneFixture(SPLIT_ID);
+  owner.hp = owner.coreHp = hp;
+  updateAiCombatClone(owner, owner.aiState, game, [enemy], enemy);
+  assert.equal(owner.splitSwitchCd > 0, hp < 100, "AI switches below 100, not at the floor");
+  assert.equal(owner.hp, 100);
+  assert.equal(a.hp, hp < 100 ? 99 : 100);
+}
 
 {
   const { owner, enemy, game, a } = cloneFixture(SHADOW_CLONE_ID);
@@ -287,13 +330,13 @@ assert.equal(SPLIT_SWITCH_COOLDOWN, 3);
   const { owner, game, a } = cloneFixture(SPLIT_ID, { body: "retractable-armor" });
   owner.retractableDeployed = true;
   owner.retractableHp = 50;
-  owner.coreHp = 10;
+  owner.coreHp = 70;
   syncNanotechDisplayedHp(owner);
   const before = owner.hp;
   trySplitSwitch(owner, game);
   assert.equal(owner.hp, before, "armor above the minimum must not secretly heal core HP");
-  assert.equal(owner.coreHp, 10);
-  assert.equal(a.hp, 25);
+  assert.equal(owner.coreHp, 70);
+  assert.equal(a.hp, 100);
 }
 
 {
@@ -313,9 +356,9 @@ assert.equal(SPLIT_SWITCH_COOLDOWN, 3);
   const aX = a.x;
   b.x = 1100;
   assert.equal(trySplitSwitch(owner, game), a);
-  assert.equal(owner.hp, 25, "controlled HP is really raised to 25");
+  assert.equal(owner.hp, 100, "controlled HP is really raised to 100");
   assert.equal(owner.maxHp, 500, "controlled body retains normal stats");
-  assert.equal(a.hp, 10, "left body retains pre-switch HP below 25");
+  assert.equal(a.hp, 10, "left body retains pre-switch HP below 100");
   assert.equal(a.coreHp, 10);
   assert.equal(owner.x, aX);
   assert.equal(a.x, oldX);
@@ -335,8 +378,8 @@ assert.equal(SPLIT_SWITCH_COOLDOWN, 3);
   tickCombatCloneFighter(owner, 3);
   assert.equal(trySplitSwitch(owner, game), b, "cycle reaches the second twin");
   assert.equal(owner.x, 1100);
-  assert.equal(b.hp, 25);
-  assert.equal(owner.hp, 25);
+  assert.equal(b.hp, 100);
+  assert.equal(owner.hp, 100);
   tickCombatCloneFighter(owner, 3);
   assert.equal(trySplitSwitch(owner, game), a);
   assert.equal(owner.x, oldX, "cycle eventually returns to the original location");
@@ -345,8 +388,9 @@ assert.equal(SPLIT_SWITCH_COOLDOWN, 3);
 {
   const { owner, enemy, game, a, b } = cloneFixture(SPLIT_ID);
   hit(a, enemy, 10, 0, game);
+  assert.equal(a.hp, 90);
   assert.equal(owner.hp, 500, "Split does not share damage");
-  assert.equal(b.hp, 25);
+  assert.equal(b.hp, 100);
   awardPowerup(a, "fireRate", game);
   assert.equal(owner.powerBuffs.fireRate, undefined, "Split does not share buffs");
   tickFighterPowerBuffs(a, 1);
@@ -356,8 +400,8 @@ assert.equal(SPLIT_SWITCH_COOLDOWN, 3);
   assert.equal(a.trapLockT, 1, "uncontrolled Split debuffs expire normally");
   a.dead = true;
   assert.equal(trySplitSwitch(owner, game), b, "dead bodies are skipped");
-  assert.equal(owner.hp, 500, "switching above 25 does not heal");
-  assert.equal(b.hp, 25);
+  assert.equal(owner.hp, 500, "switching above 100 does not heal");
+  assert.equal(b.hp, 100);
   owner.splitSwitchCd = 0;
   game.paused = true;
   assert.equal(trySplitSwitch(owner, game), null);
@@ -395,7 +439,7 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
     owner.hp = owner.coreHp = 10;
     updateAiCombatClone(owner, state, game, [enemy], enemy);
     assert.equal(state.plan, "switching split");
-    assert.equal(owner.hp, 25);
+    assert.equal(owner.hp, 100);
   }
 }
 
@@ -417,4 +461,164 @@ for (const id of [COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID]) {
   }
 }
 
-console.log("combat-clone.test.js passed: Doppel, Shadow Clone, and Split.");
+function gearCloneFixture(id, loadout = {}) {
+  const fixture = cloneFixture(id, { shield: "no-shield", ...loadout });
+  const { a, enemy, game } = fixture;
+  a.ai = "veteran";
+  a.aim = 0;
+  a.aiState.timer = 0;
+  enemy.x = a.x + 250;
+  enemy.y = a.y;
+  enemy.aim = 0;
+  game.elapsed = 1;
+  game.props = [];
+  game.platforms = [];
+  game.groundDebris = [];
+  game.settings = { gameplay: { optimizeIllusions: true } };
+  return fixture;
+}
+
+for (const id of [COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID]) {
+  {
+    const { a, enemy, game } = gearCloneFixture(id, { shield: "light-buckler" });
+    enemy.weapon = "saber";
+    enemy.x = a.x + 80;
+    enemy.aim = Math.PI;
+    const state = updateAI(a, .05, game, structuredClone(DEFAULT_PROFILE));
+    assert.equal(a.shieldRaised, true, `${id} raises its shield against close melee`);
+    assert.equal(state.attack, false);
+    const expires = state.shieldHoldUntil;
+    a.aiState.timer = 10;
+    game.elapsed = expires + .01;
+    updateAIClone(a, .05, game);
+    assert.equal(a.shieldRaised, false, "clone shields expire between decision ticks");
+  }
+  {
+    const { a, game } = gearCloneFixture(id, { weapon: "nanotech-rifle" });
+    const startingHp = a.hp;
+    a.nanobotWeapon = 0;
+    a.nanobotFree = a.nanobotMax;
+    updateAIClone(a, .05, game);
+    assert.equal(nanotechFormPct(a), 1, `${id} reforms its nanotech weapon`);
+    stepFighter(a, .05, game, structuredClone(DEFAULT_PROFILE), {}, null);
+    assert.ok(game.bullets.some((bullet) => bullet.owner === a), "formed clone gun actually fires");
+    assert.equal(a.hp, startingHp, "weapon nanotech cannot silently restore owner-sized health");
+    assert.equal(a.loadout.extensionSecondary, "no-extension");
+  }
+  for (const [weapon, distance, expectedMode] of [
+    [MODULAR_WEAPON_ID, 450, "rifle"],
+    [ADAPTIVE_NANOTECH_ID, 600, "sniper"],
+    [ADAPTIVE_NANOTECH_ID, 250, "rifle"]
+  ]) {
+    const { a, enemy, game } = gearCloneFixture(id, { weapon });
+    enemy.x = a.x + distance;
+    updateAIClone(a, .05, game);
+    assert.equal(weapon === MODULAR_WEAPON_ID ? a.modularMorphTo : a.adaptiveMorphTo,
+      expectedMode, `${id} chooses a weapon body appropriate to range`);
+    assert.equal(a.aiState.attack, false, "clone does not attack while morphing");
+  }
+  {
+    const { a, enemy, game } = gearCloneFixture(id, { secondaryWeapon: SHIELD_STEAL_ID });
+    enemy.shieldMaxDurability = enemy.shieldDurability = 175;
+    enemy.x = a.x + 100;
+    updateAIClone(a, .05, game);
+    assert.equal(a.activeWeaponSlot, "secondaryWeapon");
+    assert.equal(a.aiState.plan, "stealing shield");
+    assert.equal(a.aiState.attack, true);
+  }
+  {
+    const { a, game } = gearCloneFixture(id, { secondaryWeapon: MATERIAL_CONSUMER_ID });
+    a.materialEjectionTank = [{ sourceId: "scrap-test", bots: 1 }];
+    updateAIClone(a, .05, game);
+    assert.equal(a.activeWeaponSlot, "secondaryWeapon");
+    assert.equal(a.aiState.chuck, true, "real clones use the scrap beam");
+    assert.equal(a.aiState.plan, "debris beam");
+  }
+  {
+    const { a, game } = gearCloneFixture(id, { secondaryWeapon: THROW_BREAKABLE_ID });
+    const prop = createMapProp("crate", a.x + 50, a.y + SIZE);
+    game.props = [prop];
+    updateAIClone(a, .05, game);
+    assert.equal(a.activeWeaponSlot, "secondaryWeapon");
+    assert.equal(a.aiState.plan, "grabbing breakable");
+    assert.equal(attackThrowBreakable(a, game), true);
+    assert.equal(a.heldProp, prop);
+    const heldX = prop.x;
+    a.x += 80;
+    tickThrowBreakable(a, game, .05);
+    assert.equal(prop.x, heldX + 80, "held real props follow the exact clone movement");
+    a.attackCd = 0;
+    a.aiState.timer = 0;
+    updateAIClone(a, .05, game);
+    assert.equal(a.aiState.plan, "throwing breakable");
+    assert.equal(attackThrowBreakable(a, game), true);
+    assert.ok(game.thrownBreakables.length > 0);
+  }
+  {
+    const { a, game } = gearCloneFixture(id, { secondaryWeapon: THROWING_SPEAR_ID });
+    selectWeaponSlot(a, "secondaryWeapon");
+    a.toolCd = 2;
+    stepFighter(a, .05, game, structuredClone(DEFAULT_PROFILE), {}, null);
+    assert.equal(a.toolCd, 1.95, "real-clone tool cooldowns tick normally");
+  }
+}
+
+{
+  const { a, game } = gearCloneFixture(COMBAT_CLONE_ID, {
+    body: "nanotech-chestplate", weapon: "nanotech-rifle"
+  });
+  const coreHp = a.coreHp;
+  updateAIClone(a, .05, game);
+  assert.ok(a.nanobotArmor > 0, "Doppel can deploy nanotech chestplate armor");
+  tickNanotech(a, .05);
+  assert.equal(a.coreHp, coreHp);
+  assert.equal(a.hp, coreHp + nanotechArmorHp(a), "armor adds only its own pool, not owner core HP");
+}
+
+{
+  const { a, game } = gearCloneFixture(COMBAT_CLONE_ID, { body: "retractable-armor" });
+  updateAIClone(a, .05, game);
+  assert.equal(a.retractableMorphTo, "on", "Doppel can deploy its retractable armor");
+}
+
+for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
+  const { a, game } = gearCloneFixture(id, {
+    body: "nanotech-chestplate", shield: "retractable-shell", weapon: "nanotech-rifle"
+  });
+  updateAIClone(a, .05, game);
+  tickNanotech(a, .05);
+  assert.equal(a.nanobotArmor, 0, "fixed-HP twins cannot deploy nanotech armor");
+  assert.equal(a.retractableDeployed, false);
+  assert.equal(a.hp, id === SPLIT_ID ? 100 : 25);
+  assert.equal(nanotechFormPct(a), 1, "fixed-HP twins can still use nanotech weapons");
+}
+
+for (const optimizeIllusions of [true, false]) {
+  const { a, game } = gearCloneFixture(SPLIT_ID, { weapon: "nanotech-rifle" });
+  game.settings.gameplay.optimizeIllusions = optimizeIllusions;
+  a.nanobotWeapon = 0;
+  a.nanobotFree = a.nanobotMax;
+  updateAI(a, .05, game, structuredClone(DEFAULT_PROFILE));
+  assert.equal(nanotechFormPct(a), 1, "both optimized and full clone brains can form weapons");
+  assert.equal(a.hp, 100);
+}
+
+{
+  const { owner, enemy, game } = gearCloneFixture(COMBAT_CLONE_ID, {
+    shield: "light-buckler", weapon: "nanotech-rifle"
+  });
+  const decoy = createFighterIllusion(owner, Fighter);
+  game.fighters = [owner, decoy, enemy];
+  enemy.x = decoy.x + 80;
+  enemy.y = decoy.y;
+  enemy.weapon = "saber";
+  enemy.aim = Math.PI;
+  decoy.ai = "veteran";
+  decoy.aiState.timer = 0;
+  decoy.nanobotWeapon = 0;
+  updateAIDecoy(decoy, .05, game);
+  assert.equal(decoy.shieldRaised, false, "Illusionist decoys keep their old equipment behavior");
+  assert.equal(decoy.nanobotWeapon, 0, "decoys do not gain the new nanotech policy");
+}
+
+console.log("combat-clone.test.js passed: Doppel, Shadow Clone, Split, and real-clone gear AI.");

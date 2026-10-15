@@ -103,20 +103,30 @@ and disappear when their owner dies.
   one group clock/pool, not multiplied stacks. Instant loot benefits apply to
   every living member. New shadows inherit active timed buffs and debuffs.
 - **Split (300¢):** spawn cooldown is **30s**, matching Doppel. Twins persist
-  until killed and have **25 HP** while uncontrolled. **H** cycles through
+  until killed and have **100 HP** while uncontrolled, including in Classic
+  mode. **H** cycles through
   living bodies with a **3s** switch cooldown. Your normal kit, stored player
   HP, and combat cooldowns follow control. Switching raises player HP to a
-  minimum of **25**, while the body left behind keeps pre-switch HP capped at
-  25: leaving at 10 HP gives you 25 HP and leaves a 10-HP twin. Position,
+  minimum of **100**, while the body left behind keeps pre-switch HP capped at
+  100: leaving at 10 HP gives you 100 HP and leaves a 10-HP twin. Position,
   motion, fuel, buffs, and debuffs stay with the physical bodies; damage and
   effects are not linked. Switching does not refill shields, mana, or weapons.
   Buddy/enemy AI builds a Split team even before combat and uses Split to escape below
-  25 HP when a living twin and the switch cooldown allow it.
+  100 HP when a living twin and the switch cooldown allow it.
 
 Uncontrolled Shadow/Split bodies cannot add retractable/nanotech armor HP on top
-of their 25-HP pool. Ally outlines identify linked shadows in purple and Split
+of their fixed pools (25 HP for Shadow, 100 HP for Split). Ally outlines identify linked shadows in purple and Split
 twins in green. The Extension HUD shows spawn availability, living twins, and
-Split's switch cooldown. Existing Doppel mechanics are unchanged.
+Split's switch cooldown. Doppel's spawn cooldown and limits are unchanged.
+
+Real Doppel, Shadow, and Split twins use shared equipment AI even with Optimize
+illusions enabled: short frontal shield raises, nanotech weapon formation,
+Mechanical Modularity / Adaptive Nanotech range-and-threat mode selection, and
+Material Consumer, Throw Breakable, or Shield Steal secondary use. Doppel can
+also deploy its equipped retractable/nanotech armor; Shadow and Split still
+cannot add armor HP beyond their fixed pools. Held props follow real twins and
+do not block their own sight. Real twins cannot nest-spawn Extensions.
+Illusionist decoys retain their existing lightweight behavior.
 
 ## Disguise
 

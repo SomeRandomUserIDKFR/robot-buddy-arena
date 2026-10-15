@@ -497,6 +497,7 @@ function update(dt) {
     // and ghosted cover restores when they fade.
     if (isCombatClone(fighter)) {
       if (fighter.cloneVariant === "split") tickFighterPowerBuffs(fighter, dt);
+      tickThrowBreakable(fighter, game, dt);
       continue;
     }
     if (isIllusionFighter(fighter)) {

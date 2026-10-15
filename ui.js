@@ -28,7 +28,8 @@ import {
   DISGUISE_COOLDOWN, DISGUISE_SPEED_MULT, findDisguiseProp
 } from "./disguise.js";
 import {
-  cloneGearName, cloneSpawnCooldown, listCombatClones, SPLIT_SWITCH_COOLDOWN
+  cloneGearName, cloneSpawnCooldown, LINKED_CLONE_HP, listCombatClones,
+  SPLIT_SWITCH_COOLDOWN, SPLIT_TWIN_HP
 } from "./combat-clone.js";
 import {
   ensureProgressionProfile, getPerk, perkTradeoffLines
@@ -1406,16 +1407,16 @@ function modifierMarkup(gear) {
         const cooldown = cloneSpawnCooldown({ shadowCloneGear: !!gear.shadowClone });
         return [
           "<span>Extension · press 3 to spawn</span>",
-          "<span class=\"stat-up\">Real twin · 25 HP while uncontrolled</span>",
+          `<span class="stat-up">Real twin · ${gear.split ? SPLIT_TWIN_HP : LINKED_CLONE_HP} HP while uncontrolled</span>`,
           `<span>Max 2 alive · ${cooldown}s spawn cooldown</span>`,
           gear.shadowClone
             ? "<span class=\"stat-down\">Shared HP damage, buffs and debuffs</span>"
             : `<span class="stat-up">H cycles bodies · ${SPLIT_SWITCH_COOLDOWN}s switch cooldown</span>`,
           gear.split
-            ? "<span>Stored player HP follows you · minimum 25 on switch</span>"
+            ? `<span>Stored player HP follows you · minimum ${SPLIT_TWIN_HP} on switch</span>`
             : "<span>Full weapon damage · effects use one shared clock</span>",
           gear.split
-            ? "<span>Left body keeps pre-switch HP, capped at 25</span>"
+            ? `<span>Left body keeps pre-switch HP, capped at ${SPLIT_TWIN_HP}</span>`
             : "",
           "<span>Persistent until killed · dies with you</span>"
         ].join("");

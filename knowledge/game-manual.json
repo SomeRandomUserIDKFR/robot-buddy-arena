@@ -11,7 +11,7 @@
       "id": "manual-clone-extensions",
       "topic": "equipment",
       "aliases": ["shadow clone", "split", "linked damage", "body switching", "twins"],
-      "text": "Shadow Clone (280 Cyber): 3 spawns up to two real 25 HP shadows, 5s cooldown. Actual HP damage and existing power-up/ice/trap effects are shared with the owner; one status clock and Overcharge pool, no recursive damage sharing. Split (300 Cyber): 3 spawns up to two persistent 25 HP twins, 30s cooldown. H cycles control with 3s cooldown. Stored player HP and normal kit follow control with a 25 HP minimum; the abandoned body gets pre-switch HP capped at 25 (10 HP becomes a controlled 25 and an abandoned 10). Fuel, position, buffs, and debuffs stay with physical bodies. Neither extension's twins add armor HP, nest-spawn, survive the owner, or hold match victory."
+      "text": "Shadow Clone (280 Cyber): 3 spawns up to two real 25 HP shadows, 5s cooldown. Actual HP damage and existing power-up/ice/trap effects are shared with the owner; one status clock and Overcharge pool, no recursive damage sharing. Split (300 Cyber): 3 spawns up to two persistent 100 HP twins, including in Classic mode, 30s cooldown. H cycles control with 3s cooldown. Stored player HP and normal kit follow control with a 100 HP minimum; the abandoned body gets pre-switch HP capped at 100 (10 HP becomes a controlled 100 and an abandoned 10). Fuel, position, buffs, and debuffs stay with physical bodies. Neither extension's twins add armor HP, nest-spawn, survive the owner, or hold match victory."
     },
     {
       "id": "manual-disguise",

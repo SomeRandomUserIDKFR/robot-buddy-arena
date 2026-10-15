@@ -31,7 +31,7 @@ import {
 } from "./throw-breakable.js";
 import {
   cloneGearName, isCombatClone, isCombatCloneGear, listCombatClones,
-  tryCombatCloneSpawn, trySplitSwitch
+  SPLIT_TWIN_HP, tryCombatCloneSpawn, trySplitSwitch
 } from "./combat-clone.js";
 import {
   cycleIllusionistType, isIllusionFighter, isIllusionist, listIllusionFighters,
@@ -587,6 +587,41 @@ export function updateAiNanotech(fighter, state, game, visible, target) {
   const weaponCost = fighter.nanotechWeaponCost || 0;
   const wantRecall = armor > 0 && free < Math.max(40, weaponCost * 0.5);
   setNanotechChanneling(fighter, wantRecall);
+}
+
+function updateAiWeaponModes(fighter, state, game, visible, target, dodgeInfo) {
+  const threatFoe = target && visible.includes(target) ? target : null;
+  if (isModularWeapon(fighter) && !fighter.modularMorphing) {
+    const threatInfo = evaluateShieldThreat(fighter, threatFoe, game, visible);
+    const underFire = dodgeInfo.severity >= 2
+      || threatInfo.severity >= 2
+      || (threatInfo.severity >= 1 && hpBelow(fighter, 180));
+    let wantMode = fighter.modularMode || "sword";
+    if (underFire) {
+      wantMode = "shield";
+    } else if (threatFoe) {
+      const d = dist(fighter, threatFoe);
+      if (d > 340) wantMode = "rifle";
+      else if (d < 160) wantMode = "sword";
+      else wantMode = fighter.modularMode === "shield" ? "rifle" : (fighter.modularMode || "rifle");
+    } else if (fighter.modularMode === "shield") {
+      wantMode = "rifle";
+    }
+    if (wantMode !== fighter.modularMode) beginModularMorph(fighter, wantMode);
+  }
+  if (fighter.modularMorphing || fighter.modularMode === "shield") state.attack = false;
+
+  if (isAdaptiveNanotechWeapon(fighter) && !fighter.adaptiveMorphing) {
+    let wantMode = fighter.adaptiveMode || "sword";
+    if (threatFoe) {
+      const d = dist(fighter, threatFoe);
+      if (d < 160) wantMode = "sword";
+      else if (d > 500) wantMode = "sniper";
+      else wantMode = "rifle";
+    }
+    if (wantMode !== fighter.adaptiveMode) beginAdaptiveMorph(fighter, wantMode);
+  }
+  if (fighter.adaptiveMorphing) state.attack = false;
 }
 
 /** True if any ground scrap sits within `radius` of the fighter center. */
@@ -1338,10 +1373,11 @@ export function buddySkill(preset, learned, aiId = "balanced") {
 
 /**
  * Shared light combat brain for Illusionist decoys and Doppel twins.
- * @param {{ plantIllusions?: boolean, planPrefix?: string }} [opts]
+ * @param {{ plantIllusions?: boolean, useGear?: boolean, planPrefix?: string }} [opts]
  */
 export function updateAISummon(fighter, dt, game, opts = {}) {
   const plantIllusions = !!opts.plantIllusions;
+  const useGear = !!opts.useGear;
   const planPrefix = opts.planPrefix || "illusion";
   const state = fighter.aiState;
   const preset = AI_PRESETS[fighter.ai] || AI_PRESETS.balanced;
@@ -1349,6 +1385,7 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
   if (fighter.jetLocked) state.jet = false;
   state.timer -= dt;
   if (state.timer > 0) {
+    if (useGear) tickAiShieldHold(fighter, state, game);
     stepAimSmoothing(fighter, dt, turnRate);
     return state;
   }
@@ -1372,6 +1409,8 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
     }
   }
   if (!target) target = suspicious;
+  const visible = target && visibleToSelf(fighter, target, game) ? [target] : [];
+  if (useGear) updateAiWeaponSlot(fighter, state, game, visible, target);
 
   const reach = fighter.weaponReach || (fighter.weapon === "saber" ? 120 : 920);
   const desired = fighter.weapon === "saber" ? 80 : Math.min(420, reach * 0.4);
@@ -1401,8 +1440,23 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
   }
 
   if (plantIllusions) {
-    const visible = target ? [target] : [];
-    updateAiIllusionist(fighter, state, game, visible, target);
+    updateAiIllusionist(fighter, state, game, target ? [target] : [], target);
+  }
+  if (useGear) {
+    const threat = visible.includes(target) ? target : null;
+    const dodgeInfo = evaluateDodgeThreat(fighter, threat, game, visible);
+    updateAiWeaponModes(fighter, state, game, visible, target, dodgeInfo);
+    updateAiMaterialConsumer(fighter, state, game, visible, target);
+    updateAiThrowBreakable(fighter, state, game, visible, target);
+    updateAiShieldSteal(fighter, state, game, visible, target);
+    updateAiShield(fighter, state, game, visible, target, fighter.ai || "balanced");
+    updateAiRetractableArmor(fighter, state, game, visible, target, fighter.ai || "balanced");
+    updateAiNanotech(fighter, state, game, visible, threat);
+    if (fighter.shieldRaised || fighter.modularMorphing || fighter.adaptiveMorphing
+      || fighter.modularMode === "shield") {
+      state.attack = false;
+      state.chuck = false;
+    }
   }
   stepAimSmoothing(fighter, dt, turnRate);
   return state;
@@ -1416,10 +1470,11 @@ export function updateAIDecoy(fighter, dt, game) {
   });
 }
 
-/** Lightweight combat brain for real Doppel twins (no extension planting). */
+/** Real twins share equipment policies without nesting Extension abilities. */
 export function updateAIClone(fighter, dt, game) {
   return updateAISummon(fighter, dt, game, {
     plantIllusions: false,
+    useGear: true,
     planPrefix: fighter.cloneVariant === "shadow-clone" ? "shadow"
       : fighter.cloneVariant === "split" ? "split twin" : "doppel"
   });
@@ -1430,7 +1485,7 @@ export function updateAIClone(fighter, dt, game) {
  */
 export function updateAiCombatClone(fighter, state, game, visible, target) {
   if (!isCombatCloneGear(fighter) || fighter.dead || !game) return;
-  if (fighter.splitGear && fighter.hp < 25 && trySplitSwitch(fighter, game)) {
+  if (fighter.splitGear && fighter.hp < SPLIT_TWIN_HP && trySplitSwitch(fighter, game)) {
     state.plan = "switching split";
     return;
   }
@@ -2010,48 +2065,7 @@ export function updateAI(fighter, dt, game, profile) {
       }
     }
   }
-  // Mechanical Modularity: rifle at range, sword close, shield under fire.
-  if (isModularWeapon(fighter) && !fighter.modularMorphing) {
-    const threatFoe = visibleThreat || (target && visible.includes(target) ? target : null);
-    const threatInfo = evaluateShieldThreat(fighter, threatFoe, game, visible);
-    const underFire = dodgeInfo.severity >= 2
-      || threatInfo.severity >= 2
-      || (threatInfo.severity >= 1 && hpBelow(fighter, 180));
-    let wantMode = fighter.modularMode || "sword";
-    if (underFire) {
-      wantMode = "shield";
-    } else if (target && visible.includes(target)) {
-      const d = dist(fighter, target);
-      if (d > 340) wantMode = "rifle";
-      else if (d < 160) wantMode = "sword";
-      else wantMode = fighter.modularMode === "shield" ? "rifle" : (fighter.modularMode || "rifle");
-    } else if (fighter.modularMode === "shield") {
-      wantMode = "rifle";
-    }
-    if (wantMode !== fighter.modularMode) {
-      beginModularMorph(fighter, wantMode);
-    }
-  }
-  if (fighter.modularMorphing || fighter.modularMode === "shield") {
-    state.attack = false;
-  }
-
-  // Adaptive Nanotech Unit: sword close, sniper long range, rifle mid — R cycles.
-  if (isAdaptiveNanotechWeapon(fighter) && !fighter.adaptiveMorphing) {
-    let wantMode = fighter.adaptiveMode || "sword";
-    if (target && visible.includes(target)) {
-      const d = dist(fighter, target);
-      if (d < 160) wantMode = "sword";
-      else if (d > 500) wantMode = "sniper";
-      else wantMode = "rifle";
-    }
-    if (wantMode !== fighter.adaptiveMode) {
-      beginAdaptiveMorph(fighter, wantMode);
-    }
-  }
-  if (fighter.adaptiveMorphing) {
-    state.attack = false;
-  }
+  updateAiWeaponModes(fighter, state, game, visible, target, dodgeInfo);
 
   // Secondaries / extension: Material Consumer beam+V, Throw Breakable, Reconjurer,
   // Light Condensation.

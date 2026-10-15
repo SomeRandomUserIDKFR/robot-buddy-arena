@@ -521,7 +521,18 @@
         "what does H do",
         "split health when switching"
       ],
-      "answer": "Split costs 300 Cyber and is an Extension. Press 3 to spawn up to 2 real twins with a 30s spawn cooldown. They persist until killed and have 25 HP while uncontrolled. Press H to cycle through living bodies, with a 3s switch cooldown. Your normal kit and stored player HP follow control; switching gives you at least 25 HP. The body you leave keeps your pre-switch HP capped at 25: leaving at 10 HP gives you 25 and leaves a 10-HP twin. Position, motion, fuel, buffs, and debuffs stay with each physical body, without shared damage or effects. Switching does not reset combat cooldowns or refill shields, mana, or weapons. Uncontrolled bodies cannot add armor HP, do not hold the win condition, and die with you."
+      "answer": "Split costs 300 Cyber and is an Extension. Press 3 to spawn up to 2 real twins with a 30s spawn cooldown. They persist until killed and have 100 HP while uncontrolled, including in Classic mode. Press H to cycle through living bodies, with a 3s switch cooldown. Your normal kit and stored player HP follow control; switching gives you at least 100 HP. The body you leave keeps your pre-switch HP capped at 100: leaving at 10 HP gives you 100 and leaves a 10-HP twin. Position, motion, fuel, buffs, and debuffs stay with each physical body, without shared damage or effects. Switching does not reset combat cooldowns or refill shields, mana, or weapons. Uncontrolled bodies cannot add armor HP, do not hold the win condition, and die with you."
+    },
+    {
+      "id": "equipment-clone-gear-ai",
+      "tags": ["equipment", "ai", "doppel", "shadow clone", "split", "nanotech", "shield", "secondary"],
+      "questions": [
+        "can twins use shields",
+        "can clones use nanotech weapons",
+        "do real clones use secondary weapons",
+        "do split twins use their equipment"
+      ],
+      "answer": "Real Doppel, Shadow Clone, and Split twins use shared equipment AI even with Optimize illusions enabled. They use short frontal shield raises, form nanotech weapons, choose Mechanical Modularity and Adaptive Nanotech modes for range/threats, and use Material Consumer, Throw Breakable, or Shield Steal secondaries when useful. Doppel can deploy equipped retractable or nanotech armor; Shadow and Split cannot add armor HP beyond their fixed pools (25 and 100 HP). Held props follow real twins without blocking their own sight, and tool cooldowns tick normally. Real twins do not nest-spawn Extensions. Illusionist decoys keep their previous lightweight behavior."
     },
     {
       "id": "equipment-disguise",
@@ -590,7 +601,7 @@
         "AI secondary weapons",
         "buddy debris beam"
       ],
-      "answer": "Yes. Buddies and enemy AI can use all eight usable Extensions when equipped: Reconjurer rebuilds or conjures cover; Light Condensation scouts/blinds lanes and AI shoots enemy glare nodes; Trapper uses bear traps for grounded foes, fake platforms for airborne foes, spring pads against close threats when hurt, signal tripwires for unseen tracked foes, and mines for clustered visible foes; Illusionist casts fighter/prop/platform illusions; Doppel and Shadow Clone summon attackers during combat; Split builds a persistent team even before combat and switches below 25 HP; Disguise prioritizes nearby cover below 180 standard HP (36 Classic), stops weapon/shield use while hidden, and only reveals for close combat when healthy. AI cannot distinguish Illusionist decoys from real fighters. Cooldowns, costs, and active-object limits still apply. AI also swaps to equipped Material Consumer to vacuum debris or fire its scrap beam, holds V when the nanobot pool is full near scraps, and grabs/throws breakables with Throw Breakable. Equipping these tools is required; checking AI support does not change enemy loadouts."
+      "answer": "Yes. Buddies and enemy AI can use all eight usable Extensions when equipped: Reconjurer rebuilds or conjures cover; Light Condensation scouts/blinds lanes and AI shoots enemy glare nodes; Trapper uses bear traps for grounded foes, fake platforms for airborne foes, spring pads against close threats when hurt, signal tripwires for unseen tracked foes, and mines for clustered visible foes; Illusionist casts fighter/prop/platform illusions; Doppel and Shadow Clone summon attackers during combat; Split builds a persistent team even before combat and switches below 100 HP; Disguise prioritizes nearby cover below 180 standard HP (36 Classic), stops weapon/shield use while hidden, and only reveals for close combat when healthy. AI cannot distinguish Illusionist decoys from real fighters. Cooldowns, costs, and active-object limits still apply. AI also swaps to equipped Material Consumer to vacuum debris or fire its scrap beam, holds V when the nanobot pool is full near scraps, and grabs/throws breakables with Throw Breakable. Equipping these tools is required; checking AI support does not change enemy loadouts."
     },
     {
       "id": "equipment-nanotech",

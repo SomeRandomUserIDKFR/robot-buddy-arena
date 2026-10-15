@@ -15,6 +15,7 @@ import { clamp } from "./utils.js";
 export const COMBAT_CLONE_ID = "doppel";
 export { SHADOW_CLONE_ID, SPLIT_ID };
 export const LINKED_CLONE_HP = 25;
+export const SPLIT_TWIN_HP = 100;
 export const SPLIT_SWITCH_COOLDOWN = 3;
 export const SPLIT_SWITCH_KEY = "KeyH";
 
@@ -151,13 +152,13 @@ export function createCombatClone(owner, FighterCtor) {
   clone.facing = owner.facing || 1;
   const minHp = 40 * (owner.healthScale || 1);
   const fixedHp = clone.cloneVariant === SHADOW_CLONE_ID || clone.cloneVariant === SPLIT_ID;
-  const maxHp = fixedHp ? LINKED_CLONE_HP
+  const maxHp = clone.cloneVariant === SPLIT_ID ? SPLIT_TWIN_HP : fixedHp ? LINKED_CLONE_HP
     : Math.max(minHp, Math.round((owner.maxHp || 500 * (owner.healthScale || 1)) * COMBAT_CLONE_HP_FRAC));
   clone.maxHp = maxHp;
   clone.hp = maxHp;
+  clone.coreMaxHp = maxHp;
+  clone.coreHp = maxHp;
   if (fixedHp) {
-    clone.coreMaxHp = maxHp;
-    clone.coreHp = maxHp;
     clone.retractableMax = 0;
     clone.retractableHp = 0;
     clone.retractableDeployed = false;
@@ -196,7 +197,7 @@ export function trySplitSwitch(fighter, game) {
   if (!bodies.length) return null;
   const index = (fighter.splitNextBody || 0) % bodies.length;
   const body = bodies[index];
-  const abandonedHp = Math.min(LINKED_CLONE_HP, fighter.hp);
+  const abandonedHp = Math.min(SPLIT_TWIN_HP, fighter.hp);
   // Keep the player object (profile, kit, cooldowns, scoring) and exchange bodies.
   for (const key of BODY_FIELDS) {
     const value = fighter[key];
@@ -205,7 +206,7 @@ export function trySplitSwitch(fighter, game) {
   }
   body.hp = abandonedHp;
   body.coreHp = abandonedHp;
-  fighter.coreHp = (fighter.coreHp ?? fighter.hp) + Math.max(0, LINKED_CLONE_HP - fighter.hp);
+  fighter.coreHp = (fighter.coreHp ?? fighter.hp) + Math.max(0, SPLIT_TWIN_HP - fighter.hp);
   syncNanotechDisplayedHp(fighter);
   fighter.splitSwitchCd = SPLIT_SWITCH_COOLDOWN;
   fighter.splitNextBody = (index + 1) % bodies.length;

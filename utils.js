@@ -66,7 +66,7 @@ export function thoughtReason(plan) {
     "spawning doppel": "a real twin would split their focus",
     "spawning shadow clone": "linked twins can attack from more angles, but share the risk",
     "spawning split": "another body gives me a place to switch to",
-    "switching split": "a fresh position and the 25 HP minimum could keep me alive",
+    "switching split": "a fresh position and the 100 HP minimum could keep me alive",
     "borrowing cover": "a nearby prop can hide me while I reposition",
     "moving disguised": "I can carry this cover without showing my robot",
     "hiding wounded": "this prop can conceal and protect me while I retreat",
