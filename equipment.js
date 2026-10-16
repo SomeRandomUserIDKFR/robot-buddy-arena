@@ -518,7 +518,7 @@ export const GEAR = [
     SHADOW_CLONE_ID,
     "extensionSecondary",
     "Shadow Clone",
-    "Press 3 to spawn a real 25 HP twin, max 2 alive, 5s cooldown like Illusionist. Actual HP damage, buffs, and debuffs are shared between you and all shadows. Full weapon damage. Shadows die with you.",
+    "Press 3 to spawn a real shadow, max 10 alive, 2s cooldown. Shadows divide a 100 HP maximum budget; spawning evenly redistributes their remaining HP without healing. Shift+3 dismisses the newest shadow, merging remaining HP evenly into survivors without healing you or resetting cooldown. Shadow HP damage transfers only to you; direct HP damage to you hits all shadows, without feedback. Independent buffs/debuffs and full weapon damage. Shadows die with you.",
     {},
     {
       price: 280,
@@ -531,7 +531,7 @@ export const GEAR = [
     SPLIT_ID,
     "extensionSecondary",
     "Split",
-    "Press 3 to spawn up to 2 persistent real twins (30s cooldown). Press H to cycle bodies (3s switch cooldown). Uncontrolled bodies have 100 HP. Your normal kit and stored player HP follow control, raised to at least 100 on switching; the body you leave has your pre-switch HP capped at 100. No shared damage or effects. Twins die with you.",
+    "Press 3 to spawn up to 2 persistent real twins (30s cooldown). Press H to cycle bodies (3s switch cooldown). Newly spawned twins have 250 HP. Your normal kit and stored player HP follow control, raised to at least 100 on switching; the body you leave has your pre-switch HP capped at 250. No shared damage or effects. Twins die with you.",
     {},
     {
       price: 300,
@@ -2308,7 +2308,9 @@ export function applyHpDamage(fighter, dealt, game = null, extras = {}) {
   const lost = Math.max(0, before - fighter.hp);
   recordTacticalDamage(fighter, extras.source, lost);
   if (fighter.shadowLink && lost > 0) {
-    for (const member of fighter.shadowLink.members) {
+    const link = fighter.shadowLink;
+    const recipients = fighter === link.owner ? link.members : [fighter, link.owner];
+    for (const member of recipients) {
       if (member !== fighter && !member.dead) {
         const memberBefore = member.hp;
         damageFighterHp(member, lost, game, { alreadyScaled: true });

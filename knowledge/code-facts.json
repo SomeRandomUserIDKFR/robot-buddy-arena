@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-15T02:47:32.208Z",
+  "generatedAt": "2026-10-16T00:59:20.729Z",
   "allowlist": [
     "config.js",
     "equipment.js",
@@ -13,7 +13,7 @@
     "perks.js",
     "power.js"
   ],
-  "contentHash": "a730e67bfdc34503",
+  "contentHash": "e2f5fb9618b2c960",
   "entries": [
     {
       "id": "code-config-ceiling",
@@ -475,18 +475,48 @@
       "text": "combat-clone.js: COMBAT_CLONE_MAX_ACTIVE = 2"
     },
     {
-      "id": "code-combat-clone-linked_clone_hp",
+      "id": "code-combat-clone-shadow_clone_cooldown",
       "source": "combat-clone.js",
-      "name": "LINKED_CLONE_HP",
+      "name": "SHADOW_CLONE_COOLDOWN",
       "topic": "equipment",
       "aliases": [
-        "linked_clone_hp",
-        "linked",
+        "shadow_clone_cooldown",
+        "shadow",
+        "clone",
+        "cooldown",
+        "shadow clone cooldown"
+      ],
+      "text": "combat-clone.js: SHADOW_CLONE_COOLDOWN = 2"
+    },
+    {
+      "id": "code-combat-clone-shadow_clone_hp_budget",
+      "source": "combat-clone.js",
+      "name": "SHADOW_CLONE_HP_BUDGET",
+      "topic": "equipment",
+      "aliases": [
+        "shadow_clone_hp_budget",
+        "shadow",
         "clone",
         "hp",
-        "linked clone hp"
+        "budget",
+        "shadow clone hp budget"
       ],
-      "text": "combat-clone.js: LINKED_CLONE_HP = 25"
+      "text": "combat-clone.js: SHADOW_CLONE_HP_BUDGET = 100"
+    },
+    {
+      "id": "code-combat-clone-shadow_clone_max_active",
+      "source": "combat-clone.js",
+      "name": "SHADOW_CLONE_MAX_ACTIVE",
+      "topic": "equipment",
+      "aliases": [
+        "shadow_clone_max_active",
+        "shadow",
+        "clone",
+        "max",
+        "active",
+        "shadow clone max active"
+      ],
+      "text": "combat-clone.js: SHADOW_CLONE_MAX_ACTIVE = 10"
     },
     {
       "id": "code-combat-clone-split_switch_cooldown",
@@ -517,6 +547,21 @@
       "text": "combat-clone.js: SPLIT_SWITCH_KEY = \"KeyH\""
     },
     {
+      "id": "code-combat-clone-split_switch_min_hp",
+      "source": "combat-clone.js",
+      "name": "SPLIT_SWITCH_MIN_HP",
+      "topic": "equipment",
+      "aliases": [
+        "split_switch_min_hp",
+        "split",
+        "switch",
+        "min",
+        "hp",
+        "split switch min hp"
+      ],
+      "text": "combat-clone.js: SPLIT_SWITCH_MIN_HP = 100"
+    },
+    {
       "id": "code-combat-clone-split_twin_hp",
       "source": "combat-clone.js",
       "name": "SPLIT_TWIN_HP",
@@ -528,7 +573,7 @@
         "hp",
         "split twin hp"
       ],
-      "text": "combat-clone.js: SPLIT_TWIN_HP = 100"
+      "text": "combat-clone.js: SPLIT_TWIN_HP = 250"
     },
     {
       "id": "code-config-ai_presets",

@@ -79,6 +79,7 @@ npm run smoke:analyzer
 - **F** — deploy/retract **Retractable Armor** or **Retractable Shell** (separate armor HP pool; ~10% slower while on; morph style follows Settings → Visual)
 - **E** — cycle **Mechanical Modularity** modes (Sword → Shield → Pulse Rifle) with a short morph animation; cannot attack mid-morph
 - **3** — use the equipped Extension, including Doppel, Shadow Clone, Split, or Disguise
+- **Shift+3** — with Shadow Clone, dismiss the newest living shadow and merge remaining HP into survivors
 - **H** — with **Split**, cycle control between living bodies (3s cooldown)
 - **Mouse** — aim
 - **Left mouse button** — fire gun / swing saber
@@ -89,33 +90,43 @@ npm run smoke:analyzer
 
 Both are shop-unlocked Extension tools, available to the player and buddy
 (Campaign adds them alongside Doppel in the final-stage shop). Press
-**3** to spawn a real AI twin with your kit and full weapon damage; at most two
-twins can live at once. They do not spawn more twins or keep a lost match alive,
+**3** to spawn a real AI twin with your kit and full weapon damage; up to ten
+shadows or two Split twins can live at once. They do not spawn more twins or keep a lost match alive,
 and disappear when their owner dies.
 
-- **Shadow Clone (280¢):** each shadow has exactly **25 HP**, including with
-  Classic 100 HP enabled. Spawn cooldown is **5s**, matching Illusionist. Actual
-  HP lost after shields/armor is also applied to every living linked body,
-  without another damage-resistance calculation or recursive sharing. Overkill
-  shares only the HP actually lost. Separate hits (including attacks hitting
-  multiple linked bodies) can each share damage. Existing power-up buffs and
-  ice/trap/snare/reveal debuffs are shared; durations and Overcharge charges use
-  one group clock/pool, not multiplied stacks. Instant loot benefits apply to
-  every living member. New shadows inherit active timed buffs and debuffs.
+- **Shadow Clone (280¢):** **2s** spawn cooldown, **10** living shadows maximum.
+  Shadows share a **100-HP maximum budget**, including in Classic mode; the
+  owner's health is separate. One shadow starts at 100 HP, two have 50 max HP
+  each, three about 33.3, and ten 10. Spawning evenly redistributes the living
+  shadows' remaining HP and divides their maximum HP without adding health.
+  For example, 80 remaining HP becomes two 40-HP shadows with 50 max HP each.
+  A death raises survivors' max HP without healing them. If none survive, the
+  next shadow starts a fresh 100-HP budget.
+  **Shift+3** dismisses the newest living shadow and evenly merges the group's
+  remaining HP into survivors. This never heals/damages you or changes the spawn
+  cooldown. Dismissing the last shadow leaves none; its HP is discarded. Held
+  props are dropped, and buffs/debuffs are not transferred.
+  Actual HP lost by a shadow transfers **only to the owner**, not siblings.
+  Direct HP damage to the owner hits **all shadows**; clone-transferred damage
+  never loops back. Shields and dodges prevent transfer when no HP is lost;
+  overkill transfers only actual HP lost, without another resistance calculation.
+  Separate hits can each transfer damage. Buffs, debuffs, healing, effect timers,
+  and Overcharge charges are independent. New shadows do not inherit effects.
 - **Split (300¢):** spawn cooldown is **30s**, matching Doppel. Twins persist
-  until killed and have **100 HP** while uncontrolled, including in Classic
+  until killed and spawn with **250 HP** while uncontrolled, including in Classic
   mode. **H** cycles through
   living bodies with a **3s** switch cooldown. Your normal kit, stored player
   HP, and combat cooldowns follow control. Switching raises player HP to a
   minimum of **100**, while the body left behind keeps pre-switch HP capped at
-  100: leaving at 10 HP gives you 100 HP and leaves a 10-HP twin. Position,
+  250: leaving at 10 HP gives you 100 HP and leaves a 10-HP twin. Leaving at
+  200 HP keeps you at 200 HP and leaves a 200-HP twin. Position,
   motion, fuel, buffs, and debuffs stay with the physical bodies; damage and
   effects are not linked. Switching does not refill shields, mana, or weapons.
   Buddy/enemy AI builds a Split team even before combat and uses Split to escape below
   100 HP when a living twin and the switch cooldown allow it.
 
 Uncontrolled Shadow/Split bodies cannot add retractable/nanotech armor HP on top
-of their fixed pools (25 HP for Shadow, 100 HP for Split). Ally outlines identify linked shadows in purple and Split
+of their allotted pools (100 total HP budget for shadows, 250 HP per Split twin). Ally outlines identify shadows in purple and Split
 twins in green. The Extension HUD shows spawn availability, living twins, and
 Split's switch cooldown. Doppel's spawn cooldown and limits are unchanged.
 

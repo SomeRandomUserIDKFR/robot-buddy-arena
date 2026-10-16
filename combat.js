@@ -642,7 +642,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   tickModularWeapon(fighter, dt);
   tickAdaptiveWeapon(fighter, dt);
   tickRetractableArmor(fighter, dt);
-  if (!decoy && (!clone || fighter.cloneVariant === "split")) {
+  if (!decoy) {
     tickTrapperFighter(fighter, dt);
   }
   tickSpellbookFighter(fighter, dt);

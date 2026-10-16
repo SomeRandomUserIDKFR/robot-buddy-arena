@@ -438,19 +438,18 @@ export function tickSpellbookFighter(fighter, dt) {
       fighter.mana = Math.min(max, (fighter.mana || 0) + SPELLBOOK_MANA_REGEN * step);
     }
   }
-  const sharedClock = fighter.shadowLink && fighter.shadowLink.owner !== fighter;
   if (fighter.icePinT > 0) {
     fighter.vx = 0;
     fighter.vy = 0;
   }
-  if (!sharedClock && fighter.icePinT > 0) {
+  if (fighter.icePinT > 0) {
     fighter.icePinT = Math.max(0, fighter.icePinT - step);
     if (fighter.icePinT <= 0) {
       // Melt → slow.
       fighter.iceSlowT = Math.max(fighter.iceSlowT || 0, ICE_SLOW);
     }
   }
-  if (!sharedClock && fighter.iceSlowT > 0) {
+  if (fighter.iceSlowT > 0) {
     fighter.iceSlowT = Math.max(0, fighter.iceSlowT - step);
   }
 }

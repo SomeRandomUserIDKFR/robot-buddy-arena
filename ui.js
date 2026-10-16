@@ -28,8 +28,8 @@ import {
   DISGUISE_COOLDOWN, DISGUISE_SPEED_MULT, findDisguiseProp
 } from "./disguise.js";
 import {
-  cloneGearName, cloneSpawnCooldown, LINKED_CLONE_HP, listCombatClones,
-  SPLIT_SWITCH_COOLDOWN, SPLIT_TWIN_HP
+  cloneGearName, cloneMaxActive, cloneSpawnCooldown, SHADOW_CLONE_HP_BUDGET, listCombatClones,
+  SPLIT_SWITCH_COOLDOWN, SPLIT_SWITCH_MIN_HP, SPLIT_TWIN_HP
 } from "./combat-clone.js";
 import {
   ensureProgressionProfile, getPerk, perkTradeoffLines
@@ -589,13 +589,13 @@ export function updateHud(game) {
         ui.trapHudKicker.textContent = cd > 0 ? `${name} · COOLDOWN` : `${name} · PRESS 3`;
       }
       if (ui.trapHudType) {
-        ui.trapHudType.textContent = cd > 0 ? `${Math.ceil(cd)}s` : count >= 2 ? "FULL" : "READY";
+        ui.trapHudType.textContent = cd > 0 ? `${Math.ceil(cd)}s` : count >= cloneMaxActive(player) ? "FULL" : "READY";
       }
       if (ui.trapHudSub) {
         const switchCd = player.splitSwitchCd || 0;
         ui.trapHudSub.textContent = player.splitGear
           ? `${count}/2 twins · H ${switchCd > 0 ? `${Math.ceil(switchCd)}s` : "switch"}`
-          : player.shadowCloneGear ? `${count}/2 shadows · linked HP / effects` : `${count}/2 twins`;
+          : player.shadowCloneGear ? `${count}/${cloneMaxActive(player)} shadows · 100 HP budget · Shift+3 undo` : `${count}/2 twins`;
         ui.trapHudSub.classList.remove("hidden", "metal");
       }
     } else if (showTrap) {
@@ -1407,14 +1407,15 @@ function modifierMarkup(gear) {
         const cooldown = cloneSpawnCooldown({ shadowCloneGear: !!gear.shadowClone });
         return [
           "<span>Extension · press 3 to spawn</span>",
-          `<span class="stat-up">Real twin · ${gear.split ? SPLIT_TWIN_HP : LINKED_CLONE_HP} HP while uncontrolled</span>`,
-          `<span>Max 2 alive · ${cooldown}s spawn cooldown</span>`,
+          gear.split ? `<span class="stat-up">Real twin · ${SPLIT_TWIN_HP} HP while uncontrolled</span>`
+            : `<span class="stat-up">${SHADOW_CLONE_HP_BUDGET} HP budget divided among living shadows</span>`,
+          `<span>Max ${cloneMaxActive({ shadowCloneGear: !!gear.shadowClone })} alive · ${cooldown}s spawn cooldown</span>`,
           gear.shadowClone
-            ? "<span class=\"stat-down\">Shared HP damage, buffs and debuffs</span>"
+            ? "<span class=\"stat-down\">Shadow hits hurt you; direct hits on you hurt all shadows</span>"
             : `<span class="stat-up">H cycles bodies · ${SPLIT_SWITCH_COOLDOWN}s switch cooldown</span>`,
           gear.split
-            ? `<span>Stored player HP follows you · minimum ${SPLIT_TWIN_HP} on switch</span>`
-            : "<span>Full weapon damage · effects use one shared clock</span>",
+            ? `<span>Stored player HP follows you · minimum ${SPLIT_SWITCH_MIN_HP} on switch</span>`
+            : "<span>Full weapon damage · independent buffs/debuffs · Shift+3 merges newest shadow back</span>",
           gear.split
             ? `<span>Left body keeps pre-switch HP, capped at ${SPLIT_TWIN_HP}</span>`
             : "",

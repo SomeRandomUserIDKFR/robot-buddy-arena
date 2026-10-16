@@ -357,17 +357,11 @@ function pushLootPopup(game, fighter, def) {
 /**
  * Apply a rolled power-up to the fighter who scored the killing blow.
  */
-export function awardPowerup(fighter, typeId, game, linked = false) {
+export function awardPowerup(fighter, typeId, game) {
   if (!fighter || fighter.dead) return null;
   const def = POWERUP_DEFS[typeId] || POWERUP_DEFS.heal;
-  if (!linked && def.id === "counterSlash" && !isMeleeFighter(fighter)) {
-    return awardPowerup(fighter, pickPowerupType(fighter), game, linked);
-  }
-  if (fighter.shadowLink && !linked) {
-    for (const member of fighter.shadowLink.members) {
-      if (!member.dead) awardPowerup(member, def.id, game, true);
-    }
-    return def.id;
+  if (def.id === "counterSlash" && !isMeleeFighter(fighter)) {
+    return awardPowerup(fighter, pickPowerupType(fighter), game);
   }
   const buffs = ensureBuffBag(fighter);
 
@@ -540,20 +534,13 @@ export function consumeOvercharge(fighter) {
  */
 export function tickFighterPowerBuffs(fighter, dt) {
   if (!fighter || fighter.dead) return;
-  if (fighter.shadowLink && fighter.shadowLink.owner !== fighter) return;
   tickProtectiveRebuilding(fighter, dt);
   if (!fighter.powerBuffs) return;
   const buffs = fighter.powerBuffs;
 
   if (buffs.regen) {
     const heal = buffs.regen.rate * dt;
-    if (fighter.shadowLink) {
-      for (const member of fighter.shadowLink.members) {
-        if (!member.dead) healFighter(member, heal);
-      }
-    } else {
-      healFighter(fighter, heal);
-    }
+    healFighter(fighter, heal);
     buffs.regen.remaining -= dt;
     if (buffs.regen.remaining <= 0) delete buffs.regen;
   }

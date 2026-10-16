@@ -30,8 +30,8 @@ import {
   canGrabBreakable, isThrowBreakable, THROW_BREAKABLE_GRAB_RANGE, THROW_BREAKABLE_ID
 } from "./throw-breakable.js";
 import {
-  cloneGearName, isCombatClone, isCombatCloneGear, listCombatClones,
-  SPLIT_TWIN_HP, tryCombatCloneSpawn, trySplitSwitch
+  cloneGearName, cloneMaxActive, isCombatClone, isCombatCloneGear, listCombatClones,
+  SPLIT_SWITCH_MIN_HP, tryCombatCloneSpawn, trySplitSwitch
 } from "./combat-clone.js";
 import {
   cycleIllusionistType, isIllusionFighter, isIllusionist, listIllusionFighters,
@@ -1485,13 +1485,13 @@ export function updateAIClone(fighter, dt, game) {
  */
 export function updateAiCombatClone(fighter, state, game, visible, target) {
   if (!isCombatCloneGear(fighter) || fighter.dead || !game) return;
-  if (fighter.splitGear && fighter.hp < SPLIT_TWIN_HP && trySplitSwitch(fighter, game)) {
+  if (fighter.splitGear && fighter.hp < SPLIT_SWITCH_MIN_HP && trySplitSwitch(fighter, game)) {
     state.plan = "switching split";
     return;
   }
   if ((fighter.combatCloneCd || 0) > 0) return;
   const owned = listCombatClones(game).filter((c) => c.cloneOwner === fighter).length;
-  if (owned >= 2) return;
+  if (owned >= cloneMaxActive(fighter)) return;
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
   const pressed = hpBelow(fighter, 280);
   const midFight = !!foe && dist(fighter, foe) < 720;

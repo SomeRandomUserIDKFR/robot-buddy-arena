@@ -3,9 +3,11 @@ import { Fighter, hit, stepFighter } from "./combat.js";
 import { DEFAULT_PROFILE, SIZE } from "./config.js";
 import {
   COMBAT_CLONE_COOLDOWN, COMBAT_CLONE_HP_FRAC, COMBAT_CLONE_ID, COMBAT_CLONE_MAX_ACTIVE,
-  createCombatClone, isCombatClone, isCombatCloneGear, LINKED_CLONE_HP, listCombatClones,
-  SHADOW_CLONE_ID, SPLIT_ID, SPLIT_SWITCH_COOLDOWN, SPLIT_SWITCH_KEY, SPLIT_TWIN_HP,
-  tickCombatCloneFighter, tickCombatCloneWorld, tryCombatCloneSpawn, trySplitSwitch
+  createCombatClone, isCombatClone, isCombatCloneGear, SHADOW_CLONE_HP_BUDGET, listCombatClones,
+  SHADOW_CLONE_COOLDOWN, SHADOW_CLONE_MAX_ACTIVE, cloneMaxActive,
+  SHADOW_CLONE_ID, SPLIT_ID, SPLIT_SWITCH_COOLDOWN, SPLIT_SWITCH_KEY,
+  SPLIT_SWITCH_MIN_HP, SPLIT_TWIN_HP,
+  tickCombatCloneFighter, tickCombatCloneWorld, tryCombatCloneSpawn, tryDismissShadowClone, trySplitSwitch
 } from "./combat-clone.js";
 import {
   ADAPTIVE_NANOTECH_ID, applyHpDamage, applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID,
@@ -19,7 +21,6 @@ import { createFighterIllusion } from "./illusionist.js";
 import { createMapProp } from "./maps.js";
 import { attackThrowBreakable, THROW_BREAKABLE_ID, tickThrowBreakable } from "./throw-breakable.js";
 import { THROWING_SPEAR_ID } from "./tool-secondaries.js";
-import { ILLUSIONIST_COOLDOWN } from "./illusionist.js";
 import {
   awardPowerup, consumeOvercharge, FIRE_RATE_DURATION, REGEN_DURATION,
   REGEN_TOTAL, tickFighterPowerBuffs
@@ -135,12 +136,139 @@ function cloneFixture(extension, loadout = {}, scale = 1) {
   return { owner, enemy, game, a, b };
 }
 
+assert.equal(SHADOW_CLONE_HP_BUDGET, 100);
+assert.equal(SHADOW_CLONE_COOLDOWN, 2);
+assert.equal(SHADOW_CLONE_MAX_ACTIVE, 10);
+
+{
+  const { owner, enemy, game, a, b } = cloneFixture(SHADOW_CLONE_ID,
+    { secondaryWeapon: THROW_BREAKABLE_ID });
+  applyHpDamage(a, 10, game, { alreadyScaled: true });
+  applyHpDamage(b, 20, game, { alreadyScaled: true });
+  const ownerHp = owner.hp;
+  const spawnCd = owner.combatCloneCd;
+  const prop = createMapProp("crate", b.x, b.y + SIZE);
+  game.props = [prop];
+  selectWeaponSlot(b, "secondaryWeapon");
+  assert.equal(attackThrowBreakable(b, game), true);
+  assert.equal(b.heldProp, prop);
+  const otherOwner = applyLoadout(new Fighter({ team: 1 }),
+    { ...DEFAULT_LOADOUT, extensionSecondary: SHADOW_CLONE_ID });
+  game.fighters.push(otherOwner);
+  const other = tryCombatCloneSpawn(otherOwner, game, Fighter);
+  game.paused = true;
+  assert.equal(tryDismissShadowClone(owner, game), null);
+  game.paused = false;
+  game.over = true;
+  assert.equal(tryDismissShadowClone(owner, game), null);
+  game.over = false;
+  assert.equal(tryDismissShadowClone(owner, game), b, "dismiss newest owned living shadow");
+  assert.equal(owner.hp, ownerHp, "dismissal does not transfer damage or heal owner");
+  assert.equal(owner.combatCloneCd, spawnCd, "dismissal works during cooldown without resetting it");
+  assert.equal(a.hp, 70, "40 + 30 current HP merges into survivor");
+  assert.equal(a.maxHp, 100);
+  assert.equal(b.dead, true);
+  assert.equal(b.heldProp, null);
+  assert.equal(prop.heldBy, null, "held props are released before removal");
+  assert.equal(owner.shadowLink.members.has(b), false);
+  assert.ok(!game.fighters.includes(b) && game.fighters.includes(other));
+  assert.ok(game.fighters.includes(enemy));
+  assert.deepEqual(listCombatClones(game), [a, other], "living clone cache updates immediately");
+  assert.equal(tryDismissShadowClone(owner, game), a);
+  assert.equal(owner.hp, ownerHp);
+  assert.equal(tryDismissShadowClone(owner, game), null, "empty dismissal is harmless");
+  assert.equal(owner.shadowLink.members.size, 1);
+}
+
+{
+  const { owner, game, a, b } = cloneFixture(SHADOW_CLONE_ID);
+  owner.combatCloneCd = 0;
+  const c = tryCombatCloneSpawn(owner, game, Fighter);
+  const total = a.hp + b.hp + c.hp;
+  applyHpDamage(a, 4, game, { alreadyScaled: true });
+  const ownerHp = owner.hp;
+  assert.equal(tryDismissShadowClone(owner, game), c);
+  assert.equal(a.maxHp, 50);
+  assert.equal(b.maxHp, 50);
+  assert.ok(Math.abs(a.hp - (total - 4) / 2) < 1e-10);
+  assert.equal(a.hp, b.hp, "unequal HP is merged evenly");
+  assert.equal(owner.hp, ownerHp);
+}
+
+for (const id of [COMBAT_CLONE_ID, SPLIT_ID]) {
+  const { owner, game } = cloneFixture(id);
+  assert.equal(tryDismissShadowClone(owner, game), null, "other clone Extensions are unchanged");
+}
+
+for (const scale of [1, .2]) {
+  const owner = applyLoadout(new Fighter({ team: 0, grounded: true }),
+    { ...DEFAULT_LOADOUT, extensionSecondary: SHADOW_CLONE_ID }, { healthScale: scale });
+  const game = { fighters: [owner], effects: [], elapsed: 0 };
+  assert.equal(cloneMaxActive(owner), 10);
+  for (let count = 1; count <= 10; count++) {
+    assert.ok(tryCombatCloneSpawn(owner, game, Fighter));
+    const shadows = listCombatClones(game);
+    assert.equal(shadows.length, count);
+    for (const shadow of shadows) {
+      assert.ok(Math.abs(shadow.hp - 100 / count) < 1e-10);
+      assert.ok(Math.abs(shadow.maxHp - 100 / count) < 1e-10);
+    }
+    assert.equal(owner.combatCloneCd, 2);
+    assert.equal(tryCombatCloneSpawn(owner, game, Fighter), null, "cooldown blocks spam");
+    tickCombatCloneFighter(owner, 1.99);
+    assert.equal(tryCombatCloneSpawn(owner, game, Fighter), null, "cooldown lasts the full two seconds");
+    tickCombatCloneFighter(owner, .011);
+  }
+  assert.equal(tryCombatCloneSpawn(owner, game, Fighter), null, "ten is the hard cap");
+  const shadows = listCombatClones(game);
+  const before = owner.hp;
+  applyHpDamage(shadows[0], 1000, game, { alreadyScaled: true });
+  assert.equal(owner.hp, before - 10);
+  assert.ok(shadows[0].dead);
+  assert.ok(shadows.slice(1).every((shadow) => shadow.hp === 10), "no sibling feedback");
+  tickCombatCloneWorld(game);
+  const replacement = tryCombatCloneSpawn(owner, game, Fighter);
+  assert.ok(replacement);
+  for (const shadow of listCombatClones(game)) {
+    assert.equal(shadow.hp, 9, "replacement shares 90 surviving HP without adding health");
+    assert.equal(shadow.maxHp, 10);
+  }
+}
+
+{
+  const { owner, game, a, b } = cloneFixture(SHADOW_CLONE_ID);
+  applyHpDamage(a, 20, game, { alreadyScaled: true });
+  owner.combatCloneCd = 0;
+  const c = tryCombatCloneSpawn(owner, game, Fighter);
+  for (const shadow of [a, b, c]) {
+    assert.ok(Math.abs(shadow.hp - 80 / 3) < 1e-10, "unequal current HP is evenly redistributed");
+    assert.ok(Math.abs(shadow.maxHp - 100 / 3) < 1e-10);
+  }
+  const ownerBefore = owner.hp;
+  applyHpDamage(owner, 5, game, { alreadyScaled: true });
+  assert.equal(owner.hp, ownerBefore - 5, "direct owner damage applies just once");
+  for (const shadow of [a, b, c]) assert.ok(Math.abs(shadow.hp - (80 / 3 - 5)) < 1e-10);
+}
+
+{
+  const { owner, enemy, game } = cloneFixture(SHADOW_CLONE_ID);
+  owner.combatCloneCd = 0;
+  for (let count = 3; count <= 10; count++) {
+    updateAiCombatClone(owner, owner.aiState, game, [enemy], enemy);
+    assert.equal(listCombatClones(game).length, count, "AI fills the ten-shadow cap");
+    assert.equal(owner.combatCloneCd, 2);
+    tickCombatCloneFighter(owner, 2);
+  }
+  updateAiCombatClone(owner, owner.aiState, game, [enemy], enemy);
+  assert.equal(listCombatClones(game).length, 10);
+}
+
 for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
   assert.equal(GEAR_BY_ID[id].slot, "extensionSecondary");
   assert.ok(isCombatCloneGear(id));
   for (const scale of [1, 0.2]) {
     const { owner, enemy, game, a, b } = cloneFixture(id, {}, scale);
-    const expectedHp = id === SPLIT_ID ? SPLIT_TWIN_HP : LINKED_CLONE_HP;
+    const expectedHp = id === SPLIT_ID ? SPLIT_TWIN_HP : SHADOW_CLONE_HP_BUDGET / 2;
     assert.equal(a.hp, expectedHp, "new clones have their fixed HP in either health mode");
     assert.equal(a.coreHp, expectedHp);
     assert.equal(a.coreMaxHp, expectedHp);
@@ -149,9 +277,9 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
     assert.equal(isRealCombatant(a), false);
     assert.equal(a.loadout.extensionSecondary, "no-extension");
     assert.equal(tryCombatCloneSpawn(a, game, Fighter), null, "twins cannot nest-spawn");
-    assert.equal(owner.combatCloneCd, id === SHADOW_CLONE_ID ? ILLUSIONIST_COOLDOWN : 30);
+    assert.equal(owner.combatCloneCd, id === SHADOW_CLONE_ID ? SHADOW_CLONE_COOLDOWN : 30);
     owner.combatCloneCd = 0;
-    assert.equal(tryCombatCloneSpawn(owner, game, Fighter), null, "max two alive");
+    if (id === SPLIT_ID) assert.equal(tryCombatCloneSpawn(owner, game, Fighter), null, "max two Split twins");
     hit(enemy, a, 12, 0, game);
     assert.equal(enemy.hp, 500 - 12 * scale, "full real weapon damage at the match health scale");
     assert.ok(b && !b.dead);
@@ -165,19 +293,21 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
   const { owner, enemy, game, a, b } = cloneFixture(SHADOW_CLONE_ID);
   const startHp = owner.hp;
   hit(a, enemy, 10, 0, game);
-  assert.equal(a.hp, 15);
-  assert.equal(b.hp, 15);
+  assert.equal(a.hp, 40);
+  assert.equal(b.hp, 50, "clone hits do not damage siblings");
   assert.equal(owner.hp, startHp - 10, "one share, no recursive amplification");
   hit(owner, enemy, 5, 0, game);
-  assert.equal(a.hp, 10);
-  assert.equal(b.hp, 10);
+  assert.equal(a.hp, 35);
+  assert.equal(b.hp, 45);
   assert.equal(owner.hp, startHp - 15, "owner damage shares back to shadows");
   hit(a, enemy, 100, 0, game);
-  assert.equal(owner.hp, startHp - 25, "only actual lost HP shares, not overkill");
-  assert.ok(a.dead && b.dead);
+  assert.equal(owner.hp, startHp - 50, "only actual lost HP transfers, not overkill");
+  assert.ok(a.dead && !b.dead);
   tickCombatCloneWorld(game);
-  assert.equal(game.fighters.filter(isCombatClone).length, 0);
-  assert.equal(owner.shadowLink.members.size, 1);
+  assert.equal(game.fighters.filter(isCombatClone).length, 1);
+  assert.equal(b.maxHp, 100, "death increases surviving capacity");
+  assert.equal(b.hp, 45, "death does not heal the survivor");
+  assert.equal(owner.shadowLink.members.size, 2);
   assert.ok(owner.shadowLink.members.has(owner));
   owner.combatCloneCd = 0;
   assert.ok(tryCombatCloneSpawn(owner, game, Fighter), "dead shadows free a slot");
@@ -190,7 +320,7 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
   a.aim = Math.PI;
   hit(a, enemy, 10, 0, game);
   assert.equal(owner.hp, startHp, "blocked shield damage is not shared");
-  assert.equal(a.hp, 25);
+  assert.equal(a.hp, 50);
   a.shieldRaised = false;
   a.iframe = .2;
   hit(a, enemy, 10, 0, game);
@@ -199,37 +329,40 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
   owner.damageTaken = .5;
   hit(a, enemy, 10, 0, game);
   assert.equal(owner.hp, startHp - 10, "linked damage is not mitigated a second time");
-  assert.equal(b.hp, 15);
+  assert.equal(b.hp, 50, "transferred damage never bounces from the owner");
 }
 
 {
   const { owner, game, a, b } = cloneFixture(SHADOW_CLONE_ID);
   applyHpDamage(b, 4, game, { alreadyScaled: true });
   assert.equal(owner.hp, owner.maxHp - 4, "hazards and direct HP damagers also share");
-  assert.equal(a.hp, 21);
+  assert.equal(a.hp, 50);
   awardPowerup(a, "fireRate", game);
-  assert.equal(owner.powerBuffs, a.powerBuffs);
-  assert.equal(owner.powerBuffs, b.powerBuffs);
+  assert.notEqual(owner.powerBuffs, a.powerBuffs);
+  assert.notEqual(a.powerBuffs, b.powerBuffs);
   for (const f of [owner, a, b]) tickFighterPowerBuffs(f, 1);
-  assert.equal(owner.powerBuffs.fireRate.remaining, FIRE_RATE_DURATION - 1,
-    "one shared countdown, not one decrement per clone");
+  assert.equal(a.powerBuffs.fireRate.remaining, FIRE_RATE_DURATION - 1);
+  assert.equal(owner.powerBuffs.fireRate, undefined);
+  assert.equal(b.powerBuffs.fireRate, undefined);
   awardPowerup(b, "overcharge", game);
-  const charges = owner.powerBuffs.overcharge.charges;
+  const charges = b.powerBuffs.overcharge.charges;
   consumeOvercharge(a);
-  if (charges > 1) assert.equal(owner.powerBuffs.overcharge.charges, charges - 1);
-  else assert.equal(owner.powerBuffs.overcharge, undefined);
+  assert.equal(b.powerBuffs.overcharge.charges, charges, "Overcharge charges are independent");
   awardPowerup(b, "heal", game);
-  assert.equal(owner.hp, owner.maxHp);
-  assert.equal(a.hp, 25);
-  assert.equal(b.hp, 25);
+  assert.equal(owner.hp, owner.maxHp - 4, "clone healing does not heal owner");
+  assert.equal(a.hp, 50);
+  assert.equal(b.hp, 50);
   owner.combatCloneCd = 0;
   a.dead = true;
   b.trapLockT = 3;
   tickCombatCloneWorld(game);
   const c = tryCombatCloneSpawn(owner, game, Fighter);
-  assert.equal(c.powerBuffs.fireRate.remaining, FIRE_RATE_DURATION - 1,
-    "new shadows inherit the current buff, not a refreshed duration");
-  assert.equal(c.trapLockT, 3, "new shadows inherit active debuffs");
+  assert.equal(c.powerBuffs.fireRate, undefined, "new shadows do not inherit buffs");
+  assert.equal(c.trapLockT || 0, 0, "new shadows do not inherit debuffs");
+  assert.equal(b.trapLockT, 3);
+  assert.equal(b.hp, 25, "spawning divides surviving current HP");
+  assert.equal(c.hp, 25);
+  assert.equal(c.maxHp, 50);
 }
 
 {
@@ -238,9 +371,10 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
   awardPowerup(b, "regen", game);
   const ownerBefore = owner.hp;
   for (const f of [owner, a, b]) tickFighterPowerBuffs(f, 1);
-  assert.ok(Math.abs(owner.hp - ownerBefore - REGEN_TOTAL / REGEN_DURATION) < 1e-6);
-  assert.ok(Math.abs(a.hp - 15 - REGEN_TOTAL / REGEN_DURATION) < 1e-6);
-  assert.equal(owner.powerBuffs.regen.remaining, REGEN_DURATION - 1);
+  assert.equal(owner.hp, ownerBefore);
+  assert.equal(a.hp, 40);
+  assert.ok(Math.abs(b.hp - 40 - REGEN_TOTAL / REGEN_DURATION) < 1e-6);
+  assert.equal(b.powerBuffs.regen.remaining, REGEN_DURATION - 1);
   a.trapLockT = 5;
   a.trapLockKind = "bolas";
   b.signalRevealT = 4;
@@ -250,20 +384,23 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
     tickTrapperFighter(f, .5);
     tickSpellbookFighter(f, .5);
   }
-  assert.equal(owner.trapLockT, 4.5);
-  assert.equal(b.trapLockT, 4.5);
-  assert.equal(owner.trapLockKind, "bolas");
-  assert.equal(owner.signalRevealT, 3.5);
-  assert.equal(owner.signalRevealTeam, 1);
-  assert.equal(owner.icePinT, 1.5);
-  assert.equal(b.icePinT, 1.5);
-  tickSpellbookFighter(owner, 1.5);
+  assert.equal(a.trapLockT, 4.5);
+  assert.equal(owner.trapLockT || 0, 0);
+  assert.equal(b.trapLockT || 0, 0);
+  assert.equal(a.trapLockKind, "bolas");
+  assert.equal(b.signalRevealT, 3.5);
+  assert.equal(b.signalRevealTeam, 1);
+  assert.equal(a.icePinT, 1.5);
+  assert.equal(owner.icePinT || 0, 0);
+  assert.equal(b.icePinT || 0, 0);
+  tickSpellbookFighter(a, 1.5);
   assert.equal(a.icePinT, 0);
-  assert.ok(a.iceSlowT > 0, "pin-to-slow transition is shared");
-  tickTrapperFighter(owner, 5);
+  assert.ok(a.iceSlowT > 0, "pin-to-slow transition ticks independently");
+  tickTrapperFighter(a, 5);
+  tickTrapperFighter(b, 5);
   assert.equal(a.trapLockT, 0);
   assert.equal(a.trapLockKind, null);
-  assert.equal(a.signalRevealTeam, null);
+  assert.equal(b.signalRevealTeam, null);
 }
 
 for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
@@ -273,7 +410,7 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
   assert.equal(hasRetractableArmor(a), false);
   assert.equal(hasNanotechChestplate(a), false);
   tickNanotech(a, 1);
-  assert.equal(a.hp, id === SPLIT_ID ? SPLIT_TWIN_HP : LINKED_CLONE_HP,
+  assert.equal(a.hp, id === SPLIT_ID ? SPLIT_TWIN_HP : SHADOW_CLONE_HP_BUDGET / 2,
     "nanotech ticks must not restore owner-sized HP");
   owner.dead = true;
   tickCombatCloneWorld(game);
@@ -282,16 +419,17 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
 
 assert.equal(SPLIT_SWITCH_KEY, "KeyH");
 assert.equal(SPLIT_SWITCH_COOLDOWN, 3);
-assert.equal(SPLIT_TWIN_HP, 100);
+assert.equal(SPLIT_TWIN_HP, 250);
+assert.equal(SPLIT_SWITCH_MIN_HP, 100);
 
 for (const scale of [1, .2]) {
-  for (const hp of [10, 60, 99, 100, ...(scale === 1 ? [150] : [])]) {
+  for (const hp of [10, 60, 99, 100, ...(scale === 1 ? [150, 200, 249, 250, 251, 500] : [])]) {
     const { owner, game, a } = cloneFixture(SPLIT_ID, {}, scale);
     owner.hp = owner.coreHp = hp;
     trySplitSwitch(owner, game);
     assert.equal(owner.hp, Math.max(100, hp), "switching has an absolute 100-HP floor");
-    assert.equal(a.hp, Math.min(100, hp), "abandoned HP is preserved up to the 100-HP cap");
-    assert.equal(a.maxHp, 100);
+    assert.equal(a.hp, Math.min(250, hp), "abandoned HP is preserved up to the 250-HP cap");
+    assert.equal(a.maxHp, 250);
     assert.equal(owner.maxHp, 500 * scale, "normal controlled stats are retained");
   }
 }
@@ -308,13 +446,13 @@ for (const scale of [1, .2]) {
   assert.equal(a.hp, 60, "the abandoned body keeps total pre-switch HP");
 }
 
-for (const hp of [99, 100]) {
+for (const hp of [99, 100, 150, 249, 250]) {
   const { owner, enemy, game, a } = cloneFixture(SPLIT_ID);
   owner.hp = owner.coreHp = hp;
   updateAiCombatClone(owner, owner.aiState, game, [enemy], enemy);
   assert.equal(owner.splitSwitchCd > 0, hp < 100, "AI switches below 100, not at the floor");
-  assert.equal(owner.hp, 100);
-  assert.equal(a.hp, hp < 100 ? 99 : 100);
+  assert.equal(owner.hp, Math.max(100, hp));
+  assert.equal(a.hp, hp < 100 ? 99 : 250);
 }
 
 {
@@ -336,7 +474,7 @@ for (const hp of [99, 100]) {
   trySplitSwitch(owner, game);
   assert.equal(owner.hp, before, "armor above the minimum must not secretly heal core HP");
   assert.equal(owner.coreHp, 70);
-  assert.equal(a.hp, 100);
+  assert.equal(a.hp, 120);
 }
 
 {
@@ -388,9 +526,9 @@ for (const hp of [99, 100]) {
 {
   const { owner, enemy, game, a, b } = cloneFixture(SPLIT_ID);
   hit(a, enemy, 10, 0, game);
-  assert.equal(a.hp, 90);
+  assert.equal(a.hp, 240);
   assert.equal(owner.hp, 500, "Split does not share damage");
-  assert.equal(b.hp, 100);
+  assert.equal(b.hp, 250);
   awardPowerup(a, "fireRate", game);
   assert.equal(owner.powerBuffs.fireRate, undefined, "Split does not share buffs");
   tickFighterPowerBuffs(a, 1);
@@ -401,7 +539,7 @@ for (const hp of [99, 100]) {
   a.dead = true;
   assert.equal(trySplitSwitch(owner, game), b, "dead bodies are skipped");
   assert.equal(owner.hp, 500, "switching above 100 does not heal");
-  assert.equal(b.hp, 100);
+  assert.equal(b.hp, 250);
   owner.splitSwitchCd = 0;
   game.paused = true;
   assert.equal(trySplitSwitch(owner, game), null);
@@ -589,7 +727,7 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
   tickNanotech(a, .05);
   assert.equal(a.nanobotArmor, 0, "fixed-HP twins cannot deploy nanotech armor");
   assert.equal(a.retractableDeployed, false);
-  assert.equal(a.hp, id === SPLIT_ID ? 100 : 25);
+  assert.equal(a.hp, id === SPLIT_ID ? 250 : 50);
   assert.equal(nanotechFormPct(a), 1, "fixed-HP twins can still use nanotech weapons");
 }
 
@@ -600,7 +738,7 @@ for (const optimizeIllusions of [true, false]) {
   a.nanobotFree = a.nanobotMax;
   updateAI(a, .05, game, structuredClone(DEFAULT_PROFILE));
   assert.equal(nanotechFormPct(a), 1, "both optimized and full clone brains can form weapons");
-  assert.equal(a.hp, 100);
+  assert.equal(a.hp, 250);
 }
 
 {

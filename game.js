@@ -6,7 +6,7 @@ import {
 } from "./combat.js";
 import {
   isCombatClone, isCombatCloneGear, refreshCombatCloneCaches, tickCombatCloneWorld,
-  SPLIT_SWITCH_KEY, tryCombatCloneSpawn, trySplitSwitch
+  SPLIT_SWITCH_KEY, tryCombatCloneSpawn, tryDismissShadowClone, trySplitSwitch
 } from "./combat-clone.js";
 import {
   cycleIllusionistType, cycleIllusionPropKind, isIllusionFighter, isIllusionist,
@@ -496,7 +496,7 @@ function update(dt) {
     // Illusion decoys still tick Throw Breakable so fake held props track the hand
     // and ghosted cover restores when they fade.
     if (isCombatClone(fighter)) {
-      if (fighter.cloneVariant === "split") tickFighterPowerBuffs(fighter, dt);
+      tickFighterPowerBuffs(fighter, dt);
       tickThrowBreakable(fighter, game, dt);
       continue;
     }
@@ -665,7 +665,8 @@ function handleKeyDown(event) {
   }
   if (event.code === "Digit3" && !event.repeat) {
     const player = game.fighters[0];
-    if (isDisguiseGear(player)) tryDisguise(player, game);
+    if (event.shiftKey && player.shadowCloneGear) tryDismissShadowClone(player, game);
+    else if (isDisguiseGear(player)) tryDisguise(player, game);
     else if (isIllusionist(player)) tryIllusionistPlant(player, game, Fighter);
     else if (isCombatCloneGear(player)) tryCombatCloneSpawn(player, game, Fighter);
     else if (isTrapper(player)) tryTrapperPlant(player, game);

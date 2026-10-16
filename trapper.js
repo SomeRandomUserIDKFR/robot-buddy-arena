@@ -606,7 +606,6 @@ export function tickTrapperWorld(game, dt, oldYByFighter = null) {
 
 export function tickTrapperFighter(fighter, dt) {
   if (!fighter) return;
-  if (fighter.shadowLink && fighter.shadowLink.owner !== fighter) return;
   const step = dt || 0;
   if (fighter.trapperCd > 0) {
     fighter.trapperCd = Math.max(0, fighter.trapperCd - step);

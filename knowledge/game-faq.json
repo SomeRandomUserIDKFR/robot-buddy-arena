@@ -507,9 +507,11 @@
         "what is shadow clone",
         "how does shadow clone work",
         "do shadow clones share damage",
-        "do shadow clones share buffs and debuffs"
+        "do shadow clones share buffs and debuffs",
+        "how do I undo a shadow clone",
+        "what does shift 3 do"
       ],
-      "answer": "Shadow Clone costs 280 Cyber and is an Extension. Press 3 to spawn a real 25 HP twin with full weapon damage; max 2 alive, 5s spawn cooldown like Illusionist. Actual HP lost is shared between you and every living shadow, including damage to you; overkill shares only HP actually lost. Separate hits can each share damage. Power-up buffs and ice, trap, snare, and reveal debuffs are shared with one duration clock and one Overcharge charge pool. Instant power-ups benefit all living members, and new shadows inherit active effects. Shadows cannot add armor HP beyond 25, do not keep a match alive, and die with you."
+      "answer": "Shadow Clone costs 280 Cyber. Press 3 to spawn up to 10 real full-damage shadows with a 2s cooldown. Shift+3 dismisses the newest living shadow, evenly merging the group's remaining HP into survivors without healing/damaging you or changing spawn cooldown. Held props drop and effects do not transfer. Dismissing the last shadow discards its HP. Living shadows divide a 100-HP maximum budget, including in Classic mode; owner HP is separate. One shadow starts at 100 HP, two have 50 max each, three about 33.3, ten 10. Spawning evenly redistributes their existing remaining HP without healing: 80 remaining becomes two shadows at 40/50. Death raises survivors' max HP without healing; if none survive, the next spawn starts fresh at 100. Actual shadow HP damage transfers only to the owner, not siblings. Direct owner HP damage affects all living shadows, but damage transferred from shadows never loops back. Only actual HP lost transfers, without repeat mitigation; shields and dodges prevent transfer when no HP is lost. Separate hits can each transfer. Buffs, debuffs, healing, timers, and Overcharge charges are independent; new shadows do not inherit effects. Shadows cannot add armor HP, do not keep a match alive, and die with you."
     },
     {
       "id": "equipment-split",
@@ -521,7 +523,7 @@
         "what does H do",
         "split health when switching"
       ],
-      "answer": "Split costs 300 Cyber and is an Extension. Press 3 to spawn up to 2 real twins with a 30s spawn cooldown. They persist until killed and have 100 HP while uncontrolled, including in Classic mode. Press H to cycle through living bodies, with a 3s switch cooldown. Your normal kit and stored player HP follow control; switching gives you at least 100 HP. The body you leave keeps your pre-switch HP capped at 100: leaving at 10 HP gives you 100 and leaves a 10-HP twin. Position, motion, fuel, buffs, and debuffs stay with each physical body, without shared damage or effects. Switching does not reset combat cooldowns or refill shields, mana, or weapons. Uncontrolled bodies cannot add armor HP, do not hold the win condition, and die with you."
+      "answer": "Split costs 300 Cyber and is an Extension. Press 3 to spawn up to 2 real twins with a 30s spawn cooldown. They persist until killed and spawn with 250 HP while uncontrolled, including in Classic mode. Press H to cycle through living bodies, with a 3s switch cooldown. Your normal kit and stored player HP follow control; switching gives you at least 100 HP, not 250. The body you leave keeps your pre-switch HP capped at 250: leaving at 10 HP gives you 100 and leaves a 10-HP twin; leaving at 200 HP keeps you at 200 and leaves a 200-HP twin. Position, motion, fuel, buffs, and debuffs stay with each physical body, without shared damage or effects. Switching does not reset combat cooldowns or refill shields, mana, or weapons. Uncontrolled bodies cannot add armor HP, do not hold the win condition, and die with you."
     },
     {
       "id": "equipment-clone-gear-ai",
@@ -532,7 +534,7 @@
         "do real clones use secondary weapons",
         "do split twins use their equipment"
       ],
-      "answer": "Real Doppel, Shadow Clone, and Split twins use shared equipment AI even with Optimize illusions enabled. They use short frontal shield raises, form nanotech weapons, choose Mechanical Modularity and Adaptive Nanotech modes for range/threats, and use Material Consumer, Throw Breakable, or Shield Steal secondaries when useful. Doppel can deploy equipped retractable or nanotech armor; Shadow and Split cannot add armor HP beyond their fixed pools (25 and 100 HP). Held props follow real twins without blocking their own sight, and tool cooldowns tick normally. Real twins do not nest-spawn Extensions. Illusionist decoys keep their previous lightweight behavior."
+      "answer": "Real Doppel, Shadow Clone, and Split twins use shared equipment AI even with Optimize illusions enabled. They use short frontal shield raises, form nanotech weapons, choose Mechanical Modularity and Adaptive Nanotech modes for range/threats, and use Material Consumer, Throw Breakable, or Shield Steal secondaries when useful. Doppel can deploy equipped retractable or nanotech armor; Shadow and Split cannot add armor HP beyond their allotted pools (a 100-HP total shadow budget and 250 HP per Split twin). Held props follow real twins without blocking their own sight, and tool cooldowns tick normally. Real twins do not nest-spawn Extensions. Illusionist decoys keep their previous lightweight behavior."
     },
     {
       "id": "equipment-disguise",
