@@ -518,7 +518,7 @@ export const GEAR = [
     SHADOW_CLONE_ID,
     "extensionSecondary",
     "Shadow Clone",
-    "Press 3 to spawn a real shadow, max 10 alive, 2s cooldown. Shadows divide a 100 HP maximum budget; spawning evenly redistributes their remaining HP without healing. Shift+3 dismisses the newest shadow, merging remaining HP evenly into survivors without healing you or resetting cooldown. Shadow HP damage transfers only to you; direct HP damage to you hits all shadows, without feedback. Independent buffs/debuffs and full weapon damage. Shadows die with you.",
+    "Press 3: no cooldown, max 10 shadows. Costs 100 owner max HP (scaled in Classic). Persistent banks hold 100 HP and half your strongest shield. Only spawning combines bank + living resources, discards excess above each pool cap, and divides evenly; each maximum is full pool/count. HP/shield banks refill in 5s/2.5s; capacity still held by clones refills at half speed. Shift+3 banks the newest shadow's remaining HP/shield without healing survivors. Shadow damage hurts only you; direct damage to you hits all shadows without looping. Independent effects and full damage. Only allies see clone tells; shadows die with you.",
     {},
     {
       price: 280,
@@ -755,6 +755,9 @@ function snapshotDedicatedShield(fighter) {
 
 function restoreDedicatedShield(fighter, snap) {
   if (!snap) return;
+  const shadow = fighter.cloneVariant === SHADOW_CLONE_ID;
+  const current = fighter.shieldDurability;
+  const max = fighter.shieldMaxDurability;
   fighter.shieldId = snap.shieldId;
   fighter.shieldMaxDurability = snap.shieldMaxDurability;
   fighter.shieldDurability = snap.shieldDurability;
@@ -763,18 +766,27 @@ function restoreDedicatedShield(fighter, snap) {
   fighter.shieldBrokenSpeed = snap.shieldBrokenSpeed;
   fighter.shieldRaised = !!snap.shieldRaised && !snap.shieldBroken;
   fighter.shieldBroken = !!snap.shieldBroken;
+  if (shadow) {
+    fighter.shieldMaxDurability = max;
+    fighter.shieldDurability = current;
+    fighter.shieldBroken = max > 0 && current <= 0;
+    fighter.shieldRaised = false;
+  }
 }
 
 function applyModularPlateAsShield(fighter) {
   const plate = MODULAR_MODE_DEFS.shield.shield;
   fighter.shieldId = `${MODULAR_WEAPON_ID}-plate`;
-  fighter.shieldMaxDurability = fighter.modularPlateMax;
-  fighter.shieldDurability = fighter.modularPlateDurability;
+  if (fighter.cloneVariant !== SHADOW_CLONE_ID) {
+    fighter.shieldMaxDurability = fighter.modularPlateMax;
+    fighter.shieldDurability = fighter.modularPlateDurability;
+  }
   fighter.shieldBlockHalfAngle = plate.blockHalfAngle;
   fighter.shieldRaisedSpeed = plate.raisedSpeed * (fighter._modularShieldRaisedPerk || 1);
   fighter.shieldBrokenSpeed = plate.brokenSpeed;
-  fighter.shieldBroken = !!fighter.modularPlateBroken
-    || fighter.modularPlateDurability <= 0;
+  fighter.shieldBroken = fighter.cloneVariant === SHADOW_CLONE_ID
+    ? fighter.shieldMaxDurability > 0 && fighter.shieldDurability <= 0
+    : !!fighter.modularPlateBroken || fighter.modularPlateDurability <= 0;
   fighter.shieldRaised = false;
 }
 
@@ -2739,6 +2751,7 @@ export function effectiveStats(loadout) {
     if (gear?.slot === "weapon") result.dps = theoreticalDps(gear);
   }
   applyPerkModifiersToStats(result, loadout?.perk);
+  if (loadout?.extensionSecondary === SHADOW_CLONE_ID) result.hp -= 100;
   const weapon = weaponStats(loadout.weapon);
   result.speed = Math.min(520 * 1.4, result.speed * (weapon.movementMultiplier || 1));
   return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, Math.round(value)]));
@@ -2890,6 +2903,7 @@ export function applyLoadout(fighter, loadout, opts = {}) {
   fighter.phantomDecayT = 0;
   fighter.combatCloneGear = !!extension?.combatClone;
   fighter.shadowCloneGear = !!extension?.shadowClone;
+  fighter.shadowLink = null;
   fighter.splitGear = !!extension?.split;
   fighter.combatCloneCd = 0;
   fighter.combatCloneFlash = 0;
@@ -2963,6 +2977,9 @@ export function applyLoadout(fighter, loadout, opts = {}) {
     applyModularCombatStats(fighter, "sword");
   } else {
     fighter.modularWeapon = false;
+    fighter.modularPlateMax = 0;
+    fighter.modularPlateDurability = 0;
+    fighter.modularPlateBroken = false;
     fighter.modularMode = null;
     fighter.modularMorphing = false;
     fighter.modularModeCd = 0;

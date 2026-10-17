@@ -1924,10 +1924,13 @@ export function createRenderer(canvas) {
       : optimizeIllusionsHint;
     const decoy = isIllusionFighter(fighter);
     const clone = isCombatClone(fighter);
-    const leanSummon = optimizeIllusions && (decoy || clone);
+    const shadowOwner = fighter.cloneVariant === "shadow-clone" ? fighter.cloneOwner : null;
+    const hiddenShadow = shadowOwner && viewer && viewer.team !== fighter.team;
+    const visualFighter = shadowOwner ? { ...fighter, buddy: shadowOwner.buddy } : fighter;
+    const leanSummon = optimizeIllusions && (decoy || (clone && !shadowOwner));
     context.save();
     if (fighter.dead) context.globalAlpha = .45;
-    if (fighter.buddy) {
+    if (fighter.buddy && (!fighter.shadowCloneGear || viewer?.team === fighter.team)) {
       context.shadowColor = "#39efff";
       context.shadowBlur = 14;
       context.strokeStyle = "#4df2ff";
@@ -1978,7 +1981,7 @@ export function createRenderer(canvas) {
         context.fillStyle = fighter.cloneVariant === "shadow-clone" ? "#d2a0ff" : "#64ffbe";
         context.font = "bold 10px ui-monospace,Consolas";
         context.textAlign = "center";
-        context.fillText(fighter.cloneVariant === "split" ? "SPLIT" : "LINKED",
+        context.fillText(fighter.cloneVariant === "split" ? "SPLIT" : "SHADOW",
           fighter.x + SIZE / 2, fighter.y - 18);
       }
     }
@@ -1988,10 +1991,10 @@ export function createRenderer(canvas) {
     // Optimized summons skip heavy armor plate flair — silhouette + gun is enough.
     if (!leanSummon) {
       drawRetractableArmorPlates(
-        context, game, fighter, centerX, centerY, fighter.dead ? .45 : 1
+        context, game, shadowOwner || fighter, centerX, centerY, fighter.dead ? .45 : 1
       );
       drawNanotechChestplateArmor(
-        context, game, fighter, centerX, centerY, fighter.dead ? .45 : 1
+        context, game, shadowOwner || fighter, centerX, centerY, fighter.dead ? .45 : 1
       );
     }
     context.fillStyle = "#071016";
@@ -2019,12 +2022,12 @@ export function createRenderer(canvas) {
     context.fillText(face, centerX, centerY);
     context.translate(centerX, centerY);
     context.rotate(fighter.aim);
-    const visual = weaponVisual(fighter.weaponId || fighter.weapon, fighter);
+    const visual = weaponVisual(fighter.weaponId || fighter.weapon, visualFighter);
     const bodyAlpha = fighter.dead ? .45 : 1;
     const shieldUp = fighter.shieldRaised && !fighter.shieldBroken;
     // Disposable tool models are drawn in the post-pass (hand + grab one-shots).
     if (!handheldToolId(fighter)) {
-      drawHeldWeapon(context, game, fighter, visual, bodyAlpha, shieldUp);
+      drawHeldWeapon(context, game, visualFighter, visual, bodyAlpha, shieldUp);
     }
     context.globalAlpha = bodyAlpha;
     if ((fighter.shieldMaxDurability || 0) > 0 && (fighter.shieldRaised || fighter.shieldBroken)) {
@@ -2084,14 +2087,15 @@ export function createRenderer(canvas) {
     context.fillRect(fighter.x, fighter.y - 5, SIZE, 3);
     context.fillStyle = fighter.jetLocked ? "#ff5e56" : "#ffd64a";
     context.fillRect(fighter.x, fighter.y - 5, SIZE * fighter.fuel, 3);
-    if ((fighter.shieldMaxDurability || 0) > 0) {
+    const barShield = hiddenShadow ? shadowOwner : fighter;
+    if ((barShield.shieldMaxDurability || 0) > 0) {
       context.fillStyle = "#24343c";
       context.fillRect(fighter.x, fighter.y - 19, SIZE, 3);
-      context.fillStyle = fighter.shieldBroken ? "#6b7580" : "#7ec8ff";
+      context.fillStyle = barShield.shieldBroken ? "#6b7580" : "#7ec8ff";
       context.fillRect(
         fighter.x,
         fighter.y - 19,
-        SIZE * (fighter.shieldDurability / fighter.shieldMaxDurability),
+        SIZE * (barShield.shieldDurability / barShield.shieldMaxDurability),
         3
       );
     }

@@ -29,6 +29,7 @@ import {
 } from "./disguise.js";
 import {
   cloneGearName, cloneMaxActive, cloneSpawnCooldown, SHADOW_CLONE_HP_BUDGET, listCombatClones,
+  shadowReserves,
   SPLIT_SWITCH_COOLDOWN, SPLIT_SWITCH_MIN_HP, SPLIT_TWIN_HP
 } from "./combat-clone.js";
 import {
@@ -43,7 +44,7 @@ import {
   heldToolUsesOf, TOOL_DEFS, toolDef
 } from "./tool-secondaries.js";
 import {
-  illusionPropKindLabel, normalizeIllusionPropKind
+  displayedHp, displayedMaxHp, illusionPropKindLabel, normalizeIllusionPropKind
 } from "./illusionist.js";
 import {
   ensureSettingsProfile, normalizeArmorDespawnTimer, normalizeOptimizeIllusions,
@@ -585,17 +586,22 @@ export function updateHud(game) {
       const cd = player.combatCloneCd || 0;
       const count = listCombatClones(game).filter((c) => c.cloneOwner === player).length;
       const name = cloneGearName(player).toUpperCase();
+      const reserves = player.shadowCloneGear ? shadowReserves(player) : null;
+      const empty = reserves && reserves.hpReserve <= 0 && count === 0;
       if (ui.trapHudKicker) {
         ui.trapHudKicker.textContent = cd > 0 ? `${name} · COOLDOWN` : `${name} · PRESS 3`;
       }
       if (ui.trapHudType) {
-        ui.trapHudType.textContent = cd > 0 ? `${Math.ceil(cd)}s` : count >= cloneMaxActive(player) ? "FULL" : "READY";
+        ui.trapHudType.textContent = cd > 0 ? `${Math.ceil(cd)}s` : count >= cloneMaxActive(player)
+          ? "FULL" : empty ? "RECHARGING" : "READY";
       }
       if (ui.trapHudSub) {
         const switchCd = player.splitSwitchCd || 0;
         ui.trapHudSub.textContent = player.splitGear
           ? `${count}/2 twins · H ${switchCd > 0 ? `${Math.ceil(switchCd)}s` : "switch"}`
-          : player.shadowCloneGear ? `${count}/${cloneMaxActive(player)} shadows · 100 HP budget · Shift+3 undo` : `${count}/2 twins`;
+          : reserves ? `${count}/${cloneMaxActive(player)} shadows · bank ${Math.floor(reserves.hpReserve)}/100 HP`
+            + ` · ${Math.floor(reserves.shieldReserve)}/${Math.round(reserves.shieldMax)} shield · Shift+3 bank`
+            : `${count}/2 twins`;
         ui.trapHudSub.classList.remove("hidden", "metal");
       }
     } else if (showTrap) {
@@ -657,17 +663,16 @@ export function updateHud(game) {
     }
   }
   ui.teamBars.innerHTML = (() => {
-    const real = game.fighters.filter((f) => !f.illusion && !f.combatClone
+    const real = game.fighters.filter((f) => !f.illusion
+      && (!f.combatClone || (f.cloneVariant === "shadow-clone" && f.team !== player.team))
       && (!f.disguiseProp || f.team === player.team));
     const shown = game.mode === "survival"
       ? real.filter((f) => f.team === 0 || (!f.survivalSwarm && f.team === 1))
       : real;
     const bars = shown.map((fighter) => {
       // Illusionists see real HP; everyone else can be gaslit by phantom damage.
-      const showHp = player?.illusionist
-        ? Math.max(0, fighter.hp || 0)
-        : Math.max(0, (fighter.hp || 0) - (fighter.phantomDamage || 0));
-      const pct = fighter.maxHp > 0 ? (showHp / fighter.maxHp) * 100 : 0;
+      const showHp = displayedHp(fighter, player);
+      const pct = (showHp / displayedMaxHp(fighter, player)) * 100;
       return `
     <div class="fighter-bar" style="opacity:${fighter.dead ? .38 : 1}">
       <b style="color:${fighter.color}">${escapeHtml(fighter.name)}</b>
@@ -1409,16 +1414,18 @@ function modifierMarkup(gear) {
           "<span>Extension · press 3 to spawn</span>",
           gear.split ? `<span class="stat-up">Real twin · ${SPLIT_TWIN_HP} HP while uncontrolled</span>`
             : `<span class="stat-up">${SHADOW_CLONE_HP_BUDGET} HP budget divided among living shadows</span>`,
-          `<span>Max ${cloneMaxActive({ shadowCloneGear: !!gear.shadowClone })} alive · ${cooldown}s spawn cooldown</span>`,
+          `<span>Max ${cloneMaxActive({ shadowCloneGear: !!gear.shadowClone })} alive · ${cooldown ? `${cooldown}s spawn cooldown` : "no spawn cooldown"}</span>`,
           gear.shadowClone
             ? "<span class=\"stat-down\">Shadow hits hurt you; direct hits on you hurt all shadows</span>"
             : `<span class="stat-up">H cycles bodies · ${SPLIT_SWITCH_COOLDOWN}s switch cooldown</span>`,
           gear.split
             ? `<span>Stored player HP follows you · minimum ${SPLIT_SWITCH_MIN_HP} on switch</span>`
-            : "<span>Full weapon damage · independent buffs/debuffs · Shift+3 merges newest shadow back</span>",
+            : "<span>Full damage · independent effects · Shift+3 banks newest shadow's HP/shield</span>",
           gear.split
             ? `<span>Left body keeps pre-switch HP, capped at ${SPLIT_TWIN_HP}</span>`
-            : "",
+            : "<span class=\"stat-down\">-100 owner max HP (scaled in Classic) · enemies see no clone labels</span>"
+              + "<span>Shield pool: half your strongest shield · HP/shield recharge in 5s/2.5s</span>"
+              + "<span>Occupied capacity recharges at half speed · only spawning redistributes</span>",
           "<span>Persistent until killed · dies with you</span>"
         ].join("");
       }

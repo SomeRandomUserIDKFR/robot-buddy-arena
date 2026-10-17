@@ -215,6 +215,9 @@ function placePoint(fighter, w, h) {
  */
 export function displayedHp(fighter, viewer = null) {
   if (!fighter) return 0;
+  if (fighter.cloneVariant === "shadow-clone" && viewer && viewer.team !== fighter.team) {
+    return displayedHp(fighter.cloneOwner, viewer);
+  }
   // Decoys show their fake pool so hits look like real chip damage.
   if (isIllusionFighter(fighter)) {
     return Math.max(0, fighter.illusionFakeHp ?? fighter.hp ?? 0);
@@ -228,6 +231,9 @@ export function displayedHp(fighter, viewer = null) {
 /** Fake max HP used for decoy bars (falls back to real maxHp). */
 export function displayedMaxHp(fighter, viewer = null) {
   if (!fighter) return 1;
+  if (fighter.cloneVariant === "shadow-clone" && viewer && viewer.team !== fighter.team) {
+    return displayedMaxHp(fighter.cloneOwner, viewer);
+  }
   if (isIllusionFighter(fighter)) {
     return Math.max(1, fighter.illusionFakeMaxHp ?? fighter.maxHp ?? 1);
   }

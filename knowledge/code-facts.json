@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-16T00:59:20.729Z",
+  "generatedAt": "2026-10-17T02:26:02.062Z",
   "allowlist": [
     "config.js",
     "equipment.js",
@@ -13,7 +13,7 @@
     "perks.js",
     "power.js"
   ],
-  "contentHash": "e2f5fb9618b2c960",
+  "contentHash": "88526ff6a184495f",
   "entries": [
     {
       "id": "code-config-ceiling",
@@ -486,7 +486,7 @@
         "cooldown",
         "shadow clone cooldown"
       ],
-      "text": "combat-clone.js: SHADOW_CLONE_COOLDOWN = 2"
+      "text": "combat-clone.js: SHADOW_CLONE_COOLDOWN = 0"
     },
     {
       "id": "code-combat-clone-shadow_clone_hp_budget",
@@ -504,6 +504,21 @@
       "text": "combat-clone.js: SHADOW_CLONE_HP_BUDGET = 100"
     },
     {
+      "id": "code-combat-clone-shadow_clone_hp_regen",
+      "source": "combat-clone.js",
+      "name": "SHADOW_CLONE_HP_REGEN",
+      "topic": "equipment",
+      "aliases": [
+        "shadow_clone_hp_regen",
+        "shadow",
+        "clone",
+        "hp",
+        "regen",
+        "shadow clone hp regen"
+      ],
+      "text": "combat-clone.js: SHADOW_CLONE_HP_REGEN = 20"
+    },
+    {
       "id": "code-combat-clone-shadow_clone_max_active",
       "source": "combat-clone.js",
       "name": "SHADOW_CLONE_MAX_ACTIVE",
@@ -517,6 +532,22 @@
         "shadow clone max active"
       ],
       "text": "combat-clone.js: SHADOW_CLONE_MAX_ACTIVE = 10"
+    },
+    {
+      "id": "code-combat-clone-shadow_clone_shield_regen_seconds",
+      "source": "combat-clone.js",
+      "name": "SHADOW_CLONE_SHIELD_REGEN_SECONDS",
+      "topic": "equipment",
+      "aliases": [
+        "shadow_clone_shield_regen_seconds",
+        "shadow",
+        "clone",
+        "shield",
+        "regen",
+        "seconds",
+        "shadow clone shield regen seconds"
+      ],
+      "text": "combat-clone.js: SHADOW_CLONE_SHIELD_REGEN_SECONDS = 2.5"
     },
     {
       "id": "code-combat-clone-split_switch_cooldown",

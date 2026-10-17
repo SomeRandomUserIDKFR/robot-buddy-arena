@@ -511,7 +511,7 @@ function update(dt) {
   }
   tickTrapperWorld(game, dt, trapPrevY);
   tickIllusionistWorld(game, dt);
-  tickCombatCloneWorld(game);
+  tickCombatCloneWorld(game, dt);
   stepBullets(game, dt);
   stepThrownProps(game, dt);
   tickToolProjectiles(game, dt);

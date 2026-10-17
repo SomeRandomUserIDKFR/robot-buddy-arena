@@ -79,7 +79,7 @@ npm run smoke:analyzer
 - **F** — deploy/retract **Retractable Armor** or **Retractable Shell** (separate armor HP pool; ~10% slower while on; morph style follows Settings → Visual)
 - **E** — cycle **Mechanical Modularity** modes (Sword → Shield → Pulse Rifle) with a short morph animation; cannot attack mid-morph
 - **3** — use the equipped Extension, including Doppel, Shadow Clone, Split, or Disguise
-- **Shift+3** — with Shadow Clone, dismiss the newest living shadow and merge remaining HP into survivors
+- **Shift+3** — with Shadow Clone, dismiss the newest living shadow and bank its remaining HP/shield
 - **H** — with **Split**, cycle control between living bodies (3s cooldown)
 - **Mouse** — aim
 - **Left mouse button** — fire gun / swing saber
@@ -94,18 +94,33 @@ Both are shop-unlocked Extension tools, available to the player and buddy
 shadows or two Split twins can live at once. They do not spawn more twins or keep a lost match alive,
 and disappear when their owner dies.
 
-- **Shadow Clone (280¢):** **2s** spawn cooldown, **10** living shadows maximum.
-  Shadows share a **100-HP maximum budget**, including in Classic mode; the
-  owner's health is separate. One shadow starts at 100 HP, two have 50 max HP
-  each, three about 33.3, and ten 10. Spawning evenly redistributes the living
-  shadows' remaining HP and divides their maximum HP without adding health.
-  For example, 80 remaining HP becomes two 40-HP shadows with 50 max HP each.
-  A death raises survivors' max HP without healing them. If none survive, the
-  next shadow starts a fresh 100-HP budget.
-  **Shift+3** dismisses the newest living shadow and evenly merges the group's
-  remaining HP into survivors. This never heals/damages you or changes the spawn
-  cooldown. Dismissing the last shadow leaves none; its HP is discarded. Held
-  props are dropped, and buffs/debuffs are not transferred.
+- **Shadow Clone (280¢):** **no spawn cooldown**, **10** living shadows maximum,
+  and **-100 owner max HP** (-20 in Classic, following normal health scaling).
+  Persistent banks start with **100 HP** (also in Classic) and shield durability
+  equal to **half your strongest shield's maximum**. Mechanical Modularity uses
+  the stronger of the dedicated shield and weapon plate, not their sum; shadows
+  use one durability allocation across both modes.
+  Each shadow's maximum is always **100 / living count HP** and
+  **full shield pool / living count**, regardless of current bank contents.
+  Only spawning combines banked resources with all living shadows' current
+  resources, caps each total at its full pool capacity, discards any excess,
+  and redistributes evenly. Both banks are then emptied. For example, 80 HP
+  available becomes two shadows at 40/50. A death raises survivors' maximums
+  without healing them; a wipe never resets the bank, and spawning requires
+  some available HP.
+  Banks regenerate without adding HP/shield to living clones. Empty capacity
+  recharges at **20 HP/sec** and **40% shield pool/sec**, filling empty banks
+  in **5s/2.5s** when nothing is deployed. Capacity still held by living clones
+  recharges at **half speed**. With 90 HP deployed and an empty bank, the first
+  10 HP takes 0.5s, then the other 90 takes 9s. Banks can refill fully alongside
+  living clones; spawning still caps the redistributed total. Pausing freezes recharge.
+  **Shift+3** dismisses the newest living shadow and returns only its remaining
+  HP/shield to the banks, capped at their capacities. Survivors keep their current
+  amounts and gain maximum capacity. This never heals/damages you. Held props
+  are dropped, and buffs/debuffs are not transferred.
+  Only the owner and teammates see clone labels and actual clone health bars.
+  Enemies see matching owner health bars, armor appearance, and no clone-only
+  labels; equipping Shadow Clone does not reveal an enemy's shadows.
   Actual HP lost by a shadow transfers **only to the owner**, not siblings.
   Direct HP damage to the owner hits **all shadows**; clone-transferred damage
   never loops back. Shields and dodges prevent transfer when no HP is lost;

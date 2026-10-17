@@ -1402,7 +1402,9 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
   for (const enemy of game.fighters) {
     if (!enemy || enemy.dead || enemy.disguiseProp || enemy.team === fighter.team || enemy === fighter) continue;
     const d = dist(fighter, enemy);
-    const weight = (isIllusionFighter(enemy) || isCombatClone(enemy)) ? d + 80 : d;
+    const knownSummon = isIllusionFighter(enemy)
+      || (isCombatClone(enemy) && enemy.cloneVariant !== "shadow-clone");
+    const weight = knownSummon ? d + 80 : d;
     if (weight < best) {
       best = weight;
       target = enemy;
