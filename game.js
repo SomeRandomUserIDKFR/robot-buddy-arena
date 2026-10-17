@@ -9,7 +9,7 @@ import {
   SPLIT_SWITCH_KEY, tryCombatCloneSpawn, tryDismissShadowClone, trySplitSwitch
 } from "./combat-clone.js";
 import {
-  cycleIllusionistType, cycleIllusionPropKind, isIllusionFighter, isIllusionist,
+  cycleIllusionistType, cycleIllusionPropKind, isDecoyProjector, isIllusionFighter, isIllusionist,
   isRealCombatant,
   refreshIllusionCaches, tickIllusionistWorld, tryIllusionistPlant
 } from "./illusionist.js";
@@ -675,7 +675,7 @@ function handleKeyDown(event) {
     const player = game.fighters[0];
     if (event.shiftKey && player.shadowCloneGear) tryDismissShadowClone(player, game);
     else if (isDisguiseGear(player)) tryDisguise(player, game);
-    else if (isIllusionist(player)) tryIllusionistPlant(player, game, Fighter);
+    else if (isDecoyProjector(player)) tryIllusionistPlant(player, game, Fighter);
     else if (isCombatCloneGear(player)) tryCombatCloneSpawn(player, game, Fighter);
     else if (isTrapper(player)) tryTrapperPlant(player, game);
     else if (isLightCondensation(player)) tryLightCondensation(player, game);

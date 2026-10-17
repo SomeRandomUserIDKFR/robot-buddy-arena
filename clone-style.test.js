@@ -7,9 +7,10 @@ import {
 } from "./equipment.js";
 import { createCombatClone, SHADOW_CLONE_ID, SPLIT_ID } from "./combat-clone.js";
 import { createFighterIllusion } from "./illusionist.js";
-import { updateAI, updateAIImitation } from "./ai.js";
+import { AI_SEARCH_MEMORY_SECONDS, updateAI, updateAIImitation } from "./ai.js";
 import { migrateProfile } from "./storage.js";
 import { ensureCampaignProfile } from "./campaign.js";
+import { createPowerCrate } from "./powerups.js";
 import {
   CLONE_STYLE_ACTIONS, CLONE_STYLE_MAX_COMBOS, CLONE_STYLE_MAX_CONTEXTS,
   cloneActionChance, cloneStyleNotes, cloneStyleSituation, ensureCloneStyle,
@@ -34,7 +35,8 @@ function fixture(extension = "doppel", loadout = {}) {
     recordCloneStyle(owner, { mx: 0, ...intent }, dt, game, profile, [enemy]);
   };
   const spawn = () => {
-    const clone = extension === "illusionist" ? createFighterIllusion(owner, Fighter) : createCombatClone(owner, Fighter);
+    const clone = ["illusionist", "hologram"].includes(extension)
+      ? createFighterIllusion(owner, Fighter) : createCombatClone(owner, Fighter);
     clone.x = owner.x;
     clone.y = owner.y;
     clone.grounded = true;
@@ -48,6 +50,64 @@ function fixture(extension = "doppel", loadout = {}) {
 assert.equal(normalizeCloneBehavior(undefined), "imitation");
 assert.equal(normalizeCloneBehavior("generic"), "generic");
 assert.equal(normalizeCloneBehavior("invalid"), "imitation");
+
+for (const extension of ["doppel", SHADOW_CLONE_ID, SPLIT_ID, "illusionist", "hologram"]) {
+  for (const optimize of [true, false]) {
+    for (const movement of [1, -1, 0]) {
+      const { enemy, game, profile, sample, spawn } = fixture(extension);
+      game.settings.gameplay.optimizeIllusions = optimize;
+      for (let i = 0; i < 20; i++) sample({ mx: movement });
+      const clone = spawn();
+      clone.facing = -1;
+      updateAI(clone, .1, game, profile);
+      const lastKnown = { ...clone.aiState.lastKnown };
+      enemy.x = 5000;
+      enemy.y = 100;
+      clone.aiState.timer = 0;
+      updateAI(clone, .1, game, profile);
+      assert.equal(clone.aiState.target, null);
+      assert.equal(clone.aiState.mx, movement,
+        `${extension}, Optimize ${optimize}: remembered-point search preserves toward/away/still habits`);
+      assert.equal(clone.aiState.plan, "searching last sighting (owner habits)");
+      assert.equal(clone.aiState.desiredAim, 0, "search aim uses the unchanged last-seen point");
+      assert.deepEqual(clone.aiState.lastKnown, lastKnown);
+      assert.equal(clone.aiState.attack, false);
+      assert.equal(clone.aiState.jump, false, "search cannot invent unlearned jumps");
+      assert.equal(clone.aiState.jetHeld, false, "search cannot invent unlearned jet use");
+      assert.equal(clone.aiState.dodge, false, "search cannot invent unlearned dodges");
+      const x = clone.x;
+      clone.x = lastKnown.x - 20;
+      updateAI(clone, .1, game, profile);
+      assert.equal(clone.aiState.mx, movement, "search does not replace learned movement near the remembered point");
+      clone.x = x;
+      clone.aiState.timer = 0;
+      updateAI(clone, AI_SEARCH_MEMORY_SECONDS, game, profile);
+      assert.doesNotMatch(clone.aiState.plan, /searching last sighting/);
+      assert.deepEqual(clone.aiState.lastKnown, lastKnown);
+      enemy.x = 650;
+      enemy.y = 700;
+      clone.aiState.timer = 0;
+      updateAI(clone, .1, game, profile);
+      assert.equal(clone.aiState.target, enemy);
+      assert.equal(clone.aiState.lastKnown.x, 650);
+      assert.equal(clone.aiState.stale, 0);
+    }
+  }
+}
+
+{
+  const { enemy, game, profile, spawn } = fixture();
+  const clone = spawn();
+  updateAI(clone, .1, game, profile);
+  enemy.x = 5000;
+  game.powerCrates = [createPowerCrate({ x: clone.x + 100, y: 742 }, "yard", "yard")];
+  clone.aiState.timer = 0;
+  updateAI(clone, .1, game, profile);
+  assert.ok(clone.aiState.lastKnown);
+  assert.equal(clone.aiState.target, null);
+  assert.equal(clone.aiState.mx, 0, "fresh Normal profiles do not receive automatic search movement");
+  assert.equal(clone.aiState.attack, false, "Normal does not inherit automatic Generic crate looting");
+}
 
 {
   const { owner, profile, sample } = fixture();
@@ -104,7 +164,7 @@ assert.equal(normalizeCloneBehavior("invalid"), "imitation");
   assert.equal(JSON.stringify(profile.cloneStyle), before, "clones never train their owner's profile");
 }
 
-for (const extension of ["doppel", SHADOW_CLONE_ID, SPLIT_ID, "illusionist"]) {
+for (const extension of ["doppel", SHADOW_CLONE_ID, SPLIT_ID, "illusionist", "hologram"]) {
   for (const optimizeIllusions of [true, false]) {
     const { owner, enemy, game, profile, sample, spawn } = fixture(extension);
     const clone = spawn();
@@ -132,6 +192,7 @@ for (const extension of ["doppel", SHADOW_CLONE_ID, SPLIT_ID, "illusionist"]) {
     clone.aiState.timer = 0;
     updateAIImitation(clone, .1, game, () => .5);
     assert.equal(clone.aiState.target, null, "learned patterns do not grant hidden enemy knowledge");
+    assert.equal(clone.aiState.attack, true, "search retains learned blind firing instead of adding a tactical correction");
     const before = JSON.stringify(profile.cloneStyle);
     recordCloneStyle(clone, clone.aiState, .1, game, profile, []);
     assert.equal(JSON.stringify(profile.cloneStyle), before);
@@ -248,7 +309,7 @@ for (const extension of ["doppel", SHADOW_CLONE_ID, SPLIT_ID, "illusionist"]) {
   assert.ok(huge.cloneStyle.combos.length <= CLONE_STYLE_MAX_COMBOS);
 }
 
-for (const id of ["doppel", SHADOW_CLONE_ID, SPLIT_ID, "illusionist"]) {
+for (const id of ["doppel", SHADOW_CLONE_ID, SPLIT_ID, "illusionist", "hologram"]) {
   const profile = migrateProfile(structuredClone(DEFAULT_PROFILE));
   profile.cyber = 10000;
   assert.equal(setCloneBehavior(profile, "player", "generic"), false, "variants require the base Extension");

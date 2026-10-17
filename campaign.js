@@ -57,7 +57,7 @@ export const CAMPAIGN_STAGES = Object.freeze([
         jetpack: "sprinter-pack", shield: "no-shield"
       })
     }),
-    shopAdds: Object.freeze(["guard-helm", "endurance-pack", "light-buckler"])
+    shopAdds: Object.freeze(["guard-helm", "endurance-pack", "light-buckler", "hologram"])
   }),
   Object.freeze({
     id: "c2-gridlock",

@@ -6,7 +6,7 @@ import {
 } from "./equipment.js";
 import { isCombatClone } from "./combat-clone.js";
 import {
-  displayedHp, displayedMaxHp, hasIllusionTruthSight, isIllusionFighter
+  displayedHp, displayedMaxHp, hasIllusionTruthSight, hologramOpacity, isIllusionFighter
 } from "./illusionist.js";
 import { normalizeModularMorphStyle, optimizeIllusionsEnabled } from "./settings.js";
 import { platformsOf } from "./maps.js";
@@ -1022,7 +1022,16 @@ export function createRenderer(canvas) {
     for (const fighter of game.fighters) {
       // Allies always; enemies (including training buddy spar) need team sight.
       if (fighterVisibleToViewer(game, player, fighter)) {
-        drawFighter(game, fighter, player, viewerTruth, winningTeam, optimizeIllusions);
+        const actor = fighter.hologram && fighter.dead
+          ? { ...fighter, dead: false, iframe: 0 } : fighter;
+        context.save();
+        if (fighter.hologram && fighter.dead) context.filter = `opacity(${hologramOpacity(fighter)})`;
+        drawFighter(game, actor, player, viewerTruth, winningTeam, optimizeIllusions);
+        if (fighter.hologram) {
+          drawHeldToolPickup(actor);
+          drawHookAnchorCable(actor);
+        }
+        context.restore();
       }
     }
     // Held breakables sit on the hand — draw after the body so they read on top.
@@ -1030,19 +1039,24 @@ export function createRenderer(canvas) {
       if (!fighterVisibleToViewer(game, player, fighter)) continue;
       const held = fighter.heldProp;
       if (!held || held.destroyed) continue;
+      context.save();
+      if (fighter.hologram && fighter.dead) context.filter = `opacity(${hologramOpacity(fighter)})`;
       if (held.powerCrate || held.kind === "powerCrate") drawMetalPowerCrate(held);
       else drawPropBody(held, 1);
       if (held.canopy) drawCanopy(held, 0.85);
+      context.restore();
     }
     for (const fighter of game.fighters) {
       if (!fighterVisibleToViewer(game, player, fighter)) continue;
       if (fighter.disguiseProp) continue;
+      if (fighter.hologram) continue;
       drawHeldToolPickup(fighter);
       drawHookAnchorCable(fighter);
     }
     drawHookDragCables(game);
     drawProps(game, 1, true);
     drawPings(game);
+    drawIllusionSpawnSmoke(game, player);
     context.restore();
     drawVisionArrows(game, playerCenter);
   }
@@ -1923,18 +1937,20 @@ export function createRenderer(canvas) {
     const clone = isCombatClone(fighter);
     const shadowOwner = fighter.cloneVariant === "shadow-clone" ? fighter.cloneOwner : null;
     const hiddenShadow = shadowOwner && viewer && viewer.team !== fighter.team;
-    const visualFighter = shadowOwner ? { ...fighter, buddy: shadowOwner.buddy } : fighter;
-    const leanSummon = optimizeIllusions && (decoy || (clone && !shadowOwner));
+    const appearanceOwner = fighter.hologram ? fighter.illusionOwner : shadowOwner;
+    const visualFighter = appearanceOwner ? { ...fighter, buddy: appearanceOwner.buddy } : fighter;
+    const leanSummon = !fighter.hologram && optimizeIllusions && (decoy || (clone && !shadowOwner));
     context.save();
     if (fighter.dead) context.globalAlpha = .45;
-    if (fighter.buddy && (!fighter.shadowCloneGear || viewer?.team === fighter.team)) {
+    if ((fighter.hologram ? appearanceOwner.buddy : fighter.buddy)
+      && (!fighter.shadowCloneGear || viewer?.team === fighter.team)) {
       context.shadowColor = "#39efff";
       context.shadowBlur = 14;
       context.strokeStyle = "#4df2ff";
       context.lineWidth = 4;
       context.strokeRect(fighter.x - 3, fighter.y - 3, SIZE + 6, SIZE + 6);
     }
-    if (truth && decoy && !fighter.dead) {
+    if (truth && decoy && !fighter.hologram && !fighter.dead) {
       context.strokeStyle = "rgba(210,180,255,.95)";
       context.lineWidth = 2.5;
       context.setLineDash([6, 4]);
@@ -1988,10 +2004,10 @@ export function createRenderer(canvas) {
     // Optimized summons skip heavy armor plate flair — silhouette + gun is enough.
     if (!leanSummon) {
       drawRetractableArmorPlates(
-        context, game, shadowOwner || fighter, centerX, centerY, fighter.dead ? .45 : 1
+        context, game, appearanceOwner || fighter, centerX, centerY, fighter.dead ? .45 : 1
       );
       drawNanotechChestplateArmor(
-        context, game, shadowOwner || fighter, centerX, centerY, fighter.dead ? .45 : 1
+        context, game, appearanceOwner || fighter, centerX, centerY, fighter.dead ? .45 : 1
       );
     }
     context.fillStyle = "#071016";
@@ -2084,7 +2100,7 @@ export function createRenderer(canvas) {
     context.fillRect(fighter.x, fighter.y - 5, SIZE, 3);
     context.fillStyle = fighter.jetLocked ? "#ff5e56" : "#ffd64a";
     context.fillRect(fighter.x, fighter.y - 5, SIZE * fighter.fuel, 3);
-    const barShield = hiddenShadow ? shadowOwner : fighter;
+    const barShield = fighter.hologram ? appearanceOwner : hiddenShadow ? shadowOwner : fighter;
     if ((barShield.shieldMaxDurability || 0) > 0) {
       context.fillStyle = "#24343c";
       context.fillRect(fighter.x, fighter.y - 19, SIZE, 3);
@@ -3018,6 +3034,38 @@ export function createRenderer(canvas) {
       context.moveTo(bullet.x - bullet.vx * trail, bullet.y - bullet.vy * trail);
       context.lineTo(bullet.x, bullet.y);
       context.stroke();
+      context.restore();
+    }
+  }
+
+  function drawIllusionSpawnSmoke(game, player) {
+    for (const effect of game.effects) {
+      if (effect.type !== "illusionSpawnSmoke" || effect.life <= 0) continue;
+      const point = { x: effect.x - SIZE / 2, y: effect.y - SIZE / 2 };
+      if (effect.team !== player.team && !visibleToTeam(game, player, point)) continue;
+      const u = 1 - clamp(effect.life / effect.maxLife, 0, 1);
+      const radius = effect.radius * (1 + u * .35);
+      const fade = (1 - u) ** 1.4;
+      context.save();
+      context.globalAlpha = fade;
+      const mist = context.createRadialGradient(effect.x, effect.y, 0,
+        effect.x, effect.y, radius);
+      mist.addColorStop(0, "rgba(205,215,225,.98)");
+      mist.addColorStop(.65, "rgba(170,188,204,.95)");
+      mist.addColorStop(1, "rgba(150,170,190,0)");
+      context.fillStyle = mist;
+      context.beginPath();
+      context.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+      context.fill();
+      for (let i = 0; i < 9; i++) {
+        const angle = effect.seed + i * Math.PI * 2 / 9 + u * .7;
+        const x = effect.x + Math.cos(angle) * radius * .48;
+        const y = effect.y + Math.sin(angle) * radius * .4 - u * 15;
+        context.fillStyle = i % 2 ? "rgba(185,201,215,.75)" : "rgba(215,225,234,.8)";
+        context.beginPath();
+        context.arc(x, y, radius * (.35 + (i % 3) * .04), 0, Math.PI * 2);
+        context.fill();
+      }
       context.restore();
     }
   }

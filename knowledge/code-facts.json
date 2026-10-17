@@ -1,20 +1,22 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-17T03:34:21.316Z",
+  "generatedAt": "2026-10-17T19:08:26.697Z",
   "allowlist": [
     "config.js",
     "equipment.js",
     "combat-clone.js",
     "clone-style.js",
+    "ai-perception.js",
     "disguise.js",
     "illusionist.js",
+    "hologram.js",
     "powerups.js",
     "conquest.js",
     "maps.js",
     "perks.js",
     "power.js"
   ],
-  "contentHash": "16d5406aad6d8a4c",
+  "contentHash": "bd18f831a1059dee",
   "entries": [
     {
       "id": "code-config-ceiling",
@@ -950,6 +952,19 @@
       "text": "equipment.js: GEAR_BY_ID = Object.fromEntries(GEAR.map((gear) => [gear.id, gear]))"
     },
     {
+      "id": "code-equipment-hologram_id",
+      "source": "equipment.js",
+      "name": "HOLOGRAM_ID",
+      "topic": "equipment",
+      "aliases": [
+        "hologram_id",
+        "hologram",
+        "id",
+        "hologram id"
+      ],
+      "text": "equipment.js: HOLOGRAM_ID = \"hologram\""
+    },
+    {
       "id": "code-equipment-illusionist_id",
       "source": "equipment.js",
       "name": "ILLUSIONIST_ID",
@@ -1577,6 +1592,73 @@
       "text": "equipment.js: TRAPPER_ID = \"trapper\""
     },
     {
+      "id": "code-hologram-hologram_cooldown",
+      "source": "hologram.js",
+      "name": "HOLOGRAM_COOLDOWN",
+      "topic": "code",
+      "aliases": [
+        "hologram_cooldown",
+        "hologram",
+        "cooldown",
+        "hologram cooldown"
+      ],
+      "text": "hologram.js: HOLOGRAM_COOLDOWN = 2.5"
+    },
+    {
+      "id": "code-hologram-hologram_fade_seconds",
+      "source": "hologram.js",
+      "name": "HOLOGRAM_FADE_SECONDS",
+      "topic": "code",
+      "aliases": [
+        "hologram_fade_seconds",
+        "hologram",
+        "fade",
+        "seconds",
+        "hologram fade seconds"
+      ],
+      "text": "hologram.js: HOLOGRAM_FADE_SECONDS = .35"
+    },
+    {
+      "id": "code-hologram-hologram_id",
+      "source": "hologram.js",
+      "name": "HOLOGRAM_ID",
+      "topic": "code",
+      "aliases": [
+        "hologram_id",
+        "hologram",
+        "id",
+        "hologram id"
+      ],
+      "text": "hologram.js: HOLOGRAM_ID = \"hologram\""
+    },
+    {
+      "id": "code-hologram-hologram_life",
+      "source": "hologram.js",
+      "name": "HOLOGRAM_LIFE",
+      "topic": "code",
+      "aliases": [
+        "hologram_life",
+        "hologram",
+        "life",
+        "hologram life"
+      ],
+      "text": "hologram.js: HOLOGRAM_LIFE = 15"
+    },
+    {
+      "id": "code-hologram-hologram_max_active",
+      "source": "hologram.js",
+      "name": "HOLOGRAM_MAX_ACTIVE",
+      "topic": "code",
+      "aliases": [
+        "hologram_max_active",
+        "hologram",
+        "max",
+        "active",
+        "hologram max active"
+      ],
+      "text": "hologram.js: HOLOGRAM_MAX_ACTIVE = 2"
+    },
+    {
       "id": "code-illusionist-illusion_break_life",
       "source": "illusionist.js",
       "name": "ILLUSION_BREAK_LIFE",
@@ -1729,6 +1811,21 @@
         "illusion prop w"
       ],
       "text": "illusionist.js: ILLUSION_PROP_W = 44"
+    },
+    {
+      "id": "code-illusionist-illusion_spawn_smoke_life",
+      "source": "illusionist.js",
+      "name": "ILLUSION_SPAWN_SMOKE_LIFE",
+      "topic": "equipment",
+      "aliases": [
+        "illusion_spawn_smoke_life",
+        "illusion",
+        "spawn",
+        "smoke",
+        "life",
+        "illusion spawn smoke life"
+      ],
+      "text": "illusionist.js: ILLUSION_SPAWN_SMOKE_LIFE = 0.65"
     },
     {
       "id": "code-illusionist-illusion_types",

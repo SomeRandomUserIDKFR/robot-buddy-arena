@@ -52,6 +52,7 @@ npm run smoke:analyzer
 - `powerups.js` — metal power-up crates, buff award/tick, sight-aware spawn/respawn
 - `equipment.js` — gear catalog, loadouts, Cyber economy, rewards, purchases, and buddy gear decisions
 - `clone-style.js` — bounded owner-input learning, contextual habits, coarse combo patterns, and clone behavior variants
+- `ai-perception.js` — sight-limited lookalike tracking and phantom-health decisions
 - `power.js` — unified Power (danger estimate) from gear, perks, and AI / training
 - `conquest.js` — Ranking leagues, opponent encounter generation (includes mapId), Power via `power.js`, reroll rules
 - `perks.js` — perk catalog, Conquest EXP / levels, unlock picks, and buddy perk autonomy
@@ -174,9 +175,25 @@ player; it cannot locate or follow an unseen enemy's live coordinates. The full
 AI may search a remembered last-seen position without updating it through fog.
 Optimization changes AI/detail costs, not sight or shared team vision.
 
+All Doppel, Shadow, Split, Hologram and Illusionist fighter brains retain their own
+last-seen snapshots for up to six seconds. When sight is lost, they search from
+that fixed observation rather than following an unseen fighter's current
+position. A fresh sighting replaces the snapshot and restarts the timer; spawn
+smoke still clears it when it breaks a track.
+
+Generic summons walk toward the remembered location, using their usual
+navigation, and do not shoot a remembered enemy as though it were visible.
+Like normal AI, they can instead investigate and shoot currently visible power
+crates when no foe is visible. Normal imitation summons aim/search relative to
+their remembered point but move only according to learned toward/away/still
+habits; searching never adds unlearned jumps, jet use or dodges. Learned blind
+firing remains possible. No-data Normal clones still have no Generic fallback,
+and Normal does not gain the Generic crate-looting policy. Both behavior
+variants search with Optimize illusions enabled or disabled.
+
 ### Normal imitation and included Generic variants
 
-Buying **Doppel, Shadow Clone, Split, or Illusionist** unlocks both behavior
+Buying **Doppel, Shadow Clone, Split, Hologram, or Illusionist** unlocks both behavior
 variants at the normal price, including for existing owners. Select **Normal -
 Imitation** or **Generic - Included** beneath the equipped Extension in the
 Equipment Bay, or on the Campaign kit panel. This is a per-loadout setting
@@ -218,6 +235,61 @@ it waits for evidence. Use the included Generic option for the original tactical
 brain immediately. Generic retains the prior optimized/full-AI paths; Normal's
 imitation rules are the same with Optimize illusions on or off.
 
+### Illusionist deception against AI
+
+Ordinary AI cannot inspect a hidden real/decoy flag to pick the owner. It can
+keep tracking an already observed body while lookalikes stay separate, but
+overlap or crossing paths can break that continuity, including crossings between
+reaction ticks. Training improves the chance of retaining a track; even trained
+bots can be confused. A continuous overlap does not reroll identity every tick.
+Losing sight drops live identity tracking; searching a remembered location does
+not reveal unseen coordinates.
+
+Successful fighter casts produce a 0.65-second foreground smoke puff covering
+the caster and new decoy. Observing ordinary enemy AI that was tracking the
+caster immediately loses that target, last-known identity and pending aim/fire
+lock, then reacquires normally. It may pick the caster again, but cannot retain
+the original identity through the spawn. Truth sight, allied/human observers,
+unrelated targets and unseen casts are unaffected. Prop/platform casts and failed
+casts produce no spawn smoke or tracking reset. Smoke grants no invulnerability,
+collision or mechanical LOS/projectile blocking.
+
+On an uncertain acquisition or a confused track, aggressive/Rusher bots choose
+randomly among visually matching bodies. Defender, Coverer, Support and cautious
+mind presets favor closer candidates without always choosing the nearest. These
+rules apply to full AI, lightweight summons and Normal imitation, with either
+Optimize illusions setting. They do not add tactical action overrides to Normal.
+
+Phantom HP now affects AI health judgments: retreat and threat assessment,
+equipment-use thresholds, tactical hurt contexts, support decisions and
+finishing-target priority. Owner-style recording also uses apparent health.
+Actual HP, death, damage links, healing amounts, resource costs, rewards and
+real-damage learning evidence are unchanged. Apparent health recovers with the
+existing phantom decay. Illusionist truth sight reads real HP and can identify
+ordinary Illusionist fighters; it cannot identify Holograms or Shadows by hidden metadata.
+Prices, illusion caps, cooldowns, hit budgets and lifetimes are unchanged.
+
+## Hologram
+
+**Hologram (100 Cyber)** is a fighter-only Extension. Press **3** to project a
+lookalike with your kit and appearance, including against Illusionist truth
+sight. It has no identifying outline or simplified optimized model, grants no
+truth sight, and produces no spawn smoke or automatic target-track reset.
+Cooldown is **2.5 seconds**, with **two active** and a **15-second lifetime**.
+Campaign opens it in the first stage shop.
+
+The first incoming hit stops it immediately, then its live-looking body fades
+with smoothstep easing over **0.35 seconds** before removal. Incoming projectiles
+continue visibly and can hit the real fighter behind it. It does not block
+fighters, projectiles or sight. Its shots, swings, spells and tool attacks are
+cosmetic: no real/phantom damage, knockback, status effects, cover damage, crate
+rewards, shield theft, debris consumption or real pickups. Cosmetic shots pass
+through targets and cover. Fading holograms cannot act or supply vision and do
+not count toward victory.
+
+Normal owner imitation and the free Generic variant both share ordinary summon
+sight/search rules; Normal still adds no unlearned movement or dodge habits.
+
 ## Disguise
 
 **Disguise (240¢)** is an Extension. Press **3** within **100 units** of a real
@@ -246,13 +318,14 @@ HP (36 in Classic mode), suppressing weapon/shield use while hidden even with a
 close foe. Healthy AI can disguise while repositioning and reveal for close
 combat. Campaign makes Disguise available alongside Illusionist.
 
-All eight usable Extensions have buddy/enemy AI behavior when equipped:
+All nine usable Extensions have buddy/enemy AI behavior when equipped:
 Reconjurer rebuilds or creates cover; Light Condensation scouts/blinds lanes;
 Trapper chooses bear traps for grounded foes, fake platforms for airborne foes,
 spring pads against close threats when hurt, signal tripwires for unseen tracked
 foes, and mines against clustered visible enemies. Illusionist uses combat decoys
 and false cover/ledges; Doppel and Shadow Clone add attackers during combat;
-Split maintains persistent teammates; Disguise conceals wounded fighters.
+Split maintains persistent teammates; Hologram projects harmless fighters;
+Disguise conceals wounded fighters.
 Ability cooldowns, costs, and active-object limits still apply.
 
 ## AI tactical experiments and deduction

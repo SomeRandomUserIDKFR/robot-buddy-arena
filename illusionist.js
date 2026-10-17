@@ -1,20 +1,33 @@
 /**
  * Illusionist — most expensive extension (key 3).
- * T cycles type (HUD); 3 plants. Strictly deception for everyone else: no cues,
- * no collision, no LOS block. Fighter decoys are AI clones with the same loadout;
+ * T cycles type (HUD); 3 plants. Fighter spawns make a smoke puff; illusions
+ * have no collision or LOS block. Fighter decoys clone the same loadout;
  * their attacks only gaslight (phantom HP). Real shots pass through illusions;
  * illusion shots vanish on impact.
  * Illusionists themselves have truth sight: outlined illusions, visible ghost
  * rounds, and real (non-phantom) enemy HP bars.
  */
 import { SIZE, WORLD } from "./config.js";
-import { applyLoadout, GEAR_BY_ID } from "./equipment.js";
+import {
+  applyAdaptiveCombatStats, applyLoadout, applyModularCombatStats, GEAR_BY_ID,
+  isAdaptiveNanotechWeapon, selectWeaponSlot
+} from "./equipment.js";
 import { createMapProp, MAP_PROP_KINDS } from "./maps.js";
 import { POWER_CRATE_SIZE } from "./powerups.js";
 import { clamp } from "./utils.js";
 import { bindCloneStyle } from "./clone-style.js";
+import { visibleToTeam } from "./vision.js";
+import { createIllusionHeldProp } from "./throw-breakable.js";
 
 export const ILLUSIONIST_ID = "illusionist";
+export {
+  HOLOGRAM_ID, HOLOGRAM_COOLDOWN, HOLOGRAM_MAX_ACTIVE, HOLOGRAM_LIFE,
+  HOLOGRAM_FADE_SECONDS, isHologram, isHologramGear, hologramOpacity
+} from "./hologram.js";
+import {
+  fadeHologram, HOLOGRAM_COOLDOWN, HOLOGRAM_FADE_SECONDS, HOLOGRAM_MAX_ACTIVE, HOLOGRAM_LIFE,
+  isHologram, isHologramGear
+} from "./hologram.js";
 
 export const ILLUSION_TYPES = Object.freeze(["fighter", "prop", "platform"]);
 /** Selection id for a metal power-crate illusion (bait). */
@@ -62,6 +75,7 @@ export const ILLUSION_PHANTOM_DAMAGE = 40;
 export const ILLUSION_PHANTOM_DECAY = 6;
 /** Swirling smoke dissolve when an illusion is broken / expires. */
 export const ILLUSION_BREAK_LIFE = 0.72;
+export const ILLUSION_SPAWN_SMOKE_LIFE = 0.65;
 
 export const ILLUSION_PLATFORM_W = 160;
 export const ILLUSION_PLATFORM_H = 26;
@@ -102,6 +116,10 @@ export function isIllusionFighter(fighter) {
   return !!fighter?.illusion;
 }
 
+export function isDecoyProjector(fighter) {
+  return !isHologram(fighter) && (isIllusionist(fighter) || isHologramGear(fighter));
+}
+
 /** Illusionists see through gaslight (ghost rounds, real HP, outlined fakes). */
 export function hasIllusionTruthSight(viewer) {
   return isIllusionist(viewer);
@@ -119,6 +137,7 @@ export function illusionTypeLabel(type) {
 }
 
 export function cycleIllusionistType(fighter) {
+  if (isHologramGear(fighter)) return "fighter";
   if (!isIllusionist(fighter)) return null;
   const cur = normalizeIllusionType(fighter.illusionistType);
   const idx = ILLUSION_TYPES.indexOf(cur);
@@ -216,6 +235,7 @@ function placePoint(fighter, w, h) {
  */
 export function displayedHp(fighter, viewer = null) {
   if (!fighter) return 0;
+  if (isHologram(fighter)) return displayedHp(fighter.illusionOwner, viewer);
   if (fighter.cloneVariant === "shadow-clone" && viewer && viewer.team !== fighter.team) {
     return displayedHp(fighter.cloneOwner, viewer);
   }
@@ -232,6 +252,7 @@ export function displayedHp(fighter, viewer = null) {
 /** Fake max HP used for decoy bars (falls back to real maxHp). */
 export function displayedMaxHp(fighter, viewer = null) {
   if (!fighter) return 1;
+  if (isHologram(fighter)) return displayedMaxHp(fighter.illusionOwner, viewer);
   if (fighter.cloneVariant === "shadow-clone" && viewer && viewer.team !== fighter.team) {
     return displayedMaxHp(fighter.cloneOwner, viewer);
   }
@@ -244,6 +265,7 @@ export function displayedMaxHp(fighter, viewer = null) {
 
 /** Apply visual-only damage. Returns phantom amount applied. */
 export function applyPhantomDamage(target, amount, game = null, source = null) {
+  if (source?.hologram) return 0;
   if (!target || target.dead || isIllusionFighter(target)) return 0;
   const dealt = Math.max(ILLUSION_PHANTOM_DAMAGE, Math.max(0, amount || 0));
   target.phantomDamage = (target.phantomDamage || 0) + dealt;
@@ -282,6 +304,10 @@ export function tickPhantomDamage(fighter, dt) {
  */
 export function registerIllusionFighterHit(illusion, game) {
   if (!isIllusionFighter(illusion) || illusion.dead) return false;
+  if (isHologram(illusion)) {
+    fadeIllusionFighter(illusion, game);
+    return true;
+  }
   const hits = Math.max(1, ILLUSION_FIGHTER_HITS);
   const maxFake = Math.max(1, illusion.illusionFakeMaxHp ?? illusion.maxHp ?? 500);
   if (illusion.illusionFakeHp == null) illusion.illusionFakeHp = maxFake;
@@ -308,6 +334,10 @@ export function registerIllusionFighterHit(illusion, game) {
 
 export function fadeIllusionFighter(illusion, game) {
   if (!illusion || illusion.dead) return;
+  if (isHologram(illusion)) {
+    fadeHologram(illusion);
+    return;
+  }
   illusion.dead = true;
   illusion.hp = 0;
   illusion.illusionFakeHp = 0;
@@ -431,10 +461,33 @@ export function createFighterIllusion(owner, FighterCtor) {
   decoy.human = false;
   decoy.buddy = false;
   decoy.illusion = true;
+  decoy.hologram = isHologramGear(owner);
+  if (decoy.hologram) {
+    selectWeaponSlot(decoy, owner.activeWeaponSlot);
+    if (decoy.modularWeapon) applyModularCombatStats(decoy, owner.modularMode);
+    if (isAdaptiveNanotechWeapon(decoy)) applyAdaptiveCombatStats(decoy, owner.adaptiveMode);
+    for (const key of [
+      "nanobotFree", "nanobotArmor", "nanobotWeapon", "nanotechWeaponAbsorbing",
+      "nanotechAbsorbStart", "shieldRaised", "shieldBroken", "shieldDurability",
+      "spellType", "mana"
+    ]) {
+      if (owner[key] !== undefined) decoy[key] = owner[key];
+    }
+    if (owner.heldToolPickup) decoy.heldToolPickup = { ...owner.heldToolPickup };
+    if (owner.heldProp && !owner.heldProp.destroyed) {
+      decoy.heldProp = createIllusionHeldProp(owner.heldProp, decoy);
+      decoy.heldProp.x += decoy.x - owner.x;
+      decoy.heldProp.y += decoy.y - owner.y;
+      if (decoy.heldProp.canopy) {
+        decoy.heldProp.canopy.x += decoy.x - owner.x;
+        decoy.heldProp.canopy.y += decoy.y - owner.y;
+      }
+    }
+  }
   decoy.illusionOwner = owner;
   bindCloneStyle(owner, decoy);
-  decoy.illusionHitsLeft = ILLUSION_FIGHTER_HITS;
-  decoy.illusionLife = ILLUSION_FIGHTER_LIFE;
+  decoy.illusionHitsLeft = decoy.hologram ? 1 : ILLUSION_FIGHTER_HITS;
+  decoy.illusionLife = decoy.hologram ? HOLOGRAM_LIFE : ILLUSION_FIGHTER_LIFE;
   decoy.phantomDamage = 0;
   decoy.aim = owner.aim;
   decoy.facing = owner.facing || 1;
@@ -453,6 +506,36 @@ export function createFighterIllusion(owner, FighterCtor) {
   return decoy;
 }
 
+function spawnFighterSmoke(owner, decoy, game) {
+  game.effects ||= [];
+  game.effects.push({
+    type: "illusionSpawnSmoke",
+    x: (owner.x + decoy.x + SIZE) / 2,
+    y: (owner.y + decoy.y + SIZE) / 2,
+    radius: SIZE + Math.hypot(owner.x - decoy.x, owner.y - decoy.y) / 2,
+    life: ILLUSION_SPAWN_SMOKE_LIFE,
+    maxLife: ILLUSION_SPAWN_SMOKE_LIFE,
+    seed: Math.random() * Math.PI * 2,
+    team: owner.team
+  });
+  for (const observer of game.fighters) {
+    const state = observer.aiState;
+    if (observer.dead || observer.human || observer.team === owner.team
+      || hasIllusionTruthSight(observer) || state?.target !== owner
+      || !visibleToTeam(game, observer, owner)) continue;
+    state.target = null;
+    state.lastKnown = null;
+    state.visualTrack = null;
+    state.desiredAim = observer.aim;
+    state.attack = false;
+    state.chuck = false;
+    state.ejectVacuum = false;
+    state.timer = 0;
+    state.stale = 0;
+    state.plan = "lost target in spawn smoke";
+  }
+}
+
 /**
  * Press 3: plant the selected illusion along aim.
  * @param {Function} [FighterCtor] required for fighter illusions
@@ -460,16 +543,18 @@ export function createFighterIllusion(owner, FighterCtor) {
  */
 export function tryIllusionistPlant(fighter, game, FighterCtor = null) {
   if (!fighter || fighter.dead || !game) return null;
-  if (!isIllusionist(fighter)) return null;
+  if (!isDecoyProjector(fighter)) return null;
   if ((fighter.illusionistCd || 0) > 0) return null;
-  if (ownIllusionCount(game, fighter) >= ILLUSIONIST_MAX_ACTIVE) return null;
+  const hologram = isHologramGear(fighter);
+  if (ownIllusionCount(game, fighter) >= (hologram ? HOLOGRAM_MAX_ACTIVE : ILLUSIONIST_MAX_ACTIVE)) return null;
 
-  const type = normalizeIllusionType(fighter.illusionistType);
+  const type = hologram ? "fighter" : normalizeIllusionType(fighter.illusionistType);
   if (type === "fighter") {
     const decoy = createFighterIllusion(fighter, FighterCtor);
     if (!decoy) return null;
     game.fighters.push(decoy);
-    fighter.illusionistCd = ILLUSIONIST_COOLDOWN;
+    if (!hologram) spawnFighterSmoke(fighter, decoy, game);
+    fighter.illusionistCd = hologram ? HOLOGRAM_COOLDOWN : ILLUSIONIST_COOLDOWN;
     fighter.illusionistFlash = 0.18;
     return decoy;
   }
@@ -504,6 +589,12 @@ export function tickIllusionistFighter(fighter, dt, game = null) {
 
 export function tickIllusionistWorld(game, dt) {
   if (!game) return;
+  for (const fighter of game.fighters || []) {
+    if (isHologram(fighter) && fighter.dead) {
+      fighter.hologramFadeLeft = Math.max(0,
+        (fighter.hologramFadeLeft ?? HOLOGRAM_FADE_SECONDS) - dt);
+    }
+  }
   game.illusions ||= [];
   const keep = [];
   for (const ill of game.illusions) {
@@ -526,13 +617,14 @@ export function tickIllusionistWorld(game, dt) {
   if (Array.isArray(game.fighters)) {
     let drop = false;
     for (const f of game.fighters) {
-      if (isIllusionFighter(f) && f.dead) {
+      if (isIllusionFighter(f) && f.dead && !(isHologram(f) && f.hologramFadeLeft > 0)) {
         drop = true;
         break;
       }
     }
     if (drop) {
-      game.fighters = game.fighters.filter((f) => !isIllusionFighter(f) || !f.dead);
+      game.fighters = game.fighters.filter((f) => !isIllusionFighter(f) || !f.dead
+        || (isHologram(f) && f.hologramFadeLeft > 0));
     }
   }
   refreshIllusionCaches(game);

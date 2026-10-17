@@ -73,14 +73,14 @@ export function noteCloneStyleInput(fighter, action) {
   }
 }
 
-export function cloneStyleSituation(fighter, visible) {
+export function cloneStyleSituation(fighter, visible, { target: selected, hp = fighter.hp } = {}) {
   const foes = visible.filter((foe) => foe && !foe.dead && foe.team !== fighter.team && !foe.disguiseProp);
-  const target = foes.reduce((best, foe) => !best
+  const target = selected !== undefined ? selected : foes.reduce((best, foe) => !best
     || Math.hypot(foe.x - fighter.x, foe.y - fighter.y) < Math.hypot(best.x - fighter.x, best.y - fighter.y)
     ? foe : best, null);
   const distance = target ? Math.hypot(target.x - fighter.x, target.y - fighter.y) : Infinity;
   const range = !target ? "none" : distance < 180 ? "near" : distance < 600 ? "mid" : "far";
-  const hurt = fighter.hp < fighter.maxHp * .4 ? "hurt" : "healthy";
+  const hurt = hp < fighter.maxHp * .4 ? "hurt" : "healthy";
   const threat = foes.some((foe) => foe.weapon === "saber"
     && Math.hypot(foe.x - fighter.x, foe.y - fighter.y) < 240)
     || (fighter.hitFlash || 0) > 0;
@@ -94,13 +94,13 @@ function emptyRow() {
     move: { toward: 0, away: 0, still: 0 }, modular: modes(), adaptive: modes() };
 }
 
-export function recordCloneStyle(fighter, intent, dt, game, profile, visible) {
+export function recordCloneStyle(fighter, intent, dt, game, profile, visible, hp = fighter?.hp) {
   if (!fighter || fighter.combatClone || fighter.illusion || fighter.dead || game.paused || game.over) return;
   const style = ownerCloneStyle(fighter, profile);
   const inputs = fighter._cloneStyleInputs || new Set();
   fighter._cloneStyleInputs = null;
   if (game.learningLocked || profile?.learningLocked || !(dt > 0)) return;
-  const situation = cloneStyleSituation(fighter, visible);
+  const situation = cloneStyleSituation(fighter, visible, { hp });
   const runtime = fighter._cloneStyleRecorder ||= { acc: 0, previous: {}, last: null, frames: [] };
   const active = {
     attack: !!intent.attack, dodge: !!intent.dodge || inputs.has("dodge"),

@@ -34,6 +34,7 @@ const routeCases = [
   ["How does Shadow Clone work?", "question"],
   ["How do I switch Split bodies?", "question"],
   ["How does Disguise work?", "question"],
+  ["How does Hologram work?", "question"],
   ["stay close to me", "coaching"],
   ["play safer next time", "coaching"],
   ["could you push with me more", "coaching"],
@@ -50,6 +51,9 @@ for (const [text, expected] of routeCases) {
 }
 
 const faqCases = [
+  ["How does Hologram work?", "equipment-hologram"],
+  ["Can truth sight identify holograms?", "equipment-hologram"],
+  ["Do holograms do phantom damage?", "equipment-hologram"],
   ["How do I move?", "controls-move"],
   ["What key dodges?", "controls-dodge"],
   ["How does fog of war work?", "vision-fog"],
@@ -94,6 +98,12 @@ const faqCases = [
   ["What is Split?", "equipment-split"],
   ["How do clones learn my playstyle?", "equipment-clone-behavior"],
   ["What is the generic clone variant?", "equipment-clone-behavior"],
+  ["Can phantom damage fool the AI?", "equipment-illusionist-ai"],
+  ["Can overlapping decoys confuse bots?", "equipment-illusionist-ai"],
+  ["Does Illusionist spawn smoke break AI tracking?", "equipment-illusionist-smoke"],
+  ["Which illusion casts make smoke?", "equipment-illusionist-smoke"],
+  ["Do clones search for enemies?", "equipment-clone-search"],
+  ["Do Illusionist fighters search after losing sight?", "equipment-clone-search"],
   ["Why do my clones never dodge?", "equipment-clone-behavior"],
   ["What does H do?", "equipment-split"],
   ["What is Disguise?", "equipment-disguise"],

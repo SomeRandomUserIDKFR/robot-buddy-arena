@@ -15,6 +15,7 @@ import {
 } from "./tool-secondaries.js";
 import { clamp } from "./utils.js";
 import { fighterHitbox } from "./disguise.js";
+import { fadeHologram } from "./hologram.js";
 
 export const THROW_BREAKABLE_ID = "throw-breakable";
 export const THROW_BREAKABLE_GRAB_RANGE = 100;
@@ -264,7 +265,7 @@ export function createIllusionHeldProp(real, fighter) {
   const fake = {
     illusionHeldProp: true,
     illusionObject: true,
-    illusionSourceProp: real,
+    illusionSourceProp: fighter?.hologram ? null : real,
     kind: real.kind,
     powerCrate: !!(real.powerCrate || real.kind === "powerCrate"),
     breakable: true,
@@ -278,10 +279,10 @@ export function createIllusionHeldProp(real, fighter) {
     _fullW: real.w,
     _fullH: real.h,
     solid: false,
-    blocksProjectiles: true,
+    blocksProjectiles: !fighter?.hologram,
     blocksSight: false,
     baseSolid: false,
-    baseBlocksProjectiles: true,
+    baseBlocksProjectiles: !fighter?.hologram,
     baseBlocksSight: false,
     heldBy: fighter || null,
     thrownInFlight: false,
@@ -570,6 +571,12 @@ export function tryGrabBreakable(fighter, game) {
   }
   if (!best) return false;
 
+  if (fighter.hologram) {
+    fighter.heldProp = createIllusionHeldProp(best, fighter);
+    positionHeldProp(fighter, fighter.heldProp);
+    return true;
+  }
+
   // Planted illusion bait: pick it up directly (anyone, including decoys).
   if (isPlantedIllusionProp(best)) {
     best._fullW = best.w;
@@ -780,6 +787,7 @@ export function throwHeldBreakable(fighter, game) {
 /** Per-frame: keep held prop on the hand; drop if destroyed / weapon swapped. */
 export function tickThrowBreakable(fighter, game, dt) {
   if (!fighter) return;
+  if (fighter.hologram && fighter.dead && fighter.hologramFadeLeft > 0) return;
   if (fighter.dead) {
     if (isIllusionThrower(fighter)) releaseIllusionThrowBreakable(fighter, game);
     else dropHeldBreakable(fighter, game);
@@ -825,6 +833,17 @@ export function stepThrownBreakables(game, dt, onFighterHit = null) {
     if (!thrown || thrown.life <= 0) continue;
     const prop = thrown.prop;
     if (!prop || prop.destroyed) continue;
+    if (thrown.owner?.hologram) {
+      thrown.life -= dt;
+      thrown.vy += GRAVITY * .55 * dt;
+      thrown.x += thrown.vx * dt;
+      thrown.y += thrown.vy * dt;
+      prop.x = thrown.x - prop.w / 2;
+      prop.y = thrown.y - prop.h / 2;
+      syncCanopy(prop);
+      if (thrown.life > 0) keep.push(thrown);
+      continue;
+    }
     const plantedIllusion = isPlantedIllusionProp(prop);
     const ghostClone = isIllusionHeldProp(prop);
     const fakeThrow = ghostClone || isIllusionThrower(thrown.owner);
@@ -873,9 +892,15 @@ export function stepThrownBreakables(game, dt, onFighterHit = null) {
       thrown.life = 0;
     };
 
+    for (const enemy of game.fighters || []) {
+      if (!enemy.hologram || enemy.dead || enemy.team === thrown.owner?.team) continue;
+      if (rectsOverlap(prop.x, prop.y, prop.w, prop.h, enemy.x, enemy.y, SIZE, SIZE)) {
+        fadeHologram(enemy);
+      }
+    }
     let impacted = false;
     for (const enemy of game.fighters || []) {
-      if (enemy.dead || enemy === thrown.owner) continue;
+      if (enemy.dead || enemy.hologram || enemy === thrown.owner) continue;
       if (enemy.team === thrown.owner?.team) continue;
       const box = fighterHitbox(enemy);
       if (rectsOverlap(prop.x, prop.y, prop.w, prop.h, box.x, box.y, box.w, box.h)) {

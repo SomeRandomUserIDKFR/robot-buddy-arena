@@ -128,6 +128,7 @@ export function tickShieldStealBeam(fighter, game, dt) {
   fighter.shieldStealBeamLen = reach;
   fighter.shieldStealBeamX = ox + Math.cos(aim) * reach;
   fighter.shieldStealBeamY = oy + Math.sin(aim) * reach;
+  if (fighter.hologram) return null;
 
   const step = Math.max(0, dt || 0);
   const drain = SHIELD_STEAL_DRAIN_PER_SEC * step

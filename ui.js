@@ -512,7 +512,7 @@ export function updateHud(game) {
   }
   if (ui.trapHud) {
     const showTrap = !!player?.trapper && !player.dead;
-    const showIllu = !!player?.illusionist && !player.dead;
+    const showIllu = !!(player?.illusionist || player?.hologramGear) && !player.dead;
     const showDoppel = !!player?.combatCloneGear && !player.dead;
     const showDisguise = !!player?.disguiseGear && !player.dead;
     const showSpell = !!player && isSpellbook(player) && !player.dead
@@ -561,18 +561,26 @@ export function updateHud(game) {
         ui.trapHudSub.classList.remove("hidden", "metal");
       }
     } else if (showIllu) {
-      const t = player.illusionistType === "prop"
+      const t = player.hologramGear ? "fighter" : player.illusionistType === "prop"
         ? "prop"
         : player.illusionistType === "platform"
           ? "plat"
           : "fighter";
       clearTrapHudKinds();
-      if (ui.trapHudKicker) ui.trapHudKicker.textContent = "NEXT ILLUSION · T cycle";
+      if (ui.trapHudKicker) ui.trapHudKicker.textContent = player.hologramGear
+        ? "HOLOGRAM · 3 project" : "NEXT ILLUSION · T cycle";
       if (ui.trapHudType) {
-        ui.trapHudType.textContent = t === "prop" ? "PROP" : t === "plat" ? "PLAT" : "FIGHTER";
+        ui.trapHudType.textContent = player.hologramGear ? "HOLOGRAM"
+          : t === "prop" ? "PROP" : t === "plat" ? "PLAT" : "FIGHTER";
       }
       if (ui.trapHudSub) {
-        if (t === "prop") {
+        if (player.hologramGear) {
+          const count = game.fighters.filter((f) =>
+            f.hologram && !f.dead && f.illusionOwner === player).length;
+          const cd = player.illusionistCd || 0;
+          ui.trapHudSub.textContent = `${count}/2 active · ${cd > 0 ? `${cd.toFixed(1)}s cooldown` : count >= 2 ? "FULL" : "READY"} · 15s life`;
+          ui.trapHudSub.classList.remove("hidden", "metal");
+        } else if (t === "prop") {
           const kind = normalizeIllusionPropKind(player.illusionPropKind, game);
           ui.trapHudSub.textContent = `${illusionPropKindLabel(kind)} · Y`;
           ui.trapHudSub.classList.remove("hidden");
@@ -665,7 +673,7 @@ export function updateHud(game) {
     }
   }
   ui.teamBars.innerHTML = (() => {
-    const real = game.fighters.filter((f) => !f.illusion
+    const real = game.fighters.filter((f) => (!f.illusion || (f.hologram && !f.dead))
       && (!f.combatClone || (f.cloneVariant === "shadow-clone" && f.team !== player.team))
       && (!f.disguiseProp || f.team === player.team));
     const shown = game.mode === "survival"
@@ -1142,7 +1150,7 @@ function statMarkup(loadout, powerInfo = null) {
 function cloneBehaviorMarkup(profile, owner, campaign = false) {
   const kit = campaign ? profile.campaign?.[owner] : profile.equipment[owner];
   const gear = GEAR_BY_ID[kit?.extensionSecondary];
-  if (!gear?.combatClone && !gear?.illusionist) return "";
+  if (!gear?.combatClone && !gear?.illusionist && !gear?.hologram) return "";
   const locked = !campaign && owner === "buddy" && profile.equipment.buddyMode === "choice";
   const mode = normalizeCloneBehavior(kit.cloneBehavior);
   return `<div class="clone-behavior">
@@ -1469,6 +1477,17 @@ function modifierMarkup(gear) {
         "<span>Normal learns owner inputs · Generic included free · choose in equipment</span>",
         "<span>Ally outline only · dies with you</span>",
         "<span class=\"stat-down\">Under Illusionist on price</span>"
+      ].join("");
+    }
+    if (gear.hologram) {
+      return [
+        "<span>Normal imitation or free Generic variant</span>",
+        "<span>100 Cyber · 3 project · 2.5s cooldown</span>",
+        "<span>2 active · 15s lifetime</span>",
+        "<span class=\"stat-up\">Identical even to truth sight · no tells</span>",
+        "<span>One hit · eased 0.35s fade · shots pass visibly</span>",
+        "<span class=\"stat-down\">Cosmetic attacks only · no damage, phantom HP or effects</span>",
+        "<span>No spawn smoke · no truth sight</span>"
       ].join("");
     }
     if (gear.illusionist) {

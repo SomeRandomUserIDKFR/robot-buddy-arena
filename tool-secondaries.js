@@ -8,6 +8,7 @@
  */
 import { SIZE, WORLD } from "./config.js";
 import { fighterHitbox, fighterHitPoint } from "./disguise.js";
+import { fadeHologram } from "./hologram.js";
 
 /** Late-bound damagers (avoids import cycles with equipment / maps / powerups). */
 let applyHpDamageFn = null;
@@ -365,6 +366,10 @@ function rayHit(game, owner, ox, oy, aim, range) {
         x >= box.x && x <= box.x + box.w
         && y >= box.y && y <= box.y + box.h
       ) {
+        if (other.hologram) {
+          fadeHologram(other);
+          continue;
+        }
         if (d < bestFighterD) {
           bestFighterD = d;
           bestFighter = other;
@@ -433,7 +438,7 @@ export function beginHookDrag(owner, target, opts = {}) {
 
 function fireHook(fighter, game, fromPickup) {
   const { x, y, aim } = muzzle(fighter);
-  const hit = rayHit(game, fighter, x, y, aim, HOOK_RANGE);
+  const hit = fighter.hologram ? null : rayHit(game, fighter, x, y, aim, HOOK_RANGE);
   game.effects ||= [];
   const tx = hit?.x ?? x + Math.cos(aim) * HOOK_RANGE;
   const ty = hit?.y ?? y + Math.sin(aim) * HOOK_RANGE;
@@ -699,6 +704,26 @@ export function tickToolProjectiles(game, dt) {
   const keep = [];
   for (const proj of game.toolProjectiles || []) {
     if (!proj) continue;
+    if (proj.owner?.hologram) {
+      const gravity = proj.kind === "grenade" ? 1400 : proj.kind === "sticky" ? 1300
+        : proj.kind === "bolas" ? 900 : 0;
+      proj.vy += gravity * step;
+      proj.x += proj.vx * step;
+      proj.y += proj.vy * step;
+      proj.spin = (proj.spin || 0) + step * 14;
+      if (typeof proj.fuse === "number") proj.fuse -= step;
+      if (typeof proj.life === "number") proj.life -= step;
+      if (typeof proj.fuse === "number" && proj.fuse <= 0) {
+        game.effects ||= [];
+        game.effects.push({
+          type: "explosion", x: proj.x, y: proj.y, life: .38, color: "#ff8a3a",
+          radius: proj.kind === "sticky" ? STICKY_RADIUS : GRENADE_RADIUS
+        });
+      }
+      if ((proj.fuse ?? proj.life ?? 0) > 0 && proj.y <= WORLD.h + 120
+        && proj.x >= -120 && proj.x <= WORLD.w + 120) keep.push(proj);
+      continue;
+    }
     let alive = true;
 
     if (proj.kind === "spear") {
@@ -712,6 +737,10 @@ export function tickToolProjectiles(game, dt) {
         for (const foe of livingFighters(game)) {
           if (foe === proj.owner || foe.team === proj.team) continue;
           if (circleHitsFighter(proj.x, proj.y, 10, foe)) {
+            if (foe.hologram) {
+              fadeHologram(foe);
+              continue;
+            }
             hurt(foe, proj.damage, game);
             foe.hitFlash = Math.max(foe.hitFlash || 0, 0.2);
             foe.vx = (foe.vx || 0) + Math.cos(proj.angle || 0) * 200;
@@ -752,6 +781,10 @@ export function tickToolProjectiles(game, dt) {
         for (const foe of livingFighters(game)) {
           if (foe === proj.owner || foe.team === proj.team) continue;
           if (circleHitsFighter(proj.x, proj.y, 14, foe)) {
+            if (foe.hologram) {
+              fadeHologram(foe);
+              continue;
+            }
             proj.stuck = true;
             proj.stickFoe = foe;
             proj.stickOx = proj.x - foe.x;
@@ -784,6 +817,10 @@ export function tickToolProjectiles(game, dt) {
         for (const foe of livingFighters(game)) {
           if (foe === proj.owner || foe.team === proj.team) continue;
           if (circleHitsFighter(proj.x, proj.y, 16, foe)) {
+            if (foe.hologram) {
+              fadeHologram(foe);
+              continue;
+            }
             hurt(foe, proj.damage, game);
             foe.trapLockT = Math.max(foe.trapLockT || 0, BOLAS_LOCK);
             foe.trapLockKind = "bolas";
@@ -922,7 +959,7 @@ export function findToolPickupNear(fighter, game, maxRange = TOOL_PICKUP_RADIUS)
  * World tools are grab-only (Throw Breakable) — never walk-over collect.
  */
 export function takeToolPickup(fighter, game, pickup) {
-  if (!fighter || !game || !pickup) return null;
+  if (!fighter || fighter.hologram || !game || !pickup) return null;
   const uses = normalizeToolUses(pickup.uses ?? pickup.maxUses ?? 1);
   fighter.heldToolPickup = {
     toolId: pickup.toolId,

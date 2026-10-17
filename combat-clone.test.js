@@ -20,7 +20,8 @@ import {
   CLONE_RETRACTABLE_ARMOR_MULT, SHADOW_RETRACTABLE_ARMOR_MULT
 } from "./equipment.js";
 import { displayedHp, displayedMaxHp, isRealCombatant } from "./illusionist.js";
-import { updateAI, updateAIClone, updateAIDecoy, updateAiCombatClone } from "./ai.js";
+import { AI_SEARCH_MEMORY_SECONDS, updateAI, updateAIClone, updateAIDecoy, updateAiCombatClone } from "./ai.js";
+import { createPowerCrate } from "./powerups.js";
 import { createFighterIllusion } from "./illusionist.js";
 import { createMapProp } from "./maps.js";
 import { attackThrowBreakable, THROW_BREAKABLE_ID, tickThrowBreakable } from "./throw-breakable.js";
@@ -328,10 +329,11 @@ for (const scale of [1, .2]) {
   actor.aiState.timer = 0;
   a.x = owner.x - 50;
   a.y = owner.y - 20;
+  actor.aiState.target = a;
   game.fighters = [actor, owner, a];
   updateAIClone(actor, .016, game);
   assert.ok(Math.abs(actor.aiState.desiredAim - Math.atan2(-20, a.x)) < 1e-10,
-    "enemy summon AI cannot deprioritize an enemy because it is a shadow");
+    "enemy summon AI cannot drop a tracked enemy because it is a shadow");
 }
 
 {
@@ -1079,7 +1081,7 @@ function summonSightFixture(id, optimizeIllusions) {
   const owner = applyLoadout(new Fighter({
     x: 0, y: 700, team: 0, human: true, ai: "veteran"
   }), { ...DEFAULT_LOADOUT, cloneBehavior: "generic", extensionSecondary: id });
-  const summon = id === "illusionist" ? createFighterIllusion(owner, Fighter)
+  const summon = ["illusionist", "hologram"].includes(id) ? createFighterIllusion(owner, Fighter)
     : createCombatClone(owner, Fighter);
   assert.equal(summon.sight, owner.sight, "summons inherit equipped sight range");
   assert.equal(summon.directionalSightRange, owner.directionalSightRange);
@@ -1101,7 +1103,7 @@ function summonSightFixture(id, optimizeIllusions) {
   return { owner, summon, enemy, game };
 }
 
-for (const id of [COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID, "illusionist"]) {
+for (const id of [COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID, "illusionist", "hologram"]) {
   for (const optimizeIllusions of [true, false]) {
     {
       const { owner, summon, enemy, game } = summonSightFixture(id, optimizeIllusions);
@@ -1200,4 +1202,59 @@ for (const id of [COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID, "illusionist"]) {
   }
 }
 
-console.log("combat-clone.test.js passed: real clones, armor AI, and sight-limited summons.");
+for (const id of [COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID, "illusionist", "hologram"]) {
+  for (const optimize of [true, false]) {
+    const { summon, enemy, game } = summonSightFixture(id, optimize);
+    const profile = structuredClone(DEFAULT_PROFILE);
+    summon.sight = 1100;
+    enemy.x = 2350;
+    updateAI(summon, .05, game, profile);
+    const lastKnown = { ...summon.aiState.lastKnown };
+    assert.equal(lastKnown.x, enemy.x, `${id}, Optimize ${optimize}: records a visible sighting`);
+    enemy.x = 0;
+    enemy.y = 0;
+    assert.equal(visibleToTeam(game, summon, enemy), false);
+    summon.aiState.timer = 0;
+    updateAI(summon, .1, game, profile);
+    assert.equal(summon.aiState.target, null);
+    assert.deepEqual(summon.aiState.lastKnown, lastKnown);
+    assert.equal(summon.aiState.mx, 1, "search moves toward the remembered point, not the hidden enemy");
+    assert.equal(summon.aiState.attack, false, "a remembered position is not a visible shooting target");
+    assert.equal(summon.aiState.plan, "searching last sighting");
+    summon.aiState.timer = 0;
+    updateAI(summon, AI_SEARCH_MEMORY_SECONDS - .101, game, profile);
+    assert.equal(summon.aiState.mx, 1, "search remains active just before its six-second timeout");
+    summon.aiState.timer = 0;
+    updateAI(summon, .002, game, profile);
+    assert.equal(summon.aiState.mx, 0, "expired sighting stops driving search movement");
+    assert.equal(summon.aiState.attack, false);
+    assert.deepEqual(summon.aiState.lastKnown, lastKnown, "hidden motion never refreshes the snapshot");
+    enemy.x = 2300;
+    enemy.y = 700;
+    summon.aiState.timer = 0;
+    updateAI(summon, .05, game, profile);
+    assert.equal(summon.aiState.target, enemy, "fresh sight reacquires a real target");
+    assert.equal(summon.aiState.lastKnown.x, 2300);
+    assert.equal(summon.aiState.stale, 0);
+  }
+  for (const optimize of [true, false]) {
+    const { summon, enemy, game } = summonSightFixture(id, optimize);
+    enemy.x = 3000;
+    const profile = structuredClone(DEFAULT_PROFILE);
+    const crate = createPowerCrate({ x: 1550, y: 742 }, "yard", "yard");
+    game.powerCrates = [crate];
+    updateAI(summon, .05, game, profile);
+    assert.equal(summon.aiState.target, null);
+    assert.equal(summon.aiState.plan, "looting power crate",
+      `${id}, Optimize ${optimize}: searches visible crates when there is no enemy sighting`);
+    assert.equal(summon.aiState.mx, 1);
+    assert.equal(summon.aiState.attack, true);
+    crate.x = 3000;
+    summon.aiState.timer = 0;
+    updateAI(summon, .05, game, profile);
+    assert.equal(summon.aiState.attack, false, "hidden crates cannot drive search or firing");
+    assert.equal(summon.aiState.mx, 0);
+  }
+}
+
+console.log("combat-clone.test.js passed: real clones, armor AI, sight-limited summons, and searching.");

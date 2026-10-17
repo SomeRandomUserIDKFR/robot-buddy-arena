@@ -1,6 +1,7 @@
 import { SIZE } from "./config.js";
 import { clamp, dist } from "./utils.js";
 import { propVisibleToSelf } from "./vision.js";
+import { perceivedHp } from "./ai-perception.js";
 
 export const TACTICAL_STRATEGIES = Object.freeze(["balanced", "pressure", "cautious", "flank"]);
 export const TACTICAL_TRIAL_SECONDS = 4;
@@ -105,7 +106,7 @@ export function chooseTacticalStrategy(fighter, game, profile, visible, target) 
     finishTrial(fighter, game, profile, null, true);
     return "balanced";
   }
-  const situation = fighter.hp < fighter.maxHp * .35 ? "hurt"
+  const situation = perceivedHp(fighter) < fighter.maxHp * .35 ? "hurt"
     : visible.length > 1 ? "outnumbered" : "duel";
   const contextKey = `${fighter.weapon}:${fighter.loadout?.extensionSecondary || "no-extension"}:${situation}`;
   if (state.trial && state.trial.context !== contextKey) finishTrial(fighter, game, profile, target, true);

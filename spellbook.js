@@ -195,6 +195,7 @@ function castIce(fighter, game) {
     life: 0.28,
     owner: fighter
   });
+  if (fighter.hologram) return true;
 
   let hitSomeone = false;
   for (const enemy of game.fighters || []) {
@@ -266,6 +267,7 @@ function castFire(fighter, game) {
     radius: FIRE_RADIUS,
     life: 0.32
   });
+  if (fighter.hologram) return true;
 
   for (const enemy of game.fighters || []) {
     if (!enemy || enemy.dead || enemy === fighter) continue;
@@ -328,13 +330,13 @@ function castLightning(fighter, game) {
     bolts.push({ x1: fromX, y1: fromY, x2: c.x, y2: c.y });
     const metal = isMetalBreakable(node);
     const dmg = LIGHTNING_DAMAGE * (metal ? LIGHTNING_METAL_MULT : 1);
-    damageBreakable(node, dmg, game, c.x, c.y, fighter);
+    if (!fighter.hologram) damageBreakable(node, dmg, game, c.x, c.y, fighter);
     totalDamage += dmg;
 
     // Splash fighters near this node (stronger if metal).
     const splash = metal ? 70 : 48;
     const fighterDmg = LIGHTNING_DAMAGE * (metal ? 1.35 : 0.85);
-    for (const enemy of game.fighters || []) {
+    for (const enemy of fighter.hologram ? [] : game.fighters || []) {
       if (!enemy || enemy.dead || enemy === fighter) continue;
       if (enemy.team === fighter.team) continue;
       const ex = enemy.x + SIZE / 2;
@@ -372,7 +374,7 @@ function castLightning(fighter, game) {
     const tipX = ox + Math.cos(aim) * 220;
     const tipY = oy + Math.sin(aim) * 220;
     bolts.push({ x1: ox, y1: oy, x2: tipX, y2: tipY });
-    for (const enemy of game.fighters || []) {
+    for (const enemy of fighter.hologram ? [] : game.fighters || []) {
       if (!enemy || enemy.dead || enemy === fighter) continue;
       if (enemy.team === fighter.team) continue;
       const ex = enemy.x + SIZE / 2;

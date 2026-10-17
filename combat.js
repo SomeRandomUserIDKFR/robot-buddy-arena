@@ -36,7 +36,7 @@ import {
   isCombatClone, tickCombatCloneFighter
 } from "./combat-clone.js";
 import {
-  applyPhantomDamage, ghostBulletThroughIllusion, isIllusionFighter,
+  applyPhantomDamage, displayedHp, ghostBulletThroughIllusion, isIllusionFighter,
   ILLUSION_PHANTOM_DAMAGE, registerIllusionFighterHit, registerIllusionObjectHit,
   tickIllusionistFighter
 } from "./illusionist.js";
@@ -154,6 +154,11 @@ export function triggerDodge(fighter, game, keys) {
 }
 
 function hit(target, source, damage, angle, game, extras = {}) {
+  if (source?.hologram) return;
+  if (target.hologram) {
+    registerIllusionFighterHit(target, game);
+    return;
+  }
   if (target.iframe > 0 || target.dead) {
     // A successful dodge is only when iframes negate a hit that would have landed.
     if (target.iframe > 0 && !target.dead) {
@@ -326,6 +331,13 @@ function fireHitscanLaser(fighter, game, shotAngle, ox, oy, formPct = 1) {
   const reach = fighter.weaponReach || 1720;
   const ex = ox + Math.cos(shotAngle) * reach;
   const ey = oy + Math.sin(shotAngle) * reach;
+  if (fighter.hologram) {
+    game.effects.push({
+      type: "laser", x: ox, y: oy, x2: ex, y2: ey,
+      life: .07, team: fighter.team, owner: fighter
+    });
+    return;
+  }
   const dmg = fighter.weaponBaseDamage * consumeOvercharge(fighter) * formPct;
   const boxes = [
     ...platformsOf(game).map((platform) => ({
@@ -530,6 +542,7 @@ export function attack(fighter, game, random = Math.random) {
       type: "saber", x: fighter.x + SIZE / 2, y: fighter.y + SIZE / 2,
       life: .14, angle: fighter.aim, owner: fighter
     });
+    if (fighter.hologram) return;
     let slashedFighter = false;
     for (const enemy of game.fighters) {
       const cx = fighter.x + SIZE / 2;
@@ -650,9 +663,10 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   }
   tickSpellbookFighter(fighter, dt);
   tickIllusionistFighter(fighter, dt, game);
+  if (fighter.dead) return;
   tickCombatCloneFighter(fighter, dt);
   tickShieldStealFighter(fighter, dt);
-  if (!decoy) tickToolSecondary(fighter, dt);
+  if (!decoy || fighter.hologram) tickToolSecondary(fighter, dt);
   // Humans: know fire intent before nanotech tick so hold-to-shoot blocks regen.
   let intent = null;
   if (fighter.human && getHumanIntent) {
@@ -676,7 +690,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   if (!decoy && !clone) {
     const visible = game.fighters.filter((foe) => foe && !foe.dead && foe.team !== fighter.team
       && !foe.disguiseProp && visibleToTeam(game, fighter, foe));
-    recordCloneStyle(fighter, intent, dt, game, profile, visible);
+    recordCloneStyle(fighter, intent, dt, game, profile, visible, displayedHp(fighter, fighter));
   }
   if (fighter.shieldRaised) endDisguise(fighter, game);
   applyTrapLockToIntent(fighter, intent);
@@ -783,11 +797,11 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
     }
   }
   if (fighter.y > WORLD.h + 100) hit(fighter, fighter, 999, -Math.PI / 2, game);
-  fighter.materialEjectHeld = !!intent.ejectVacuum;
-  fighter.materialBeamHeld = !!(intent.chuck && fighter.materialConsumer);
+  fighter.materialEjectHeld = !fighter.hologram && !!intent.ejectVacuum;
+  fighter.materialBeamHeld = !fighter.hologram && !!(intent.chuck && fighter.materialConsumer);
   fighter.shieldStealHeld = !!(intent.attack && isShieldSteal(fighter));
   if (intent.chuck || fighter.shieldStealHeld) endDisguise(fighter, game);
-  if (intent.chuck) chuckMaterialConsumerScrap(fighter, game);
+  if (intent.chuck && !fighter.hologram) chuckMaterialConsumerScrap(fighter, game);
   if (fighter.shieldStealHeld) {
     tickShieldStealBeam(fighter, game, dt);
   } else if (intent.attack) {
@@ -803,6 +817,7 @@ export function stepBullets(game, dt) {
   const hasIllusions = livingIllusions.length > 0;
   const blockers = allProjectileBlockers(game);
   const platforms = platformsOf(game);
+  const holograms = game.fighters.filter((fighter) => fighter.hologram && !fighter.dead);
   for (const bullet of game.bullets) {
     bullet.px = bullet.x;
     bullet.py = bullet.y;
@@ -810,6 +825,7 @@ export function stepBullets(game, dt) {
     bullet.y += bullet.vy * dt;
     bullet.traveled += Math.hypot(bullet.vx * dt, bullet.vy * dt);
     bullet.life -= dt;
+    if (bullet.owner?.hologram) continue;
     const ownerIllusion = isIllusionFighter(bullet.owner);
 
     // Visual-only illusions: chip/fade them; real rounds ghost (invisible, keep going).
@@ -826,9 +842,25 @@ export function stepBullets(game, dt) {
       }
     }
 
+    if (holograms.length) {
+      const solids = game.fighters.filter((enemy) =>
+        !enemy.dead && enemy !== bullet.owner && enemy.team !== bullet.owner.team
+        && !enemy.hologram && (!isIllusionFighter(enemy) || ownerIllusion));
+      const contact = raycastFirst(bullet.px, bullet.py, bullet.x, bullet.y, [
+        ...solids.map(fighterHitbox), ...blockers, ...platforms
+      ]);
+      for (const hologram of holograms) {
+        if (!hologram.dead && hologram.team !== bullet.owner.team
+          && segmentHitsBox(bullet.px, bullet.py, contact.x, contact.y,
+            hologram.x, hologram.y, SIZE, SIZE)) {
+          registerIllusionFighterHit(hologram, game);
+        }
+      }
+    }
+
     let stopped = false;
     for (const enemy of game.fighters) {
-      if (enemy.dead || enemy.team === bullet.owner.team || enemy === bullet.owner) continue;
+      if (enemy.dead || enemy.hologram || enemy.team === bullet.owner.team || enemy === bullet.owner) continue;
       const box = fighterHitbox(enemy);
       if (!segmentHitsBox(bullet.px, bullet.py, bullet.x, bullet.y, box.x, box.y, box.w, box.h)) {
         continue;

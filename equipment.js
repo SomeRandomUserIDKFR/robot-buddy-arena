@@ -16,6 +16,7 @@ import {
 } from "./tool-secondaries.js";
 import { angleDiff } from "./utils.js";
 import { SIZE } from "./config.js";
+import { fadeHologram } from "./hologram.js";
 import {
   applyPerkModifiersToStats, CONQUEST_EXP, cyberWinMultiplier, ensureProgressionProfile,
   grantExp, normalizeEquippedPerk, perkCombatExtras
@@ -122,6 +123,7 @@ export const RECONJURER_BUILDER_ID = "reconjurer-builder";
 export const LIGHT_CONDENSATION_ID = "light-condensation";
 export const TRAPPER_ID = "trapper";
 export const ILLUSIONIST_ID = "illusionist";
+export const HOLOGRAM_ID = "hologram";
 export const COMBAT_CLONE_ID = "doppel";
 export const SHADOW_CLONE_ID = "shadow-clone";
 export const SPLIT_ID = "split";
@@ -554,10 +556,18 @@ export const GEAR = [
     }
   ),
   item(
+    HOLOGRAM_ID,
+    "extensionSecondary",
+    "Hologram",
+    "Press 3: project an identical fighter, even against truth sight. Two active, 2.5s cooldown, 15s lifetime. One hit starts a smooth 0.35s fade; incoming shots continue visibly. Cosmetic attacks pass through without real or phantom damage. No spawn smoke or truth sight. Normal imitation and Generic included.",
+    {},
+    { price: 100, extensionSecondary: true, hologram: true }
+  ),
+  item(
     ILLUSIONIST_ID,
     "extensionSecondary",
     "Illusionist",
-    "Premium Extension: T cycles illusion type (HUD), 3 plants. On PROP, Y cycles the breakable look (including metal crate bait). Fighter decoys clone your kit with a fake HP bar (10 hits to fade) and AI-fight as gaslights; prop/platform illusions are visual-only with no cues to others. No collision or sight block. Real shots look like they die on the decoy but keep going invisible; illusion shots vanish and only phantom-damage bars (≥40). You have truth sight: outlined illusions, visible ghost rounds, and real enemy HP. Most expensive extension.",
+    "Premium Extension: T cycles illusion type (HUD), 3 plants. On PROP, Y cycles the breakable look (including metal crate bait). Fighter decoys clone your kit with a fake HP bar (10 hits to fade) and AI-fight as gaslights. Fighter spawning makes a brief smoke puff over you and the decoy, breaking observing ordinary AI target tracks; prop/platform casts do not. Prop/platform illusions are visual-only with no cues to others. No collision or sight block. Real shots look like they die on the decoy but keep going invisible; illusion shots vanish and only phantom-damage bars (≥40). You have truth sight: outlined illusions, visible ghost rounds, and real enemy HP. Most expensive extension.",
     {},
     {
       price: 320,
@@ -1966,7 +1976,7 @@ function claimMaterialConsumerNear(fighter, game, tip, botsPerPiece, options = {
  * @returns {number} bots gained this tick
  */
 export function tickMaterialConsumerVacuum(fighter, game, dt) {
-  if (!fighter || fighter.dead || !isMaterialConsumer(fighter)) return 0;
+  if (!fighter || fighter.dead || fighter.hologram || !isMaterialConsumer(fighter)) return 0;
   if (!(dt > 0) || !(fighter.nanobotMax > 0)) return 0;
 
   const tip = materialConsumerTip(fighter);
@@ -2322,6 +2332,11 @@ export function tickRetractableArmor(fighter, dt) {
 
 /** Damage after shield block: nano armor, then retractable pool while deployed, then core. */
 export function applyHpDamage(fighter, dealt, game = null, extras = {}) {
+  if (extras.source?.hologram) return 0;
+  if (fighter.hologram) {
+    if (dealt > 0) fadeHologram(fighter);
+    return 0;
+  }
   if (fighter.disguiseProp) return damageDisguise(fighter, dealt, game || fighter.disguiseGame, extras);
   const before = fighter.hp;
   const result = damageFighterHp(fighter, dealt, game, extras);
@@ -2539,7 +2554,7 @@ export function setCloneBehavior(profile, owner, behavior, campaign = false) {
   if (!["player", "buddy"].includes(owner) || !["imitation", "generic"].includes(behavior)) return false;
   const kit = campaign ? profile.campaign?.[owner] : profile.equipment?.[owner];
   const gear = GEAR_BY_ID[kit?.extensionSecondary];
-  if (!kit || (!gear?.combatClone && !gear?.illusionist)
+  if (!kit || (!gear?.combatClone && !gear?.illusionist && !gear?.hologram)
     || !effectiveOwned(profile).includes(gear.id)
     || (!campaign && owner === "buddy" && profile.equipment.buddyMode === "choice")) return false;
   kit.cloneBehavior = behavior;
@@ -2921,6 +2936,7 @@ export function applyLoadout(fighter, loadout, opts = {}) {
   fighter.trapLockT = 0;
   fighter.trapLockKind = null;
   fighter.illusionist = !!extension?.illusionist;
+  fighter.hologramGear = !!extension?.hologram;
   fighter.illusionistCd = 0;
   fighter.illusionistFlash = 0;
   fighter.illusionistType = "fighter";

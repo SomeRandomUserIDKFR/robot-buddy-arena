@@ -24,6 +24,19 @@
   ],
   "entries": [
     {
+      "id": "equipment-hologram",
+      "tags": ["equipment", "extension", "hologram", "projection", "fade", "truth sight"],
+      "questions": [
+        "what is hologram",
+        "how does hologram work",
+        "can truth sight identify holograms",
+        "do holograms do phantom damage",
+        "do shots pass through holograms",
+        "how much does hologram cost"
+      ],
+      "answer": "Hologram is a 100 Cyber fighter-only Extension: press 3, 2.5s cooldown, two active, 15s lifetime. The fighter looks identical to its owner even to Illusionist truth sight, without a special outline, optimized-model tell or spawn smoke. One hit stops it acting immediately, then it fades smoothly over 0.35s. Incoming projectiles keep going visibly and can hit the owner behind it. Its attacks are cosmetic and pass through: no real or phantom damage, knockback, statuses, cover damage, shield theft, debris vacuuming or real pickups. It grants no truth sight and cannot keep a match alive; fading bodies stop providing sight. Normal imitation and the free Generic variant are included. Both use normal summon sight/search; Normal uses only learned movement habits. Campaign opens Hologram in the first stage shop."
+    },
+    {
       "id": "controls-overview",
       "tags": ["controls", "keys", "input", "hotkeys"],
       "questions": [
@@ -333,7 +346,18 @@
         "how does vision work",
         "sight range"
       ],
-      "answer": "Enemies outside our team's sight are hidden. Sight is shared: players, buddies, real Doppel/Shadow/Split clones, and Illusionist fighter decoys all contribute normal vision while alive. This applies with Optimize illusions on or off, including fog coverage and enemy visibility. Summons acquire only enemies their team can currently see, like a player; they cannot locate or follow unseen enemies' live positions. Full AI can search a remembered last-seen position without updating it through fog. Helmets change sensor range, snipers add a narrow forward sight cone when aimed, and map sight penalties affect summons too. Solid city building walls block line of sight; forest trunks and desert bushes do not hard-block shared vision. Dead summons no longer provide sight."
+      "answer": "Enemies outside our team's sight are hidden. Sight is shared: players, buddies, real Doppel/Shadow/Split clones, and Illusionist fighter decoys all contribute normal vision while alive. This applies with Optimize illusions on or off, including fog coverage and enemy visibility. Summons acquire only enemies their team can currently see, like a player; they cannot locate or follow unseen enemies' live positions. All summon brains can search their own fixed last-seen snapshot for up to six seconds without updating it through fog. Generic uses ordinary search movement and visible crate looting; Normal searches using learned movement habits only, with no unlearned jump/jet/dodge or Generic fallback. Helmets change sensor range, snipers add a narrow forward sight cone when aimed, and map sight penalties affect summons too. Solid city building walls block line of sight; forest trunks and desert bushes do not hard-block shared vision. Dead summons no longer provide sight."
+    },
+    {
+      "id": "equipment-clone-search",
+      "tags": ["equipment", "clones", "searching", "last seen", "generic", "imitation", "illusionist"],
+      "questions": [
+        "do clones search for enemies",
+        "do illusionist fighters search after losing sight",
+        "how do normal imitation clones search",
+        "can clones follow hidden enemies"
+      ],
+      "answer": "Doppel, Shadow, Split and Illusionist fighters all remember their own last-seen enemy snapshot for up to six seconds, with Optimize illusions on or off. Losing sight clears the live target; searching uses fixed observed coordinates, never hidden movement. A new sighting refreshes the snapshot and timer. Generic clones navigate toward that remembered point, do not auto-fire at unseen foes, and can loot currently visible power crates while no foe is visible, like ordinary AI. Normal imitation clones search relative to their remembered point using only learned toward/away/still movement, jump and jet habits; they do not gain automatic navigation moves or dodges. Learned blind firing may continue, but fresh Normal profiles still wait without a Generic fallback. Normal does not inherit Generic's automatic crate looting. Search memory stops driving movement after six seconds unless refreshed; ordinary spawn-smoke track breaks still clear the snapshot immediately. No change to HP, damage, cooldowns, prices or summon limits."
     },
     {
       "id": "maps-themes",
@@ -498,7 +522,28 @@
         "illusion platform",
         "most expensive extension"
       ],
-      "answer": "Illusionist is the most expensive Extension (320¢). Press T to cycle FIGHTER / PROP / PLAT (top-right HUD), then 3 to plant. Strictly deception: no world cues, no collision, no sight block. Fighter decoys are AI clones with your exact loadout and a fake health bar that chips when shot (10 hits to fade). Their hits only gaslight — bars and numbers drop by at least 40 phantom damage, real HP is untouched. Their projectiles vanish on impact. When a real shot 'hits' an illusion it looks like it disappears, but the round keeps traveling invisible and can still hurt whatever is behind. Prop and platform illusions look real and punish focus, not bodies — unlike Trapper, which actually hurts. AI cannot tell decoys from real fighters."
+      "answer": "Illusionist is the most expensive Extension (320¢). Press T to cycle FIGHTER / PROP / PLAT (top-right HUD), then 3 to plant. Successful FIGHTER casts make a 0.65-second smoke puff over caster and decoy, breaking observing ordinary AI's existing caster track and forcing fresh acquisition. Prop/platform and failed casts do not. No collision, mechanical sight block or invulnerability. Fighter decoys are AI clones with your exact loadout and a fake health bar that chips when shot (10 hits to fade). Their hits only gaslight — bars and numbers drop by at least 40 phantom damage, real HP is untouched. Phantom health also fools ordinary AI health judgments, including retreat, equipment use and finishing-target priority. Their projectiles vanish on impact. When a real shot 'hits' an illusion it looks like it disappears, but the round keeps traveling invisible and can still hurt whatever is behind. Prop and platform illusions look real and punish focus, not bodies — unlike Trapper, which actually hurts. Ordinary AI tracks observed bodies rather than reading hidden decoy flags; overlapping or crossing lookalikes can confuse it, depending on training. Aggressive selection is random among lookalikes; defensive selection favors closer bodies. Illusionist truth sight identifies illusion fighters and reads real HP."
+    },
+    {
+      "id": "equipment-illusionist-smoke",
+      "tags": ["equipment", "illusionist", "fighter", "spawn", "smoke", "tracking"],
+      "questions": [
+        "does illusionist spawn smoke break ai tracking",
+        "which illusion casts make smoke",
+        "does illusion smoke make me invincible"
+      ],
+      "answer": "Only successful Illusionist fighter spawns make a 0.65-second foreground smoke puff covering caster and decoy. Observing ordinary enemy AI currently tracking the caster immediately drops its target, last-known identity and pending aim/fire lock, then reacquires normally among visible candidates. It can choose the caster again by chance; smoke removes identity continuity, not the ability to fight. Truth sight, allies, human observers, unrelated targets and unseen casts do not have their AI state reset. Prop/platform casts, cooldown failures, full active caps and invalid fighter spawns make no smoke and break no tracks. Smoke grants no invulnerability, real HP, collision or mechanical LOS/projectile block. Existing prices, cooldowns, active caps and fighter lifetimes are unchanged."
+    },
+    {
+      "id": "equipment-illusionist-ai",
+      "tags": ["equipment", "illusionist", "decoys", "targeting", "tracking", "phantom", "training"],
+      "questions": [
+        "can phantom damage fool the ai",
+        "how does ai track the real player among illusions",
+        "can overlapping decoys confuse bots",
+        "why do aggressive bots target illusions randomly"
+      ],
+      "answer": "Ordinary bots have no automatic real/decoy identification. They can retain an observed body while lookalikes stay separate. Overlapping or crossing matching bodies can break the track, even between reaction ticks; training improves retention but never guarantees it. An uncertain acquisition or confused aggressive/Rusher bot chooses randomly among lookalikes. Defensive styles and cautious minds prefer closer candidates probabilistically. Staying overlapped does not reroll every tick, and losing sight discards live identity tracking. This applies to full, lightweight and imitation AI with either Optimize illusions setting. Phantom damage changes perceived health, so ordinary AI may retreat, deploy equipment, support an apparently hurt ally or prioritize an apparently weak enemy. Tactical and owner-style hurt contexts use apparent health too. Real HP, death, damage links, healing, resources, rewards and real-damage evidence remain unchanged; phantom decay restores apparent health normally. Illusionist truth sight is the exception: real HP and identified illusion fighters, but no automatic Shadow identification. No changes to prices, caps, cooldowns, hit budgets or lifetimes."
     },
     {
       "id": "equipment-shadow-clone",
@@ -618,7 +663,7 @@
         "AI secondary weapons",
         "buddy debris beam"
       ],
-      "answer": "Yes. Buddies and enemy AI can use all eight usable Extensions when equipped: Reconjurer rebuilds or conjures cover; Light Condensation scouts/blinds lanes and AI shoots enemy glare nodes; Trapper uses bear traps for grounded foes, fake platforms for airborne foes, spring pads against close threats when hurt, signal tripwires for unseen tracked foes, and mines for clustered visible foes; Illusionist casts fighter/prop/platform illusions; Doppel and Shadow Clone summon attackers during combat; Split builds a persistent team even before combat and switches below 100 HP; Disguise prioritizes nearby cover below 180 standard HP (36 Classic), stops weapon/shield use while hidden, and only reveals for close combat when healthy. AI cannot distinguish Illusionist decoys from real fighters. Cooldowns, costs, and active-object limits still apply. AI also swaps to equipped Material Consumer to vacuum debris or fire its scrap beam, holds V when the nanobot pool is full near scraps, and grabs/throws breakables with Throw Breakable. Equipping these tools is required; checking AI support does not change enemy loadouts."
+      "answer": "Yes. Buddies and enemy AI can use all nine usable Extensions when equipped: Reconjurer rebuilds or conjures cover; Light Condensation scouts/blinds lanes and AI shoots enemy glare nodes; Trapper uses bear traps for grounded foes, fake platforms for airborne foes, spring pads against close threats when hurt, signal tripwires for unseen tracked foes, and mines for clustered visible foes; Illusionist casts fighter/prop/platform illusions; Hologram projects harmless fighter lookalikes; Doppel and Shadow Clone summon attackers during combat; Split builds a persistent team even before combat and switches below 100 HP; Disguise prioritizes nearby cover below 180 standard HP (36 Classic), stops weapon/shield use while hidden, and only reveals for close combat when healthy. Ordinary AI cannot automatically identify Illusionist decoys, and Holograms also fool truth sight. Cooldowns, costs, and active-object limits still apply. AI also swaps to equipped Material Consumer to vacuum debris or fire its scrap beam, holds V when the nanobot pool is full near scraps, and grabs/throws breakables with Throw Breakable. Equipping these tools is required; checking AI support does not change enemy loadouts."
     },
     {
       "id": "equipment-nanotech",

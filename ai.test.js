@@ -1569,6 +1569,7 @@ console.log("Trapper AI suite passed.");
     [LIGHT_CONDENSATION_ID]: (fighter, game) => game.props.some((p) => p.lightCondensation),
     [TRAPPER_ID]: (fighter, game) => game.traps.length > 0,
     [ILLUSIONIST_ID]: (fighter, game) => game.fighters.some(isIllusionFighter),
+    hologram: (fighter, game) => game.fighters.some((f) => f.hologram && f.illusionOwner === fighter),
     [COMBAT_CLONE_ID]: (fighter, game) => game.fighters.some(isCombatClone),
     [SHADOW_CLONE_ID]: (fighter, game) => game.fighters.some((f) => f.cloneVariant === SHADOW_CLONE_ID),
     [SPLIT_ID]: (fighter, game) => game.fighters.some((f) => f.cloneVariant === SPLIT_ID),

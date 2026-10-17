@@ -34,7 +34,7 @@ import {
   SPLIT_SWITCH_MIN_HP, tryCombatCloneSpawn, trySplitSwitch
 } from "./combat-clone.js";
 import {
-  cycleIllusionistType, isIllusionFighter, isIllusionist, listIllusionFighters,
+  cycleIllusionistType, isDecoyProjector, isHologramGear, isIllusionFighter, listIllusionFighters,
   listIllusionObjects, tryIllusionistPlant
 } from "./illusionist.js";
 import {
@@ -44,7 +44,8 @@ import {
 import { angleDiff, clamp, dist, formatTime, lerp } from "./utils.js";
 import { crateVisibleToTeam } from "./powerups.js";
 import { fightStyleSpacingBias } from "./fight-styles.js";
-import { hpAtLeast, hpBelow, optimizeIllusionsEnabled, scaleHealthAmount } from "./settings.js";
+import { optimizeIllusionsEnabled, scaleHealthAmount } from "./settings.js";
+import { aiHpAtLeast as hpAtLeast, aiHpBelow as hpBelow, perceivedHp, selectAiTarget } from "./ai-perception.js";
 import { hasLineOfSight, visibleToSelf, visibleToTeam } from "./vision.js";
 import { Fighter } from "./combat.js";
 import { endDisguise, findDisguiseProp, isDisguiseGear, tryDisguise } from "./disguise.js";
@@ -52,6 +53,24 @@ import { chooseTacticalStrategy, observeSuspiciousProps } from "./ai-tactics.js"
 import {
   chooseCloneWeight, cloneActionChance, cloneStyleSituation, learnedCloneRow
 } from "./clone-style.js";
+
+export const AI_SEARCH_MEMORY_SECONDS = 6;
+
+function rememberVisibleTarget(fighter, target) {
+  const state = fighter.aiState;
+  state.target = target;
+  state.lastKnown = {
+    x: target.x, y: target.y, vx: target.vx, vy: target.vy, weapon: target.weapon,
+    hp: perceivedHp(target, fighter), healthScale: target.healthScale
+  };
+  state.stale = 0;
+  fighter.spotted = .4;
+}
+
+function rememberedSearchTarget(state) {
+  return state.lastKnown && state.stale < AI_SEARCH_MEMORY_SECONDS
+    ? { ...state.lastKnown, dead: false } : null;
+}
 
 function imitationSummon(fighter) {
   return (isCombatClone(fighter) || isIllusionFighter(fighter)) && fighter.cloneBehavior === "imitation";
@@ -63,17 +82,22 @@ export function updateAIImitation(fighter, dt, game, random = Math.random) {
   const style = owner?.cloneStyle || fighter.cloneStyle;
   const visible = game.fighters.filter((foe) => foe && !foe.dead && !foe.disguiseProp
     && foe.team !== fighter.team && visibleToTeam(game, fighter, foe));
-  const { target, key } = cloneStyleSituation(fighter, visible);
-  state.target = target;
-  if (target) {
-    state.desiredAim = Math.atan2(target.y - fighter.y, target.x - fighter.x);
+  state.timer -= dt;
+  state.stale += dt;
+  const deciding = state.timer <= 0 || !state.imitationActions;
+  const target = deciding || !visible.includes(state.target)
+    ? selectAiTarget(fighter, visible, { random }) : state.target;
+  if (target) rememberVisibleTarget(fighter, target);
+  const searching = !target && rememberedSearchTarget(state);
+  const aimTarget = target || searching;
+  const { key } = cloneStyleSituation(fighter, visible, { target, hp: perceivedHp(fighter) });
+  if (aimTarget) {
+    state.desiredAim = Math.atan2(aimTarget.y - fighter.y, aimTarget.x - fighter.x);
   } else {
     state.desiredAim = fighter.aim;
   }
-  state.timer -= dt;
   const now = game.elapsed || 0;
   const row = learnedCloneRow(style, key);
-  const deciding = state.timer <= 0 || !state.imitationActions;
   if (deciding) {
     const interval = .25 + random() * .3;
     state.timer = interval;
@@ -90,8 +114,9 @@ export function updateAIImitation(fighter, dt, game, random = Math.random) {
     state.imitationMove = chooseCloneWeight(row?.move, random);
     state.imitationModular = chooseCloneWeight(row?.modular, random);
     state.imitationAdaptive = chooseCloneWeight(row?.adaptive, random);
-    state.plan = row ? "imitating owner habits" : "observing owner habits";
   }
+  state.plan = searching ? "searching last sighting (owner habits)"
+    : row ? "imitating owner habits" : "observing owner habits";
   const actions = { ...state.imitationActions };
   const pending = state.imitationCombo;
   const comboDue = pending && pending.at <= now;
@@ -113,7 +138,7 @@ export function updateAIImitation(fighter, dt, game, random = Math.random) {
     }
   }
   state.imitationPrevious = actions;
-  const direction = target ? Math.sign(target.x - fighter.x) : fighter.facing || 1;
+  const direction = aimTarget ? Math.sign(aimTarget.x - fighter.x) : fighter.facing || 1;
   state.mx = state.imitationMove === "toward" ? direction : state.imitationMove === "away" ? -direction : 0;
   state.jump = !!actions.jump && fighter.grounded;
   state.jet = !!actions.jet && !fighter.grounded;
@@ -229,7 +254,7 @@ export function evaluateShieldThreat(fighter, threat, game, visible) {
   const saber = (threat.weapon || "") === "saber";
   const heavyRanged = (threat.weaponStats?.aimSettle || 0) >= .3
     || /sniper/i.test(threat.weaponId || "");
-  const hpRatio = fighter.hp / Math.max(1, fighter.maxHp || 500);
+  const hpRatio = perceivedHp(fighter) / Math.max(1, fighter.maxHp || 500);
 
   let severity = 0;
   if (
@@ -1047,7 +1072,7 @@ export function updateAiLightCondensation(fighter, state, game, visible, target)
   if ((fighter.lightCondensationCd || 0) > 0) return;
 
   const foe = target && Array.isArray(visible) && visible.includes(target) ? target : null;
-  const hunting = !!target && !foe && (state.stale || 0) < 6;
+  const hunting = !!target && !foe && (state.stale || 0) < AI_SEARCH_MEMORY_SECONDS;
   const pressured = hpBelow(fighter, 220) || (foe && dist(fighter, foe) < 300);
   const ownGlare = listLightCondensationProps(game).filter((p) => p.team === fighter.team);
   // Cap active ally nodes so maps don't fill with neon squares.
@@ -1133,11 +1158,11 @@ export function updateAiTrapper(fighter, state, game, visible, target) {
 
 /**
  * Illusionist (T cycle / key 3): fighter decoys under pressure, plats when foes
- * are above, props as lane bait. AI never filters illusions out of targeting —
- * decoys are treated as real combatants by design.
+ * are above, props as lane bait. Ordinary AI treats decoys as possible real
+ * combatants; truth sight is the only automatic illusion identification.
  */
 export function updateAiIllusionist(fighter, state, game, visible, target) {
-  if (!isIllusionist(fighter) || fighter.dead || !game) return;
+  if (!isDecoyProjector(fighter) || fighter.dead || !game) return;
   if ((fighter.illusionistCd || 0) > 0) return;
   let owned = 0;
   for (const i of listIllusionObjects(game)) {
@@ -1153,7 +1178,8 @@ export function updateAiIllusionist(fighter, state, game, visible, target) {
   if (!foe && !engaged && hpAtLeast(fighter, 280)) return;
 
   let want = "fighter";
-  if (foe && (!foe.grounded || foe.y < fighter.y - 50)) want = "platform";
+  if (isHologramGear(fighter)) want = "fighter";
+  else if (foe && (!foe.grounded || foe.y < fighter.y - 50)) want = "platform";
   else if (foe && dist(fighter, foe) > 420) want = "prop";
   else if (hpBelow(fighter, 200)) want = "fighter";
 
@@ -1478,6 +1504,7 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
   const turnRate = preset.aimTurnRate ?? AI_PRESETS.balanced.aimTurnRate;
   if (fighter.jetLocked) state.jet = false;
   state.timer -= dt;
+  state.stale += dt;
   if (state.timer > 0) {
     if (useGear) tickAiShieldHold(fighter, state, game);
     stepAimSmoothing(fighter, dt, turnRate);
@@ -1489,27 +1516,17 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
   state.dodge = false;
   state.shield = false;
 
-  let target = null;
-  let best = Infinity;
   const suspicious = observeSuspiciousProps(fighter, game);
   const visible = game.fighters.filter((enemy) => enemy && !enemy.dead && !enemy.disguiseProp
     && enemy.team !== fighter.team && visibleToTeam(game, fighter, enemy));
-  // Prefer real foes; fall back to any living enemy (including other decoys).
-  for (const enemy of visible) {
-    const d = dist(fighter, enemy);
-    const knownSummon = isIllusionFighter(enemy)
-      || (isCombatClone(enemy) && enemy.cloneVariant !== "shadow-clone");
-    const weight = knownSummon ? d + 80 : d;
-    if (weight < best) {
-      best = weight;
-      target = enemy;
-    }
-  }
+  let target = selectAiTarget(fighter, visible);
   if (!target && suspicious) {
     target = suspicious;
     visible.push(suspicious);
   }
   state.target = target;
+  if (target) rememberVisibleTarget(fighter, target);
+  else target = rememberedSearchTarget(state);
   if (useGear) updateAiWeaponSlot(fighter, state, game, visible, target);
 
   const reach = fighter.weaponReach || (fighter.weapon === "saber" ? 120 : 920);
@@ -1519,17 +1536,19 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
     const dy = (target.y + SIZE / 2) - (fighter.y + SIZE / 2);
     const distance = Math.hypot(dx, dy);
     state.desiredAim = Math.atan2(dy, dx);
-    const canSee = visibleToSelf(fighter, target, game);
+    const searching = !visible.includes(target);
+    const canSee = !searching && visibleToSelf(fighter, target, game);
     state.attack = canSee && distance < reach;
     let goalX = target.x;
-    if (distance < desired - 50) goalX = fighter.x - Math.sign(dx || 1) * 120;
+    if (!searching && distance < desired - 50) goalX = fighter.x - Math.sign(dx || 1) * 120;
     else if (distance > desired + 70) goalX = target.x;
     state.mx = Math.abs(goalX - fighter.x) > 28 ? Math.sign(goalX - fighter.x) : 0;
     state.jump = !!fighter.grounded && target.y < fighter.y - 140;
     const needLift = target.y < fighter.y - 90;
     state.jet = !fighter.grounded && needLift && fighter.fuel > 0.18 && !fighter.jetLocked;
     state.jetHeld = state.jet;
-    state.plan = target.suspectedProp ? "investigating moving prop" : `${planPrefix} pressing`;
+    state.plan = searching ? "searching last sighting"
+      : target.suspectedProp ? "investigating moving prop" : `${planPrefix} pressing`;
   } else {
     state.attack = false;
     state.mx = 0;
@@ -1539,8 +1558,22 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
     state.plan = `${planPrefix} idle`;
   }
 
+  if (!visible.length) {
+    const crate = pickNearestVisibleCrate(game, fighter);
+    if (crate) {
+      state.desiredAim = aimAtPowerCrate(fighter, crate);
+      state.mx = Math.abs(crate.x - fighter.x) > 28 ? Math.sign(crate.x - fighter.x) : 0;
+      state.jump = fighter.grounded && crate.y < fighter.y - 120;
+      state.jet = !fighter.grounded && crate.y < fighter.y - 90
+        && fighter.fuel > .18 && !fighter.jetLocked;
+      state.jetHeld = state.jet;
+      state.attack = dist(fighter, crate) < reach;
+      state.plan = "looting power crate";
+    }
+  }
+
   if (plantIllusions) {
-    updateAiIllusionist(fighter, state, game, target ? [target] : [], target);
+    updateAiIllusionist(fighter, state, game, visible, target);
   }
   if (useGear) {
     const threat = visible.includes(target) ? target : null;
@@ -1587,7 +1620,7 @@ export function updateAIClone(fighter, dt, game) {
  */
 export function updateAiCombatClone(fighter, state, game, visible, target) {
   if (!isCombatCloneGear(fighter) || fighter.dead || !game) return;
-  if (fighter.splitGear && fighter.hp < SPLIT_SWITCH_MIN_HP && trySplitSwitch(fighter, game)) {
+  if (fighter.splitGear && perceivedHp(fighter) < SPLIT_SWITCH_MIN_HP && trySplitSwitch(fighter, game)) {
     state.plan = "switching split";
     return;
   }
@@ -1703,13 +1736,12 @@ export function updateAI(fighter, dt, game, profile) {
   const enemies = game.fighters.filter((enemy) => !enemy.dead && !enemy.disguiseProp && enemy.team !== fighter.team);
   const visible = enemies.filter((enemy) => visibleToTeam(game, fighter, enemy));
   const latestPing = game.pings[game.pings.length - 1];
-  let target = visible.sort((a, b) => {
-    const hpBias = preset.change * (a.hp - b.hp) * 1.2;
-    const pingBias = latestPing
-      ? coachingBias("focusTargets") * (dist(a, latestPing) - dist(b, latestPing)) * 1.4
-      : 0;
-    return dist(fighter, a) - dist(fighter, b) + hpBias + pingBias;
-  })[0];
+  let target = selectAiTarget(fighter, visible, {
+    score: (enemy) => dist(fighter, enemy) + preset.change * perceivedHp(enemy, fighter) * 1.2
+      + (latestPing ? coachingBias("focusTargets") * dist(enemy, latestPing) * 1.4 : 0),
+    trackingSkill: fighter.buddy ? evidenceReliability(learned.capabilities.aim) : undefined,
+    style: fighter.buddy ? profile.fightStyle : fighter.fightStyle
+  });
   const suspicious = observeSuspiciousProps(fighter, game);
   if (!target && suspicious) {
     target = suspicious;
@@ -1719,17 +1751,10 @@ export function updateAI(fighter, dt, game, profile) {
   state.tacticalStrategy = strategy;
 
   if (target) {
-    state.target = target;
-    state.lastKnown = {
-      x: target.x, y: target.y, vx: target.vx, vy: target.vy, weapon: target.weapon
-    };
-    state.stale = 0;
-    fighter.spotted = .4;
-  } else if (state.lastKnown && state.stale < 6) {
-    target = { ...state.lastKnown, hp: 500, dead: false };
+    rememberVisibleTarget(fighter, target);
   } else {
     state.target = null;
-    target = null;
+    target = rememberedSearchTarget(state);
   }
 
   // Per-decision tool holds (persist between reaction ticks like attack).
@@ -1761,7 +1786,7 @@ export function updateAI(fighter, dt, game, profile) {
       protect = .55;
     }
     if (
-      lowHpKnowledge > .35 && hpBelow(player, 190)
+      lowHpKnowledge > .35 && hpBelow(player, 190, fighter)
     ) {
       protect = learned.habits.lowHpBehavior.estimate > .45 ? .95 : .6;
     }
@@ -1771,7 +1796,7 @@ export function updateAI(fighter, dt, game, profile) {
     if (
       lowHpKnowledge > .2
       && learned.habits.lowHpBehavior.estimate !== null
-      && hpBelow(player, 190)
+      && hpBelow(player, 190, fighter)
       && isTeamMode(game)
     ) {
       // Copy low-HP aggression: high estimate → stay aggressive near the player.
@@ -1850,8 +1875,8 @@ export function updateAI(fighter, dt, game, profile) {
       goalX = lerp(goalX, player.x, followBias);
     }
     // Mimic soft safety: always keep a light teammate bias in 2v2.
-    if (isMimic && (hpBelow(player, 190) || dist(fighter, player) > 520)) {
-      goalX = lerp(goalX, player.x, MIMIC_TEAM_SAFETY * (hpBelow(player, 190) ? 1.15 : 1));
+    if (isMimic && (hpBelow(player, 190, fighter) || dist(fighter, player) > 520)) {
+      goalX = lerp(goalX, player.x, MIMIC_TEAM_SAFETY * (hpBelow(player, 190, fighter) ? 1.15 : 1));
       protect = Math.max(protect, lerp(protect, .75, MIMIC_TEAM_SAFETY));
     }
   }
@@ -1876,8 +1901,9 @@ export function updateAI(fighter, dt, game, profile) {
   if (target) {
     const dx = target.x - fighter.x;
     const distance = dist(fighter, target);
+    const searchingSummon = !visible.includes(target) && (isCombatClone(fighter) || isIllusionFighter(fighter));
     const idealX = target.x - Math.sign(dx || 1) * desired;
-    if (Math.abs(distance - desired) > 45) goalX = idealX;
+    if (!searchingSummon && Math.abs(distance - desired) > 45) goalX = idealX;
     if (strategy === "flank") {
       const ally = game.fighters.find((other) => other !== fighter && !other.dead
         && other.team === fighter.team && !isIllusionFighter(other)
@@ -1947,10 +1973,10 @@ export function updateAI(fighter, dt, game, profile) {
     }
     // Only a somewhat-trained buddy knows to back out of point-blank gunfights.
     const keepsDistance = !fighter.buddy || rangeKnowledge > .3;
-    if (distance < 150 && fighter.weapon === "gun" && keepsDistance) {
+    if (!searchingSummon && distance < 150 && fighter.weapon === "gun" && keepsDistance) {
       goalX = fighter.x - Math.sign(dx) * 220;
     }
-    state.plan = distance > desired + 100
+    state.plan = searchingSummon ? "searching last sighting" : distance > desired + 100
       ? "closing safely"
       : "pressing target";
   } else {
@@ -2084,9 +2110,9 @@ export function updateAI(fighter, dt, game, profile) {
     const threatDistance = dist(fighter, threat);
     const threatReach = (threat.weapon || "gun") === "saber" ? 300 : 780;
     const closeEngagement = (threat.weapon || "gun") === "saber" ? 260 : 430;
-    const critical = fighter.hp < retreatHp && threatDistance < threatReach;
-    const badlyLosing = fighter.hp + scaleHealthAmount(fighter, 120)
-      < (threat.hp || scaleHealthAmount(threat, 500) || scaleHealthAmount(fighter, 500))
+    const critical = perceivedHp(fighter) < retreatHp && threatDistance < threatReach;
+    const badlyLosing = perceivedHp(fighter) + scaleHealthAmount(fighter, 120)
+      < perceivedHp(threat, fighter)
       && threatDistance < closeEngagement;
     if (critical || badlyLosing || (priorRetreatDecision && threatDistance < threatReach)) {
       state.escape = makeEscapePlan(fighter, threat, game, learned, basePreset);
@@ -2148,8 +2174,8 @@ export function updateAI(fighter, dt, game, profile) {
     // Low-HP retreat hops: brief detour to a nearby visible crate, then resume escape.
     // Never overrides close self-defense or imminent high-severity dodges.
     const maxHp = Math.max(1, fighter.maxHp || 500);
-    const wantsHealHop = fighter.hp < retreatHp
-      || fighter.hp / maxHp < CRATE_ESCAPE_HP_FRAC;
+    const wantsHealHop = perceivedHp(fighter) < retreatHp
+      || perceivedHp(fighter) / maxHp < CRATE_ESCAPE_HP_FRAC;
     if (wantsHealHop && !defending && dodgeInfo.severity < 2 && !state.dodge) {
       const hopCrate = pickEscapeCrateHop(fighter, game, escape);
       if (hopCrate) {

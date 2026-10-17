@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { Fighter, hit, stepBullets } from "./combat.js";
+import { SIZE } from "./config.js";
 import {
   applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID, ILLUSIONIST_ID
 } from "./equipment.js";
@@ -7,6 +8,7 @@ import {
   applyPhantomDamage, createFighterIllusion, cycleIllusionistType,
   cycleIllusionPropKind, displayedHp, hasIllusionTruthSight, ILLUSION_BREAK_LIFE,
   ILLUSION_FIGHTER_HITS, ILLUSION_METAL_PROP, ILLUSION_PHANTOM_DAMAGE,
+  ILLUSION_SPAWN_SMOKE_LIFE,
   isIllusionFighter, isIllusionist, isRealCombatant, listIllusionPropKinds,
   refreshIllusionCaches, registerIllusionFighterHit, registerIllusionObjectHit,
   tryIllusionistPlant
@@ -54,6 +56,15 @@ assert.equal(ILLUSION_PHANTOM_DAMAGE, 40);
   assert.ok(decoy.illusionFakeHp > 0);
   assert.equal(isRealCombatant(decoy), false);
   assert.equal(game.fighters.includes(decoy), true);
+  const smoke = game.effects.find((effect) => effect.type === "illusionSpawnSmoke");
+  assert.ok(smoke);
+  assert.equal(smoke.life, ILLUSION_SPAWN_SMOKE_LIFE);
+  assert.equal(smoke.maxLife, ILLUSION_SPAWN_SMOKE_LIFE);
+  for (const body of [owner, decoy]) {
+    assert.ok(Math.hypot(body.x + SIZE / 2 - smoke.x, body.y + SIZE / 2 - smoke.y)
+      + SIZE / Math.SQRT2 <= smoke.radius,
+      "spawn smoke covers both the caster and fighter decoy");
+  }
 }
 
 {

@@ -2,6 +2,30 @@
   "version": 1,
   "chunks": [
     {
+      "id": "manual-hologram",
+      "topic": "equipment",
+      "aliases": ["hologram", "projection", "one hit fade", "hologram truth sight", "cosmetic attacks"],
+      "text": "Hologram is a 100 Cyber fighter-only Extension, available in the first Campaign stage shop. Press 3: 2.5-second cooldown, two active, 15-second lifetime. It mirrors the owner's kit/appearance and apparent health, with no identifying outline or lean optimized model, even against Illusionist truth sight. It does not grant truth sight, spawn smoke or reset an existing visual track. On the first incoming hit it stops acting immediately and keeps a live-looking body during a 0.35-second smoothstep opacity fade; expiry uses the same fade. Incoming bullets and tool projectiles pass through visibly without being consumed/ghosted, and may hit a real fighter behind it. Outgoing shots, melee, spells and tools are cosmetic, pass through cover/fighters and cause no real/phantom damage, statuses, knockback, prop damage, crate rewards, shield drain, real grabs or debris consumption. Holograms do not count for victory; fading bodies cease contributing sight. Includes Normal imitation and free Generic selection in Equipment/Campaign, shared owner analysis and ordinary summon sight/search. Normal search remains learned-movement-only, without extra dodges or tactical navigation. Truth sight can identify ordinary Illusionist decoys, not Holograms or Shadows."
+    },
+    {
+      "id": "manual-clone-search",
+      "topic": "equipment",
+      "aliases": ["clone searching", "illusionist search", "last-seen memory", "normal search habits"],
+      "text": "All Doppel, Shadow, Split and Illusionist fighter brains keep their own last-seen snapshots for up to six seconds, with Optimize illusions on or off. On losing team sight they drop the live target and use fixed observed coordinates, never unseen updates. Fresh visible acquisition refreshes the snapshot/timer; spawn-smoke identity resets still erase it immediately. Generic summons navigate toward the remembered point with ordinary jump/jet navigation, stop auto-firing at an unseen foe, and may loot currently visible power crates like normal AI. Normal imitation summons aim/search relative to their remembered point but move only with learned toward/away/still tendencies and learned jump/jet inputs, never automatic tactical movement or dodges. Learned blind fire is retained. Empty Normal profiles have no Generic fallback or automatic crate-looting policy. After six seconds without a sighting, the remembered point no longer drives searching. HP, damage, armor, cooldowns, prices and summon limits are unchanged."
+    },
+    {
+      "id": "manual-illusionist-spawn-smoke",
+      "topic": "equipment",
+      "aliases": ["fighter spawn smoke", "smoke puff", "break ai tracking", "illusionist spawning"],
+      "text": "A successful Illusionist FIGHTER cast produces a 0.65-second foreground smoke cloud covering the caster and new decoy. Ordinary enemy AI currently tracking the visible caster immediately loses its target, last-known identity and pending aim/fire lock, and reacquires at its next decision. This is a fresh acquisition, not a forced choice of decoy: the AI may pick the caster again without retaining original identity. Truth sight, allied/human observers, unrelated targets and unseen casts are unaffected. Prop/platform casts and failed casts (cooldown, active cap or invalid fighter construction) produce no spawn smoke or tracking reset. Smoke does not grant invulnerability, damage, collision or mechanical sight/projectile blocking. Prices, cooldowns, active limits and fighter lifetimes are unchanged."
+    },
+    {
+      "id": "manual-illusionist-perception",
+      "topic": "equipment",
+      "aliases": ["illusionist targeting", "phantom damage", "overlapping decoys", "visual tracking", "confuse bots"],
+      "text": "Illusionist deception affects AI as well as displayed bars. Ordinary bots cannot identify real/decoy actors from hidden flags. They retain observed bodies while visually matching enemies stay separate; overlap or crossing can break the track, including between reaction ticks. Training improves retention without perfect immunity. When acquiring an uncertain group or losing a track, aggressive/Rusher selection is uniform among lookalikes, while Defender/Coverer/Support and cautious mind presets probabilistically favor nearer bodies. Continuous overlap does not reroll each tick. Losing sight drops live identity tracking; last-seen searches do not follow hidden coordinates. Full AI, lightweight summons and Normal imitation use these rules with Optimize illusions on or off, without giving Normal generic action policies. Phantom health affects retreat, threat assessment, equipment thresholds, support, finishing-target priority and tactical/owner-style hurt contexts. Real HP, death, damage links, healing, resources, rewards and real-damage learning evidence are untouched; ordinary phantom decay restores perceived health. Illusionist truth sight reads real HP and identifies illusion fighters, but does not reveal Shadows by hidden flags. Prices, active caps, cooldowns, hit budgets and lifetimes are unchanged."
+    },
+    {
       "id": "manual-clone-behavior",
       "topic": "equipment",
       "aliases": ["normal clones", "generic clones", "imitation", "copy inputs", "clone combos", "clone playstyle"],
