@@ -215,6 +215,7 @@ assert.equal(ILLUSION_PHANTOM_DAMAGE, 40);
   decoy.y = 700;
   decoy.illusionistCd = 0;
   decoy.illusionistType = "prop";
+  decoy.cloneBehavior = "generic";
   const enemy = new Fighter({
     x: 550, y: 700, team: 1, hp: 500, maxHp: 500, grounded: true
   });

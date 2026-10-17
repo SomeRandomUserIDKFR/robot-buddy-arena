@@ -51,6 +51,7 @@ npm run smoke:analyzer
 - `combat.js` — fighters, movement, weapons, and projectiles
 - `powerups.js` — metal power-up crates, buff award/tick, sight-aware spawn/respawn
 - `equipment.js` — gear catalog, loadouts, Cyber economy, rewards, purchases, and buddy gear decisions
+- `clone-style.js` — bounded owner-input learning, contextual habits, coarse combo patterns, and clone behavior variants
 - `power.js` — unified Power (danger estimate) from gear, perks, and AI / training
 - `conquest.js` — Ranking leagues, opponent encounter generation (includes mapId), Power via `power.js`, reroll rules
 - `perks.js` — perk catalog, Conquest EXP / levels, unlock picks, and buddy perk autonomy
@@ -148,7 +149,7 @@ Ally outlines identify shadows in purple and Split
 twins in green. The Extension HUD shows spawn availability, living twins, and
 Split's switch cooldown. Doppel's spawn cooldown and limits are unchanged.
 
-Real Doppel, Shadow, and Split twins use shared equipment AI even with Optimize
+Generic Doppel, Shadow, and Split twins use shared equipment AI even with Optimize
 illusions enabled: short frontal shield raises, nanotech weapon formation,
 Mechanical Modularity / Adaptive Nanotech range-and-threat mode selection, and
 Material Consumer, Throw Breakable, or Shield Steal secondary use. All real twins
@@ -162,7 +163,7 @@ health scaling). Real twins top up nanotech armor under sustained pressure and
 can operate a retractable shell alongside a nanotech chestplate.
 Held props follow real twins and
 do not block their own sight. Real twins cannot nest-spawn Extensions.
-Illusionist decoys retain their existing lightweight behavior.
+Generic Illusionist decoys retain their existing lightweight behavior.
 
 All real twins and Illusionist fighter decoys have normal equipped sight,
 including directional weapon sight and map sight penalties. Living summons
@@ -172,6 +173,50 @@ eyes. Summon AI acquires only enemies currently visible to its team, like a
 player; it cannot locate or follow an unseen enemy's live coordinates. The full
 AI may search a remembered last-seen position without updating it through fog.
 Optimization changes AI/detail costs, not sight or shared team vision.
+
+### Normal imitation and included Generic variants
+
+Buying **Doppel, Shadow Clone, Split, or Illusionist** unlocks both behavior
+variants at the normal price, including for existing owners. Select **Normal -
+Imitation** or **Generic - Included** beneath the equipped Extension in the
+Equipment Bay, or on the Campaign kit panel. This is a per-loadout setting
+(`cloneBehavior`), not a second item or purchase. Normal is the default for
+new and migrated loadouts. Buddy-choice autonomy still locks manual selection.
+The choice changes fighter brains only, not prices, HP, damage links, armor
+strength, cooldowns, or Illusionist prop/platform mechanics.
+
+During every fight, even with Generic equipped or no clone Extension equipped,
+one lightweight owner recorder observes game input and combat context. It
+batches raw intent at about 10 Hz: movement, attack, jump/jet holds, dodge key
+presses, secondary/tool use, equipment states and weapon modes. Contexts include
+weapon kind, visible-enemy range, low health, close melee/hit pressure, and
+ground/air state. Usage and non-usage are compared with available opportunities;
+an unequipped shield or dodge on cooldown is not treated as a choice to avoid it.
+Summons do not record or feed their actions back into the owner profile.
+
+The human player's profile persists across Training, Conquest, Campaign, and
+Survival; it is autosaved locally every 15 match seconds, on quitting, and at
+match end. Other owners learn their own behavior for that match only.
+**Learning Lock freezes this recorder in every mode**, including the tutorial.
+Each owner's summons read the same live aggregate profile rather than running
+separate analyzers. Stored data is bounded to 64 contexts and 64 sequence
+patterns; short raw frame buffers stay in memory and are discarded after analysis.
+No external model, network call, or system-wide keyboard recording is involved.
+
+Normal summons imitate observed tendencies, including omissions and mistakes:
+no observed dodging means no tactical dodge fallback; excessive jet holds remain
+excessive even when fuel is exhausted. Successful moves are not ranked above
+failed ones, and Shadow clones do not receive an extra caution policy. Equipment
+AI runs only when supported by the learned behavior. Repeated action transitions
+are stored with coarse quick/short/long gaps, not exact timings, and clones
+resample their own timing and choices. Their own vision, resources, controls,
+cooldowns, and armor limits still apply. Context notes describe associations and
+possible intent, not certainty about why an input happened.
+
+With no relevant observations, Normal does not silently fall back to Generic:
+it waits for evidence. Use the included Generic option for the original tactical
+brain immediately. Generic retains the prior optimized/full-AI paths; Normal's
+imitation rules are the same with Optimize illusions on or off.
 
 ## Disguise
 
@@ -323,7 +368,7 @@ The arena also has a hard ceiling just above the highest platform's airspace (`y
 
 Learning is evidence-based and multidimensional. There is no level, skill percentage, elapsed-time ramp, or automatic per-match learning reward. Starting or finishing a match changes no learning record by itself; idle play also produces no evidence. A record changes only when a relevant situation occurs, the buddy makes a prediction or attempts a counter, and the result can be judged.
 
-**Learning Lock / Spar only** (equipment bay toggle, persisted on the profile, default unlocked): Training still runs as a full 1v1 with the same controls, mind modes, Mimic, and gear, but the match writes no habit evidence, capability evidence (including precisionAim), readiness changes, coaching directive practice tallies, lesson proposals, or other Training learning updates. Post-match feedback makes the spar clear — no “I learned…” claims. Coaching chat and new practice goals remain available after a spar; that spar itself does not advance practice evidence. Conquest Cyber, EXP, and Ranking rewards are unaffected; lock only means Training will not write learning. Training / Spar never grant Conquest EXP or Ranking changes.
+**Learning Lock / Spar only** (equipment bay toggle, persisted on the profile, default unlocked): Training still runs as a full 1v1 with the same controls, mind modes, Mimic, and gear, but the match writes no habit evidence, capability evidence (including precisionAim), readiness changes, coaching directive practice tallies, lesson proposals, or other Training learning updates. Post-match feedback makes the spar clear — no “I learned…” claims. Coaching chat and new practice goals remain available after a spar; that spar itself does not advance practice evidence. Conquest Cyber, EXP, and Ranking rewards are unaffected. The lock also freezes tactical evidence and owner-input clone-style recording in every mode; it does not disable combat or rewards. Training / Spar never grant Conquest EXP or Ranking changes.
 
 The gun and saber profiles independently track engagement-range prediction, rush prediction, dodge-timing prediction, jetpack-use prediction, and low-HP behavior. Aim, useful dodge timing, and fuel management have separate outcome records too. Each record stores successes, failures, an outcome-weighted estimate, and uncertainty. Contradictory outcomes lower reliability, so a changed player habit can make an old belief stale. Learning rush timing cannot improve aim, fuel use, or any other unrelated domain.
 

@@ -12,6 +12,7 @@ import {
 } from "./equipment.js";
 import { clamp } from "./utils.js";
 import { dropHeldBreakable } from "./throw-breakable.js";
+import { bindCloneStyle } from "./clone-style.js";
 
 export const COMBAT_CLONE_ID = "doppel";
 export { SHADOW_CLONE_ID, SPLIT_ID };
@@ -213,6 +214,7 @@ export function createCombatClone(owner, FighterCtor) {
   clone.buddy = false;
   clone.combatClone = true;
   clone.cloneOwner = owner;
+  bindCloneStyle(owner, clone);
   clone.cloneVariant = owner.loadout.extensionSecondary;
   clone.aim = owner.aim;
   clone.facing = owner.facing || 1;

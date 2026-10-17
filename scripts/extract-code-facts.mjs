@@ -15,6 +15,7 @@ const ALLOWLIST = [
   "config.js",
   "equipment.js",
   "combat-clone.js",
+  "clone-style.js",
   "disguise.js",
   "illusionist.js",
   "powerups.js",

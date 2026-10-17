@@ -56,6 +56,8 @@ import {
   damageDisguise, DISGUISE_SPEED_MULT, endDisguise, fighterHitbox, fighterHitPoint,
   syncDisguisePosition, tickDisguise
 } from "./disguise.js";
+import { ownerCloneStyle, recordCloneStyle } from "./clone-style.js";
+import { visibleToTeam } from "./vision.js";
 
 bindThrowBreakablePowerCrateDamager(damagePowerCrate);
 bindExplosiveBarrelPowerCrateDamager(damagePowerCrate);
@@ -630,6 +632,7 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
   }
   const decoy = isIllusionFighter(fighter);
   const clone = isCombatClone(fighter);
+  if (!decoy && !clone) ownerCloneStyle(fighter, profile);
   fighter.attackCd -= dt;
   fighter.dodgeCd -= dt;
   fighter.iframe -= dt;
@@ -669,6 +672,11 @@ export function stepFighter(fighter, dt, game, profile, keys, getHumanIntent) {
     intent = fighter.human
       ? getHumanIntent(fighter)
       : updateAI(fighter, dt, game, profile);
+  }
+  if (!decoy && !clone) {
+    const visible = game.fighters.filter((foe) => foe && !foe.dead && foe.team !== fighter.team
+      && !foe.disguiseProp && visibleToTeam(game, fighter, foe));
+    recordCloneStyle(fighter, intent, dt, game, profile, visible);
   }
   if (fighter.shieldRaised) endDisguise(fighter, game);
   applyTrapLockToIntent(fighter, intent);

@@ -23,8 +23,9 @@ import {
   purchaseGear, reconcileLoadoutsToOwned, selectWeaponSlot, setBuddyMode,
   setNanotechChanneling, tickMaterialConsumerVacuum, tryMaterialConsumerReform,
   tryNanotechWeaponAction, toggleRetractableArmor, toggleShieldRaise, trainerLoadout,
-  weaponKind
+  weaponKind, setCloneBehavior
 } from "./equipment.js";
+import { noteCloneStyleInput, ownerCloneStyle } from "./clone-style.js";
 import {
   applyCampaignBossModifiers, awardCampaign, beginCampaignSelect, campaignEquip,
   ensureCampaignProfile, getPendingCampaignEncounter, initCampaignBossState,
@@ -158,6 +159,7 @@ function makeGame(mode) {
       human: true
     }), playerLoadout)
   ];
+  ownerCloneStyle(fighters[0], profile);
   if (mode === "tutorial") {
     // Controlled recruit spar dummy — not the player's tuned mind/style.
     fighters.push(outfit(new Fighter({
@@ -458,6 +460,10 @@ function humanIntent(fighter) {
 function update(dt) {
   if (!game || game.paused || game.over) return;
   game.elapsed += dt;
+  if (game.elapsed >= (game.nextCloneStyleSave || 15)) {
+    saveProfile();
+    game.nextCloneStyleSave = game.elapsed + 15;
+  }
   game.announcement -= dt;
   game.thoughtClock -= dt;
   const player = game.fighters[0];
@@ -471,6 +477,7 @@ function update(dt) {
       }
     } else {
       if (nanoFHoldT > 0 && !nanoFHoldLatched) {
+        noteCloneStyleInput(player, "nano");
         pulseNanotechArmor(player);
       }
       nanoFHoldT = 0;
@@ -629,6 +636,7 @@ function handleKeyDown(event) {
   unlockSfx();
   if (!game || game.over) return;
   if (event.code === "KeyQ" && !event.repeat) {
+    if (!game.paused) noteCloneStyleInput(game.fighters[0], "shield");
     toggleShieldRaise(game.fighters[0]);
   }
   if (event.code === "KeyF" && !event.repeat) {
@@ -684,6 +692,7 @@ function handleKeyDown(event) {
     if (isIllusionist(player)) cycleIllusionPropKind(player, game);
   }
   if (event.code === "KeyC") {
+    if (!game.paused) noteCloneStyleInput(game.fighters[0], "dodge");
     tutorialDodgePulse = true;
     triggerDodge(game.fighters[0], game, keys);
   }
@@ -764,6 +773,7 @@ bindUi({
   },
   quit() {
     setJetpackThrusting(false);
+    saveProfile();
     game = null;
     setPendingEncounter(null);
     setPendingCampaignEncounter(null);
@@ -852,6 +862,20 @@ bindUi({
     ui.shopFeedback.className = "shop-feedback success";
     saveProfile();
     refreshMenu(profile);
+  },
+  cloneBehavior(owner, behavior, campaign = false) {
+    if (!setCloneBehavior(profile, owner, behavior, campaign)) {
+      const message = "Equip an owned clone Extension to choose its behavior.";
+      if (campaign) refreshCampaignSelect(profile, message);
+      else {
+        ui.shopFeedback.textContent = message;
+        ui.shopFeedback.className = "shop-feedback error";
+      }
+      return;
+    }
+    saveProfile();
+    if (campaign) refreshCampaignSelect(profile);
+    else refreshMenu(profile);
   },
   buddyMode(mode) {
     setBuddyMode(profile, mode);

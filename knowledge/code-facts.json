@@ -1,10 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-17T02:36:48.567Z",
+  "generatedAt": "2026-10-17T03:34:21.316Z",
   "allowlist": [
     "config.js",
     "equipment.js",
     "combat-clone.js",
+    "clone-style.js",
     "disguise.js",
     "illusionist.js",
     "powerups.js",
@@ -13,7 +14,7 @@
     "perks.js",
     "power.js"
   ],
-  "contentHash": "d28aa1a17850d78e",
+  "contentHash": "16d5406aad6d8a4c",
   "entries": [
     {
       "id": "code-config-ceiling",
@@ -415,6 +416,65 @@
         "speed surge mult"
       ],
       "text": "powerups.js: SPEED_SURGE_MULT = 1.18"
+    },
+    {
+      "id": "code-clone-style-clone_style_actions",
+      "source": "clone-style.js",
+      "name": "CLONE_STYLE_ACTIONS",
+      "topic": "code",
+      "aliases": [
+        "clone_style_actions",
+        "clone",
+        "style",
+        "actions",
+        "clone style actions"
+      ],
+      "text": "clone-style.js: CLONE_STYLE_ACTIONS = [ \"attack\", \"dodge\", \"jump\", \"jet\", \"shield\", \"armor\", \"nano\", \"recall\", \"chuck\", \"eject\", \"secondary\", \"form\" ]"
+    },
+    {
+      "id": "code-clone-style-clone_style_max_combos",
+      "source": "clone-style.js",
+      "name": "CLONE_STYLE_MAX_COMBOS",
+      "topic": "code",
+      "aliases": [
+        "clone_style_max_combos",
+        "clone",
+        "style",
+        "max",
+        "combos",
+        "clone style max combos"
+      ],
+      "text": "clone-style.js: CLONE_STYLE_MAX_COMBOS = 64"
+    },
+    {
+      "id": "code-clone-style-clone_style_max_contexts",
+      "source": "clone-style.js",
+      "name": "CLONE_STYLE_MAX_CONTEXTS",
+      "topic": "code",
+      "aliases": [
+        "clone_style_max_contexts",
+        "clone",
+        "style",
+        "max",
+        "contexts",
+        "clone style max contexts"
+      ],
+      "text": "clone-style.js: CLONE_STYLE_MAX_CONTEXTS = 64"
+    },
+    {
+      "id": "code-clone-style-clone_style_sample_seconds",
+      "source": "clone-style.js",
+      "name": "CLONE_STYLE_SAMPLE_SECONDS",
+      "topic": "code",
+      "aliases": [
+        "clone_style_sample_seconds",
+        "clone",
+        "style",
+        "sample",
+        "seconds",
+        "clone style sample seconds"
+      ],
+      "text": "clone-style.js: CLONE_STYLE_SAMPLE_SECONDS = .1"
     },
     {
       "id": "code-combat-clone-combat_clone_cooldown",

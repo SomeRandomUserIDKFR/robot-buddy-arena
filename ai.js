@@ -10,7 +10,7 @@ import {
   isModularWeapon, MATERIAL_CONSUMER_EJECTION_TANK_CAP, MATERIAL_CONSUMER_ID,
   MATERIAL_CONSUMER_VACUUM_RADIUS, materialDebrisAmmoCount, materialEjectionTank,
   nanotechFormPct, nanotechPoolRoom, pulseNanotechArmor, selectWeaponSlot,
-  setNanotechChanneling, tryFormNanotechWeapon
+  setNanotechChanneling, tryFormNanotechWeapon, tryNanotechWeaponAction
 } from "./equipment.js";
 import {
   isShieldSteal, SHIELD_STEAL_ID, SHIELD_STEAL_RANGE
@@ -49,6 +49,100 @@ import { hasLineOfSight, visibleToSelf, visibleToTeam } from "./vision.js";
 import { Fighter } from "./combat.js";
 import { endDisguise, findDisguiseProp, isDisguiseGear, tryDisguise } from "./disguise.js";
 import { chooseTacticalStrategy, observeSuspiciousProps } from "./ai-tactics.js";
+import {
+  chooseCloneWeight, cloneActionChance, cloneStyleSituation, learnedCloneRow
+} from "./clone-style.js";
+
+function imitationSummon(fighter) {
+  return (isCombatClone(fighter) || isIllusionFighter(fighter)) && fighter.cloneBehavior === "imitation";
+}
+
+export function updateAIImitation(fighter, dt, game, random = Math.random) {
+  const state = fighter.aiState;
+  const owner = fighter.cloneOwner || fighter.illusionOwner;
+  const style = owner?.cloneStyle || fighter.cloneStyle;
+  const visible = game.fighters.filter((foe) => foe && !foe.dead && !foe.disguiseProp
+    && foe.team !== fighter.team && visibleToTeam(game, fighter, foe));
+  const { target, key } = cloneStyleSituation(fighter, visible);
+  state.target = target;
+  if (target) {
+    state.desiredAim = Math.atan2(target.y - fighter.y, target.x - fighter.x);
+  } else {
+    state.desiredAim = fighter.aim;
+  }
+  state.timer -= dt;
+  const now = game.elapsed || 0;
+  const row = learnedCloneRow(style, key);
+  const deciding = state.timer <= 0 || !state.imitationActions;
+  if (deciding) {
+    const interval = .25 + random() * .3;
+    state.timer = interval;
+    const actions = {};
+    for (const action of ["attack", "jump", "jet", "shield", "armor", "recall",
+      "chuck", "eject", "secondary", "form"]) {
+      actions[action] = random() < cloneActionChance(row, action);
+    }
+    for (const action of ["dodge", "nano"]) {
+      actions[action] = !!row && random() < Math.min(1,
+        (row.events[action] || 0) / Math.max(.1, row.opportunities[action] || 0) * interval);
+    }
+    state.imitationActions = actions;
+    state.imitationMove = chooseCloneWeight(row?.move, random);
+    state.imitationModular = chooseCloneWeight(row?.modular, random);
+    state.imitationAdaptive = chooseCloneWeight(row?.adaptive, random);
+    state.plan = row ? "imitating owner habits" : "observing owner habits";
+  }
+  const actions = { ...state.imitationActions };
+  const pending = state.imitationCombo;
+  const comboDue = pending && pending.at <= now;
+  if (pending && pending.at <= now) {
+    if (cloneActionChance(row, pending.action) > 0) actions[pending.action] = true;
+    state.imitationCombo = null;
+  }
+  const previous = state.imitationPrevious || {};
+  if (!state.imitationCombo) {
+    const onsets = Object.keys(actions).filter((action) => actions[action] && !previous[action]);
+    const candidates = (style?.combos || []).filter((combo) => combo.context === key
+      && onsets.includes(combo.from) && combo.count >= 2 && cloneActionChance(row, combo.to) > 0);
+    const combo = candidates.length ? candidates[Math.floor(random() * candidates.length)] : null;
+    const starts = combo ? row?.events[combo.from] || 0 : 0;
+    if (combo && random() < Math.min(1, combo.count / Math.max(1, starts))) {
+      const ranges = { quick: [.12, .35], short: [.35, 1], long: [1, 2.5] };
+      const [min, max] = ranges[combo.delay];
+      state.imitationCombo = { action: combo.to, at: now + min + random() * (max - min) };
+    }
+  }
+  state.imitationPrevious = actions;
+  const direction = target ? Math.sign(target.x - fighter.x) : fighter.facing || 1;
+  state.mx = state.imitationMove === "toward" ? direction : state.imitationMove === "away" ? -direction : 0;
+  state.jump = !!actions.jump && fighter.grounded;
+  state.jet = !!actions.jet && !fighter.grounded;
+  state.jetHeld = !!actions.jet;
+  state.attack = !!actions.attack && (!target || hasLineOfSight(game, fighter, target));
+  state.dodge = !!actions.dodge;
+  state.chuck = !!actions.chuck;
+  state.ejectVacuum = !!actions.eject;
+  state.imitationActions.dodge = false;
+  if (row) {
+    if (row.opportunities.secondary > 0) selectWeaponSlot(fighter, actions.secondary ? "secondaryWeapon" : "weapon");
+    if (row.opportunities.shield > 0) {
+      fighter.shieldRaised = !!actions.shield && !fighter.shieldBroken && fighter.shieldMaxDurability > 0;
+      if (fighter.shieldRaised) state.attack = false;
+    }
+    if (row.opportunities.armor > 0) beginRetractableMorph(fighter, !!actions.armor);
+    setNanotechChanneling(fighter, !!actions.recall);
+    if (deciding || comboDue) {
+      if (actions.nano) pulseNanotechArmor(fighter);
+      if (row.opportunities.form > 0 && actions.form && nanotechFormPct(fighter) < 1) tryFormNanotechWeapon(fighter);
+      if (row.opportunities.form > 0 && !actions.form && fighter.nanobotWeapon > 0
+        && !fighter.nanotechWeaponAbsorbing) tryNanotechWeaponAction(fighter);
+      if (state.imitationModular) beginModularMorph(fighter, state.imitationModular);
+      if (state.imitationAdaptive) beginAdaptiveMorph(fighter, state.imitationAdaptive);
+    }
+  }
+  stepAimSmoothing(fighter, dt, AI_PRESETS[fighter.ai]?.aimTurnRate || AI_PRESETS.balanced.aimTurnRate);
+  return state;
+}
 
 function isTeamMode(game) {
   return game?.mode === "conquest"
@@ -1470,6 +1564,7 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
 
 /** Lightweight combat brain for fighter decoys (may nest-plant illusions). */
 export function updateAIDecoy(fighter, dt, game) {
+  if (imitationSummon(fighter)) return updateAIImitation(fighter, dt, game);
   return updateAISummon(fighter, dt, game, {
     plantIllusions: true,
     planPrefix: "illusion"
@@ -1478,6 +1573,7 @@ export function updateAIDecoy(fighter, dt, game) {
 
 /** Real twins share equipment policies without nesting Extension abilities. */
 export function updateAIClone(fighter, dt, game) {
+  if (imitationSummon(fighter)) return updateAIImitation(fighter, dt, game);
   return updateAISummon(fighter, dt, game, {
     plantIllusions: false,
     useGear: true,
@@ -1542,6 +1638,7 @@ export function updateAiDisguise(fighter, state, game, visible, target) {
 }
 
 export function updateAI(fighter, dt, game, profile) {
+  if (imitationSummon(fighter)) return updateAIImitation(fighter, dt, game);
   const optimize = optimizeIllusionsEnabled(game);
   if (isIllusionFighter(fighter) && optimize) {
     return updateAIDecoy(fighter, dt, game);

@@ -92,6 +92,9 @@ const faqCases = [
   ["What is Shadow Clone?", "equipment-shadow-clone"],
   ["Do shadow clones share buffs and debuffs?", "equipment-shadow-clone"],
   ["What is Split?", "equipment-split"],
+  ["How do clones learn my playstyle?", "equipment-clone-behavior"],
+  ["What is the generic clone variant?", "equipment-clone-behavior"],
+  ["Why do my clones never dodge?", "equipment-clone-behavior"],
   ["What does H do?", "equipment-split"],
   ["What is Disguise?", "equipment-disguise"],
   ["What happens when disguise breaks?", "equipment-disguise"]

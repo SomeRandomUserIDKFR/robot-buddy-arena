@@ -129,7 +129,7 @@ function cloneFixture(extension, loadout = {}, scale = 1) {
   const owner = applyLoadout(new Fighter({
     x: 400, y: 700, team: 0, human: true, aim: 0, name: "YOU",
     color: "#e7f9ff", grounded: true
-  }), { ...DEFAULT_LOADOUT, ...loadout, extensionSecondary: extension }, { healthScale: scale });
+  }), { ...DEFAULT_LOADOUT, cloneBehavior: "generic", ...loadout, extensionSecondary: extension }, { healthScale: scale });
   const enemy = new Fighter({ x: 900, y: 700, team: 1, hp: 500, maxHp: 500 });
   const game = {
     fighters: [owner, enemy], effects: [], bullets: [], pings: [], stats: {},
@@ -1078,7 +1078,7 @@ for (const optimizeIllusions of [true, false]) {
 function summonSightFixture(id, optimizeIllusions) {
   const owner = applyLoadout(new Fighter({
     x: 0, y: 700, team: 0, human: true, ai: "veteran"
-  }), { ...DEFAULT_LOADOUT, extensionSecondary: id });
+  }), { ...DEFAULT_LOADOUT, cloneBehavior: "generic", extensionSecondary: id });
   const summon = id === "illusionist" ? createFighterIllusion(owner, Fighter)
     : createCombatClone(owner, Fighter);
   assert.equal(summon.sight, owner.sight, "summons inherit equipped sight range");

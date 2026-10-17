@@ -11,6 +11,7 @@ import {
   weaponKind, weaponStats, CLONE_NANOTECH_ARMOR_MULT, SHADOW_NANOTECH_ARMOR_MULT,
   CLONE_RETRACTABLE_ARMOR_MULT, SHADOW_RETRACTABLE_ARMOR_MULT
 } from "./equipment.js";
+import { cloneStyleNotes, normalizeCloneBehavior } from "./clone-style.js";
 import {
   beginConquestSelect, getPendingEncounter, hasFreeReroll, loadoutSummary,
   REROLL_CYBER_COST
@@ -1138,6 +1139,29 @@ function statMarkup(loadout, powerInfo = null) {
     ${perk ? `<span><b>PERK</b> ${escapeHtml(perk.name)}</span>` : ""}`;
 }
 
+function cloneBehaviorMarkup(profile, owner, campaign = false) {
+  const kit = campaign ? profile.campaign?.[owner] : profile.equipment[owner];
+  const gear = GEAR_BY_ID[kit?.extensionSecondary];
+  if (!gear?.combatClone && !gear?.illusionist) return "";
+  const locked = !campaign && owner === "buddy" && profile.equipment.buddyMode === "choice";
+  const mode = normalizeCloneBehavior(kit.cloneBehavior);
+  return `<div class="clone-behavior">
+    <div class="slot-hint">Clone behavior · both variants included with ${escapeHtml(gear.name)}</div>
+    <div class="gear-options">
+      ${[["imitation", "Normal · Imitation", "Learns the owner's habits, including omissions and mistakes. No generic fallback."],
+        ["generic", "Generic · Included", "Original tactical clone AI. No extra purchase."]].map(([id, name, text]) =>
+        `<button type="button" class="gear-card ${mode === id ? "selected" : ""}"
+          data-clone-behavior="${id}" data-clone-owner="${owner}" data-clone-campaign="${campaign}"
+          aria-pressed="${mode === id}" ${locked ? "disabled" : ""}>
+          <strong>${name}</strong><small>${text}</small></button>`).join("")}
+    </div>
+    ${owner === "player" ? `<div class="slot-hint">${Math.floor(profile.cloneStyle?.seconds || 0)}s observed · ${profile.cloneStyle?.combos?.length || 0} sequence patterns.
+      One owner profile is shared by their summons; other owners learn their own match behavior.</div>
+      ${cloneStyleNotes(profile.cloneStyle).map((note) => `<div class="slot-hint">${escapeHtml(note)}</div>`).join("")}`
+      : `<div class="slot-hint">Buddy summons learn the buddy's own inputs during each fight; their memory lasts for that match.</div>`}
+  </div>`;
+}
+
 function slotsMarkup(profile, owner) {
   const equipment = profile.equipment;
   const loadout = equipment[owner];
@@ -1173,6 +1197,7 @@ function slotsMarkup(profile, owner) {
           </div>
           <button type="button" class="scroll-arrow next" data-scroll-dir="1" aria-label="Next ${escapeHtml(SLOT_LABELS[slot])} options">›</button>
         </div>
+        ${slot === "extensionSecondary" ? cloneBehaviorMarkup(profile, owner) : ""}
       </div>`;
   }).join("");
 }
@@ -1431,6 +1456,7 @@ function modifierMarkup(gear) {
               + "<span>Shield pool: half your strongest shield · HP/shield recharge in 5s/2.5s</span>"
               + "<span>Occupied capacity recharges at half speed · only spawning redistributes</span>",
           armorLine,
+          "<span>Normal learns owner inputs · Generic included free · choose in equipment</span>",
           "<span>Persistent until killed · dies with you</span>"
         ].join("");
       }
@@ -1440,12 +1466,14 @@ function modifierMarkup(gear) {
         "<span class=\"stat-up\">25% of your max HP · real damage</span>",
         "<span>Max 2 alive · 30s cooldown</span>",
         armorLine,
+        "<span>Normal learns owner inputs · Generic included free · choose in equipment</span>",
         "<span>Ally outline only · dies with you</span>",
         "<span class=\"stat-down\">Under Illusionist on price</span>"
       ].join("");
     }
     if (gear.illusionist) {
       return [
+        "<span>Fighter behavior: Normal imitation or free Generic variant</span>",
         "<span>Premium Extension · T cycle · 3 plant</span>",
         "<span class=\"stat-up\">Fighter decoy · kit + fake HP bar</span>",
         "<span class=\"stat-up\">Gaslight hits · ≥40 phantom HP</span>",
@@ -1775,6 +1803,7 @@ function campaignLoadoutMarkup(profile, owner) {
         `<span><em>${escapeHtml(SLOT_LABELS[slot.slot] || slot.slot)}</em> ${escapeHtml(slot.name)}</span>`
       )).join("")}
     </div>
+    ${cloneBehaviorMarkup(profile, owner, true)}
   `;
 }
 
@@ -1930,6 +1959,11 @@ export function bindUi(handlers) {
   ui.campaignBackBtn?.addEventListener("click", () => handlers.campaignBack?.());
   ui.campaignFightBtn?.addEventListener("click", () => handlers.campaignFight?.());
   ui.campaignSelect?.addEventListener("click", (event) => {
+    const behavior = event.target.closest("[data-clone-behavior]");
+    if (behavior && !behavior.disabled) {
+      handlers.cloneBehavior?.(behavior.dataset.cloneOwner, behavior.dataset.cloneBehavior, true);
+      return;
+    }
     const stageBtn = event.target.closest("[data-campaign-stage]");
     if (stageBtn && !stageBtn.disabled) {
       handlers.campaignSelectStage?.(stageBtn.dataset.campaignStage);
@@ -1957,6 +1991,11 @@ export function bindUi(handlers) {
     handlers.aiMode?.(ui.aiMode.value);
   });
   $("#menu").addEventListener("click", (event) => {
+    const behavior = event.target.closest("[data-clone-behavior]");
+    if (behavior && !behavior.disabled) {
+      handlers.cloneBehavior?.(behavior.dataset.cloneOwner, behavior.dataset.cloneBehavior, false);
+      return;
+    }
     const character = event.target.closest("[data-buddy-character]");
     if (character) {
       handlers.buddyCharacter?.(character.dataset.buddyCharacter);

@@ -23,6 +23,7 @@ import {
 import { healthScale as resolveHealthScale } from "./settings.js";
 import { damageDisguise, endDisguise } from "./disguise.js";
 import { recordTacticalDamage } from "./ai-tactics.js";
+import { normalizeCloneBehavior } from "./clone-style.js";
 
 const item = (id, slot, name, tradeoff, modifiers = {}, extra = {}) => ({
   id, slot, name, tradeoff, modifiers, ...extra
@@ -2457,6 +2458,7 @@ export function normalizeLoadout(loadout, owned = STARTER_GEAR, legacy = null) {
     );
     normalized[slot] = allowed ? id : DEFAULT_LOADOUT[slot];
   }
+  normalized.cloneBehavior = normalizeCloneBehavior(source.cloneBehavior);
   return normalized;
 }
 
@@ -2528,6 +2530,21 @@ export function equipOwned(profile, owner, slot, gearId) {
   if (owner === "buddy" && profile.equipment.buddyMode === "suggested"
     && profile.equipment.suggestion) {
     profile.equipment.suggestion.loadout[slot] = gearId;
+  }
+
+  return true;
+}
+
+export function setCloneBehavior(profile, owner, behavior, campaign = false) {
+  if (!["player", "buddy"].includes(owner) || !["imitation", "generic"].includes(behavior)) return false;
+  const kit = campaign ? profile.campaign?.[owner] : profile.equipment?.[owner];
+  const gear = GEAR_BY_ID[kit?.extensionSecondary];
+  if (!kit || (!gear?.combatClone && !gear?.illusionist)
+    || !effectiveOwned(profile).includes(gear.id)
+    || (!campaign && owner === "buddy" && profile.equipment.buddyMode === "choice")) return false;
+  kit.cloneBehavior = behavior;
+  if (!campaign && owner === "buddy" && profile.equipment.suggestion) {
+    profile.equipment.suggestion.loadout.cloneBehavior = behavior;
   }
   return true;
 }
@@ -2781,6 +2798,7 @@ export function applyLoadout(fighter, loadout, opts = {}) {
   fighter.healthScale = scale;
   fighter.loadout = {
     ...DEFAULT_LOADOUT, ...loadout, shield: shieldGear.id,
+    cloneBehavior: normalizeCloneBehavior(loadout.cloneBehavior),
     perk: loadout?.perk || null
   };
   fighter.perkId = loadout?.perk || null;

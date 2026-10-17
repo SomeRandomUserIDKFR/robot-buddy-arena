@@ -14,6 +14,7 @@ import {
 import { ensureProgressionProfile, setBuddyPerkAutonomy } from "./perks.js";
 import { ensureSettingsProfile } from "./settings.js";
 import { ensureTacticalMemory } from "./ai-tactics.js";
+import { ensureCloneStyle } from "./clone-style.js";
 
 function freshDefaults() {
   return structuredClone(DEFAULT_PROFILE);
@@ -67,6 +68,7 @@ export function migrateProfile(saved) {
   ensureFightStyle(loaded);
   ensureTutorialProfile(loaded, saved);
   ensureTacticalMemory(loaded);
+  ensureCloneStyle(loaded);
   loaded.learningLocked = !!loaded.learningLocked;
   loaded.aiMode = normalizeAiMode(loaded.aiMode);
   loaded.mimicIntensity = normalizeMimicIntensity(loaded.mimicIntensity);
@@ -102,6 +104,7 @@ ensureSurvivalProfile(profile, profile);
 ensureTutorialProfile(profile, profile);
 ensureProgressionProfile(profile, profile);
 ensureTacticalMemory(profile);
+ensureCloneStyle(profile);
 
 export function saveProfile() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));

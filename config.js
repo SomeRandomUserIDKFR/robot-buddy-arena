@@ -68,6 +68,7 @@ export const DEFAULT_PROFILE = {
   // When true, Training still fights but writes no learning / practice evidence.
   learningLocked: false,
   tacticalMemory: { contexts: {} },
+  cloneStyle: { version: 1, seconds: 0, contexts: {}, combos: [] },
   // Buddy mind + Mimic dial (persisted; migrated for older saves).
   aiMode: "balanced",
   mimicIntensity: "quite",

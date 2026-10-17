@@ -12,6 +12,7 @@ import { applyLoadout, GEAR_BY_ID } from "./equipment.js";
 import { createMapProp, MAP_PROP_KINDS } from "./maps.js";
 import { POWER_CRATE_SIZE } from "./powerups.js";
 import { clamp } from "./utils.js";
+import { bindCloneStyle } from "./clone-style.js";
 
 export const ILLUSIONIST_ID = "illusionist";
 
@@ -431,6 +432,7 @@ export function createFighterIllusion(owner, FighterCtor) {
   decoy.buddy = false;
   decoy.illusion = true;
   decoy.illusionOwner = owner;
+  bindCloneStyle(owner, decoy);
   decoy.illusionHitsLeft = ILLUSION_FIGHTER_HITS;
   decoy.illusionLife = ILLUSION_FIGHTER_LIFE;
   decoy.phantomDamage = 0;
