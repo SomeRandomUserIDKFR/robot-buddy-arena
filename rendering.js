@@ -922,12 +922,9 @@ export function createRenderer(canvas) {
     drawCeiling(game, .35);
     const player = game.fighters[0];
     const optimizeIllusions = optimizeIllusionsEnabled(game);
-    // With Optimize illusions: summons must not expand fog / sight discs.
     const allies = game.fighters.filter(
       (fighter) => (
         !fighter.dead
-        && !(optimizeIllusions && isIllusionFighter(fighter))
-        && !(optimizeIllusions && isCombatClone(fighter))
         && fighter.team === player.team
       )
     );

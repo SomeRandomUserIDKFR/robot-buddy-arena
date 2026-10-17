@@ -1398,9 +1398,10 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
   let target = null;
   let best = Infinity;
   const suspicious = observeSuspiciousProps(fighter, game);
+  const visible = game.fighters.filter((enemy) => enemy && !enemy.dead && !enemy.disguiseProp
+    && enemy.team !== fighter.team && visibleToTeam(game, fighter, enemy));
   // Prefer real foes; fall back to any living enemy (including other decoys).
-  for (const enemy of game.fighters) {
-    if (!enemy || enemy.dead || enemy.disguiseProp || enemy.team === fighter.team || enemy === fighter) continue;
+  for (const enemy of visible) {
     const d = dist(fighter, enemy);
     const knownSummon = isIllusionFighter(enemy)
       || (isCombatClone(enemy) && enemy.cloneVariant !== "shadow-clone");
@@ -1410,8 +1411,11 @@ export function updateAISummon(fighter, dt, game, opts = {}) {
       target = enemy;
     }
   }
-  if (!target) target = suspicious;
-  const visible = target && visibleToSelf(fighter, target, game) ? [target] : [];
+  if (!target && suspicious) {
+    target = suspicious;
+    visible.push(suspicious);
+  }
+  state.target = target;
   if (useGear) updateAiWeaponSlot(fighter, state, game, visible, target);
 
   const reach = fighter.weaponReach || (fighter.weapon === "saber" ? 120 : 920);

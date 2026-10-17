@@ -333,7 +333,7 @@
         "how does vision work",
         "sight range"
       ],
-      "answer": "Enemies outside our team's sight are hidden. Sight is shared: if either of us can see a foe, that foe is visible to the team. Helmets can change sensor range. Snipers also get a narrow forward sight cone when aimed. Solid city building walls can block line of sight; forest trunks and desert bushes do not hard-block shared vision."
+      "answer": "Enemies outside our team's sight are hidden. Sight is shared: players, buddies, real Doppel/Shadow/Split clones, and Illusionist fighter decoys all contribute normal vision while alive. This applies with Optimize illusions on or off, including fog coverage and enemy visibility. Summons acquire only enemies their team can currently see, like a player; they cannot locate or follow unseen enemies' live positions. Full AI can search a remembered last-seen position without updating it through fog. Helmets change sensor range, snipers add a narrow forward sight cone when aimed, and map sight penalties affect summons too. Solid city building walls block line of sight; forest trunks and desert bushes do not hard-block shared vision. Dead summons no longer provide sight."
     },
     {
       "id": "maps-themes",

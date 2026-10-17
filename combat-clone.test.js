@@ -31,6 +31,7 @@ import {
 } from "./powerups.js";
 import { tickSpellbookFighter } from "./spellbook.js";
 import { tickTrapperFighter } from "./trapper.js";
+import { fighterVisibleToViewer, visibleToSelf, visibleToTeam } from "./vision.js";
 
 assert.equal(GEAR_BY_ID[COMBAT_CLONE_ID].slot, "extensionSecondary");
 assert.equal(GEAR_BY_ID[COMBAT_CLONE_ID].combatClone, true);
@@ -1074,4 +1075,129 @@ for (const optimizeIllusions of [true, false]) {
     "real-clone retractable penalties do not alter decoys or owners");
 }
 
-console.log("combat-clone.test.js passed: Doppel, Shadow Clone, Split, and real-clone gear AI.");
+function summonSightFixture(id, optimizeIllusions) {
+  const owner = applyLoadout(new Fighter({
+    x: 0, y: 700, team: 0, human: true, ai: "veteran"
+  }), { ...DEFAULT_LOADOUT, extensionSecondary: id });
+  const summon = id === "illusionist" ? createFighterIllusion(owner, Fighter)
+    : createCombatClone(owner, Fighter);
+  assert.equal(summon.sight, owner.sight, "summons inherit equipped sight range");
+  assert.equal(summon.directionalSightRange, owner.directionalSightRange);
+  owner.sight = 100;
+  owner.directionalSightRange = 0;
+  summon.x = 1400;
+  summon.y = 700;
+  summon.sight = 200;
+  summon.directionalSightRange = 0;
+  summon.ai = "veteran";
+  summon.aiState.timer = 0;
+  summon.illusionist = false;
+  const enemy = new Fighter({ x: 1600, y: 700, team: 1, hp: 500, maxHp: 500 });
+  const game = {
+    fighters: [owner, summon, enemy], props: [], platforms: [], effects: [], bullets: [],
+    pings: [], groundDebris: [], stats: {}, elapsed: 1, mode: "conquest",
+    settings: { gameplay: { optimizeIllusions } }
+  };
+  return { owner, summon, enemy, game };
+}
+
+for (const id of [COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID, "illusionist"]) {
+  for (const optimizeIllusions of [true, false]) {
+    {
+      const { owner, summon, enemy, game } = summonSightFixture(id, optimizeIllusions);
+      assert.equal(visibleToSelf(owner, enemy, game), false);
+      assert.equal(visibleToSelf(summon, enemy, game), true, "normal sight includes its exact boundary");
+      assert.equal(visibleToTeam(game, owner, enemy), true, `${id} shares sight with either optimization mode`);
+      assert.equal(fighterVisibleToViewer(game, owner, enemy), true, "summon sight reveals enemies to player");
+      updateAI(summon, .05, game, structuredClone(DEFAULT_PROFILE));
+      assert.equal(summon.aiState.target, enemy, "summon acquires a visible enemy");
+      assert.equal(summon.aiState.attack, true);
+      enemy.x += .01;
+      assert.equal(visibleToSelf(summon, enemy, game), false);
+      assert.equal(visibleToTeam(game, owner, enemy), false);
+      assert.equal(fighterVisibleToViewer(game, owner, enemy), false, "outside all eyes remains hidden");
+      const lastKnown = summon.aiState.lastKnown ? { ...summon.aiState.lastKnown } : null;
+      enemy.x = 2500;
+      enemy.y = 300;
+      summon.aiState.timer = 0;
+      updateAI(summon, .05, game, structuredClone(DEFAULT_PROFILE));
+      assert.equal(summon.aiState.attack, false);
+      if (lastKnown) {
+        assert.deepEqual(summon.aiState.lastKnown, lastKnown,
+          "last-seen memory cannot follow a hidden enemy's new position");
+      } else {
+        assert.equal(summon.aiState.target, null);
+        assert.equal(summon.aiState.mx, 0, "light summons do not chase unseen coordinates");
+      }
+    }
+    {
+      const { owner, summon, enemy, game } = summonSightFixture(id, optimizeIllusions);
+      enemy.x += 1;
+      updateAI(summon, .05, game, structuredClone(DEFAULT_PROFILE));
+      assert.equal(summon.aiState.target, null, "never-observed out-of-range fighters cannot become targets");
+      assert.equal(summon.aiState.attack, false);
+      assert.equal(visibleToTeam(game, owner, enemy), false);
+    }
+    {
+      const { owner, summon, enemy, game } = summonSightFixture(id, optimizeIllusions);
+      game.props.push({
+        x: 1500, y: 600, w: 40, h: 250, hp: 100, blocksSight: true, solid: true
+      });
+      assert.equal(visibleToSelf(summon, enemy, game), false);
+      assert.equal(visibleToTeam(game, owner, enemy), false, "walls block summon-shared vision");
+      updateAI(summon, .05, game, structuredClone(DEFAULT_PROFILE));
+      assert.equal(summon.aiState.target, null, "summons cannot acquire enemies through walls");
+      assert.equal(summon.aiState.attack, false);
+    }
+    {
+      const { summon, enemy, game } = summonSightFixture(id, optimizeIllusions);
+      const hidden = new Fighter({ x: 1460, y: 850, team: 1 });
+      game.fighters.push(hidden);
+      game.props.push({
+        x: 1430, y: 780, w: 50, h: 50, hp: 100, blocksSight: true, solid: true
+      });
+      assert.equal(visibleToTeam(game, summon, hidden), false);
+      assert.equal(visibleToTeam(game, summon, enemy), true);
+      updateAI(summon, .05, game, structuredClone(DEFAULT_PROFILE));
+      assert.equal(summon.aiState.target, enemy, "closer hidden enemies cannot distract target selection");
+    }
+    {
+      const { owner, summon, enemy, game } = summonSightFixture(id, optimizeIllusions);
+      summon.sight = 100;
+      summon.directionalSightRange = 500;
+      summon.sightHalfAngle = .1;
+      summon.aim = 0;
+      enemy.x = summon.x + 500;
+      assert.equal(visibleToTeam(game, owner, enemy), true, "summons share equipped directional sight");
+      enemy.x += .01;
+      assert.equal(visibleToTeam(game, owner, enemy), false);
+      enemy.x = summon.x - 400;
+      assert.equal(visibleToTeam(game, owner, enemy), false, "rear foes outside normal sight stay hidden");
+      enemy.x = summon.x + 400;
+      enemy.y += 200;
+      assert.equal(visibleToTeam(game, owner, enemy), false, "sight cones are not omnidirectional");
+      enemy.y = summon.y;
+      game.gimmick = { sightMult: .5 };
+      assert.equal(visibleToTeam(game, owner, enemy), false, "map sight penalties also affect summons");
+      enemy.x = summon.x + 200;
+      assert.equal(visibleToTeam(game, owner, enemy), true);
+      summon.dead = true;
+      assert.equal(visibleToTeam(game, owner, enemy), false, "dead summons provide no team sight");
+    }
+    {
+      const { owner, summon, enemy, game } = summonSightFixture(id, optimizeIllusions);
+      const teammate = new Fighter({ x: 1900, y: 700, team: owner.team, sight: 100 });
+      teammate.directionalSightRange = 0;
+      game.fighters.push(teammate);
+      enemy.x = 1950;
+      assert.equal(visibleToSelf(summon, enemy, game), false);
+      assert.equal(visibleToTeam(game, summon, enemy), true);
+      updateAI(summon, .05, game, structuredClone(DEFAULT_PROFILE));
+      assert.equal(summon.aiState.target, enemy, "summons can use teammate sightings just like players");
+      teammate.dead = true;
+      assert.equal(visibleToTeam(game, summon, enemy), false);
+    }
+  }
+}
+
+console.log("combat-clone.test.js passed: real clones, armor AI, and sight-limited summons.");

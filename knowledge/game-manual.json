@@ -77,7 +77,7 @@
       "id": "manual-vision",
       "topic": "vision",
       "aliases": ["fog", "sight", "arrows", "outline", "los"],
-      "text": "Fog of war hides unseen enemies. Shared team vision and LOS rules apply. Cyan arrows cue off-screen threats; buddy outline helps track your partner. Soft cover and solid walls can block projectiles or sight depending on prop/map rules."
+      "text": "Fog of war hides unseen enemies. All living players, buddies, real Doppel/Shadow/Split clones, and Illusionist fighter decoys contribute normal equipped sight to shared team vision, even with Optimize illusions enabled. Summons expand fog coverage but obey sight range, directional weapon cones, map sight penalties, and walls. Their AI acquires only currently team-visible enemies, like a player, never unseen live coordinates. Full AI may search an unchanged remembered last-seen position. Dead summons contribute no sight. Optimization changes AI and draw detail, not sight rules. Cyan arrows cue off-screen threats; buddy outline helps track your partner. Soft cover and solid walls can block projectiles or sight depending on prop/map rules."
     },
     {
       "id": "manual-deep-qa",

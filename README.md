@@ -164,6 +164,15 @@ Held props follow real twins and
 do not block their own sight. Real twins cannot nest-spawn Extensions.
 Illusionist decoys retain their existing lightweight behavior.
 
+All real twins and Illusionist fighter decoys have normal equipped sight,
+including directional weapon sight and map sight penalties. Living summons
+share what they see with their team and expand its fog-of-war coverage, even
+with **Optimize illusions** enabled. Walls and range still limit every pair of
+eyes. Summon AI acquires only enemies currently visible to its team, like a
+player; it cannot locate or follow an unseen enemy's live coordinates. The full
+AI may search a remembered last-seen position without updating it through fog.
+Optimization changes AI/detail costs, not sight or shared team vision.
+
 ## Disguise
 
 **Disguise (240¢)** is an Extension. Press **3** within **100 units** of a real
