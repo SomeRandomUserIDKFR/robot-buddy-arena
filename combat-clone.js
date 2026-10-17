@@ -7,6 +7,7 @@
 import { SIZE, WORLD } from "./config.js";
 import {
   applyLoadout, GEAR_BY_ID, NO_EXTENSION_ID, SHADOW_CLONE_ID, SPLIT_ID,
+  CLONE_RETRACTABLE_ARMOR_MULT, SHADOW_RETRACTABLE_ARMOR_MULT,
   syncNanotechDisplayedHp
 } from "./equipment.js";
 import { clamp } from "./utils.js";
@@ -82,7 +83,7 @@ function linkShadowClone(owner, clone) {
   const link = shadowReserves(owner);
   const existing = livingShadows(link);
   const currentHp = Math.min(SHADOW_CLONE_HP_BUDGET,
-    link.hpReserve + existing.reduce((sum, member) => sum + member.hp, 0));
+    link.hpReserve + existing.reduce((sum, member) => sum + member.coreHp, 0));
   const currentShield = Math.min(link.shieldMax,
     link.shieldReserve + existing.reduce((sum, member) => sum + member.shieldDurability, 0));
   clone.shadowLink = link;
@@ -117,7 +118,7 @@ function rechargeReserve(current, max, deployed, rate, dt) {
 function tickShadowReserves(owner, dt) {
   const link = shadowReserves(owner);
   const shadows = livingShadows(link);
-  const deployedHp = shadows.reduce((sum, shadow) => sum + shadow.hp, 0);
+  const deployedHp = shadows.reduce((sum, shadow) => sum + shadow.coreHp, 0);
   const deployedShield = shadows.reduce((sum, shadow) => sum + shadow.shieldDurability, 0);
   link.hpReserve = rechargeReserve(link.hpReserve, SHADOW_CLONE_HP_BUDGET,
     deployedHp, SHADOW_CLONE_HP_REGEN, dt);
@@ -188,7 +189,7 @@ export function createCombatClone(owner, FighterCtor) {
   if (!owner?.loadout || typeof FighterCtor !== "function") return null;
   if (owner.shadowCloneGear) {
     const link = shadowReserves(owner);
-    if (!(link.hpReserve + livingShadows(link).reduce((sum, shadow) => sum + shadow.hp, 0) > 0)) return null;
+    if (!(link.hpReserve + livingShadows(link).reduce((sum, shadow) => sum + shadow.coreHp, 0) > 0)) return null;
   }
   const { x, y } = placePoint(owner);
   const loadout = {
@@ -223,12 +224,10 @@ export function createCombatClone(owner, FighterCtor) {
   clone.hp = maxHp;
   clone.coreMaxHp = maxHp;
   clone.coreHp = maxHp;
-  if (fixedHp) {
-    clone.retractableMax = 0;
-    clone.retractableHp = 0;
-    clone.retractableDeployed = false;
-    clone.nanobotArmor = 0;
-  }
+  const armorMult = clone.cloneVariant === SHADOW_CLONE_ID
+    ? SHADOW_RETRACTABLE_ARMOR_MULT : CLONE_RETRACTABLE_ARMOR_MULT;
+  clone.retractableMax *= armorMult;
+  clone.retractableHp *= armorMult;
   clone.fuel = Math.min(1, owner.fuel ?? 1);
   if (clone.cloneVariant === SHADOW_CLONE_ID) linkShadowClone(owner, clone);
   // Look like an Illusionist decoy at a glance: no special name tag.
@@ -263,7 +262,7 @@ export function tryDismissShadowClone(fighter, game) {
   const newest = shadows[shadows.length - 1];
   if (!newest) return null;
   const link = newest.shadowLink;
-  link.hpReserve = Math.min(SHADOW_CLONE_HP_BUDGET, link.hpReserve + newest.hp);
+  link.hpReserve = Math.min(SHADOW_CLONE_HP_BUDGET, link.hpReserve + newest.coreHp);
   link.shieldReserve = Math.min(link.shieldMax, link.shieldReserve + newest.shieldDurability);
   dropHeldBreakable(newest, game);
   newest.dead = true;
@@ -290,8 +289,8 @@ export function trySplitSwitch(fighter, game) {
     fighter[key] = body[key];
     body[key] = value;
   }
-  body.hp = abandonedHp;
   body.coreHp = abandonedHp;
+  syncNanotechDisplayedHp(body);
   fighter.coreHp = (fighter.coreHp ?? fighter.hp) + Math.max(0, SPLIT_SWITCH_MIN_HP - fighter.hp);
   syncNanotechDisplayedHp(fighter);
   fighter.splitSwitchCd = SPLIT_SWITCH_COOLDOWN;

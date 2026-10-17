@@ -517,8 +517,8 @@ export function wantRetractableDeployed(fighter, state, game, visible, target) {
  * player buddies deploy reliably (this is a loadout verb, not a timing skill).
  */
 export function updateAiRetractableArmor(fighter, state, game, visible, target, aiId) {
-  // Nanotech chestplate owns F — do not toggle retractable shell while channeling.
-  if (hasNanotechChestplate(fighter)) return;
+  // Real clones can manage both pools; normal fighters' chestplate owns F.
+  if (hasNanotechChestplate(fighter) && !isCombatClone(fighter)) return;
   if (!hasRetractableArmor(fighter) || fighter.dead || fighter.retractableMorphing) {
     return;
   }
@@ -576,7 +576,7 @@ export function updateAiNanotech(fighter, state, game, visible, target) {
   const underFire = (visible || []).some((foe) => foe && !foe.dead)
     || (!!target && !target.dead);
   if (underFire && free >= 40 && armor < 400) {
-    if (!state.nanoPulseLatch) {
+    if (!state.nanoPulseLatch || isCombatClone(fighter)) {
       pulseNanotechArmor(fighter);
       state.nanoPulseLatch = true;
     }

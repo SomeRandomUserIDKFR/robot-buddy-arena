@@ -140,17 +140,27 @@ and disappear when their owner dies.
   Buddy/enemy AI builds a Split team even before combat and uses Split to escape below
   100 HP when a living twin and the switch cooldown allow it.
 
-Uncontrolled Shadow/Split bodies cannot add retractable/nanotech armor HP on top
-of their allotted pools (100 total HP budget for shadows, 250 HP per Split twin). Ally outlines identify shadows in purple and Split
+Uncontrolled Shadow/Split bodies can add reduced armor buffers on top of their
+base pools (100 total core HP for shadows, 250 core HP per Split twin).
+Shadow spawning, reserve recharge, and dismissal count only core HP, never armor;
+surviving armor remains independent and cannot be converted into banked health.
+Ally outlines identify shadows in purple and Split
 twins in green. The Extension HUD shows spawn availability, living twins, and
 Split's switch cooldown. Doppel's spawn cooldown and limits are unchanged.
 
 Real Doppel, Shadow, and Split twins use shared equipment AI even with Optimize
 illusions enabled: short frontal shield raises, nanotech weapon formation,
 Mechanical Modularity / Adaptive Nanotech range-and-threat mode selection, and
-Material Consumer, Throw Breakable, or Shield Steal secondary use. Doppel can
-also deploy its equipped retractable/nanotech armor; Shadow and Split still
-cannot add armor HP beyond their fixed pools. Held props follow real twins and
+Material Consumer, Throw Breakable, or Shield Steal secondary use. All real twins
+deploy equipped armor: **nanotech is 10% effective for Doppel/Split and 5% for
+Shadow**; **retractable armor has 85% strength for Doppel/Split and 10% for
+Shadow**. Nanotech penalties reduce HP per bot, not weapon power or the shared
+bot supply; damage consumes bots at the same reduced HP-per-bot conversion.
+For example, 500 armor bots supply 25 HP to Doppel/Split or 12.5 HP to Shadow,
+and 120-HP folding plates supply 102 HP or 12 HP respectively (before Classic
+health scaling). Real twins top up nanotech armor under sustained pressure and
+can operate a retractable shell alongside a nanotech chestplate.
+Held props follow real twins and
 do not block their own sight. Real twins cannot nest-spawn Extensions.
 Illusionist decoys retain their existing lightweight behavior.
 

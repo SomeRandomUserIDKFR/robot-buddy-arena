@@ -8,7 +8,8 @@ import { analyzerStatus, initializeLanguageAnalyzer } from "./language-analyzer.
 import {
   ADAPTIVE_NANOTECH_ID, effectiveStats, effectiveOwned, GEAR, GEAR_BY_ID, nanotechArmorHp,
   nanotechArmorMaxHp, ownedForSlot, shieldStats, SLOT_LABELS, SLOT_ORDER, theoreticalDps,
-  weaponKind, weaponStats
+  weaponKind, weaponStats, CLONE_NANOTECH_ARMOR_MULT, SHADOW_NANOTECH_ARMOR_MULT,
+  CLONE_RETRACTABLE_ARMOR_MULT, SHADOW_RETRACTABLE_ARMOR_MULT
 } from "./equipment.js";
 import {
   beginConquestSelect, getPendingEncounter, hasFreeReroll, loadoutSummary,
@@ -1408,6 +1409,9 @@ function modifierMarkup(gear) {
       ].join("");
     }
     if (gear.combatClone) {
+      const nanoArmor = gear.shadowClone ? SHADOW_NANOTECH_ARMOR_MULT : CLONE_NANOTECH_ARMOR_MULT;
+      const retractableArmor = gear.shadowClone ? SHADOW_RETRACTABLE_ARMOR_MULT : CLONE_RETRACTABLE_ARMOR_MULT;
+      const armorLine = `<span>Armor strength: ${nanoArmor * 100}% nanotech · ${retractableArmor * 100}% retractable</span>`;
       if (gear.shadowClone || gear.split) {
         const cooldown = cloneSpawnCooldown({ shadowCloneGear: !!gear.shadowClone });
         return [
@@ -1426,6 +1430,7 @@ function modifierMarkup(gear) {
             : "<span class=\"stat-down\">-100 owner max HP (scaled in Classic) · enemies see no clone labels</span>"
               + "<span>Shield pool: half your strongest shield · HP/shield recharge in 5s/2.5s</span>"
               + "<span>Occupied capacity recharges at half speed · only spawning redistributes</span>",
+          armorLine,
           "<span>Persistent until killed · dies with you</span>"
         ].join("");
       }
@@ -1434,6 +1439,7 @@ function modifierMarkup(gear) {
         "<span class=\"stat-up\">Real twin · looks like an illusion fighter</span>",
         "<span class=\"stat-up\">25% of your max HP · real damage</span>",
         "<span>Max 2 alive · 30s cooldown</span>",
+        armorLine,
         "<span>Ally outline only · dies with you</span>",
         "<span class=\"stat-down\">Under Illusionist on price</span>"
       ].join("");

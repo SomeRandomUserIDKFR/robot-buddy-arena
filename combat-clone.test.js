@@ -13,8 +13,11 @@ import {
 import {
   ADAPTIVE_NANOTECH_ID, applyHpDamage, applyLoadout, DEFAULT_LOADOUT, GEAR_BY_ID,
   hasNanotechChestplate, hasRetractableArmor, MATERIAL_CONSUMER_ID, MODULAR_WEAPON_ID,
-  nanotechArmorHp, nanotechFormPct, selectWeaponSlot, SHIELD_STEAL_ID, effectiveStats,
-  beginModularMorph, tickModularWeapon, syncNanotechDisplayedHp, tickNanotech
+  nanotechArmorHp, nanotechArmorMaxHp, nanotechFormPct, selectWeaponSlot, SHIELD_STEAL_ID, effectiveStats,
+  beginModularMorph, tickModularWeapon, syncNanotechDisplayedHp, tickNanotech,
+  pulseNanotechArmor, setNanotechChanneling, tickRetractableArmor,
+  CLONE_NANOTECH_ARMOR_MULT, SHADOW_NANOTECH_ARMOR_MULT,
+  CLONE_RETRACTABLE_ARMOR_MULT, SHADOW_RETRACTABLE_ARMOR_MULT
 } from "./equipment.js";
 import { displayedHp, displayedMaxHp, isRealCombatant } from "./illusionist.js";
 import { updateAI, updateAIClone, updateAIDecoy, updateAiCombatClone } from "./ai.js";
@@ -595,8 +598,8 @@ for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
   const { owner, game, a } = cloneFixture(id, {
     body: "nanotech-chestplate", shield: "retractable-shell", weapon: "nanotech-rifle"
   });
-  assert.equal(hasRetractableArmor(a), false);
-  assert.equal(hasNanotechChestplate(a), false);
+  assert.equal(hasRetractableArmor(a), true);
+  assert.equal(hasNanotechChestplate(a), true);
   tickNanotech(a, 1);
   assert.equal(a.hp, id === SPLIT_ID ? SPLIT_TWIN_HP : SHADOW_CLONE_HP_BUDGET / 2,
     "nanotech ticks must not restore owner-sized HP");
@@ -889,34 +892,140 @@ for (const id of [COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID]) {
   }
 }
 
-{
-  const { a, game } = gearCloneFixture(COMBAT_CLONE_ID, {
-    body: "nanotech-chestplate", weapon: "nanotech-rifle"
-  });
-  const coreHp = a.coreHp;
-  updateAIClone(a, .05, game);
-  assert.ok(a.nanobotArmor > 0, "Doppel can deploy nanotech chestplate armor");
-  tickNanotech(a, .05);
-  assert.equal(a.coreHp, coreHp);
-  assert.equal(a.hp, coreHp + nanotechArmorHp(a), "armor adds only its own pool, not owner core HP");
+assert.equal(CLONE_NANOTECH_ARMOR_MULT, .1);
+assert.equal(SHADOW_NANOTECH_ARMOR_MULT, .05);
+assert.equal(CLONE_RETRACTABLE_ARMOR_MULT, .85);
+assert.equal(SHADOW_RETRACTABLE_ARMOR_MULT, .1);
+
+for (const id of [COMBAT_CLONE_ID, SHADOW_CLONE_ID, SPLIT_ID]) {
+  const nanoMult = id === SHADOW_CLONE_ID ? .05 : .1;
+  const retractMult = id === SHADOW_CLONE_ID ? .1 : .85;
+  for (const scale of [1, .2]) {
+    for (const optimizeIllusions of [true, false]) {
+      const { owner, enemy, game, a } = cloneFixture(id, {
+        body: "nanotech-chestplate", shield: "retractable-shell", weapon: "nanotech-rifle"
+      }, scale);
+      a.ai = "veteran";
+      a.aiState.timer = 0;
+      enemy.weapon = "saber";
+      enemy.x = a.x + 70;
+      enemy.y = a.y;
+      enemy.aim = Math.PI;
+      game.settings = { gameplay: { optimizeIllusions } };
+      const coreHp = a.coreHp;
+      assert.ok(hasNanotechChestplate(a) && hasRetractableArmor(a));
+      assert.equal(a.retractableMax, owner.retractableMax * retractMult);
+      assert.equal(nanotechArmorMaxHp(a), nanotechArmorMaxHp(owner) * nanoMult);
+      updateAI(a, .05, game, structuredClone(DEFAULT_PROFILE));
+      assert.equal(a.nanobotArmor, 100, `${id} loans bots into armor with either AI mode`);
+      assert.equal(a.retractableMorphTo, "on", `${id} can deploy shell alongside nanotech`);
+      tickNanotech(a, .05);
+      tickRetractableArmor(a, .5);
+      assert.equal(a.retractableDeployed, true);
+      assert.ok(Math.abs(nanotechArmorHp(a) - 50 * scale * nanoMult) < 1e-10);
+      assert.equal(a.coreHp, coreHp, "deploying armor never restores owner-sized core HP");
+      assert.ok(Math.abs(a.hp - coreHp - a.retractableMax - nanotechArmorHp(a)) < 1e-10);
+      assert.equal(nanotechFormPct(a), 1, "armor penalties do not weaken weapon formation");
+      game.elapsed += 1;
+      a.aiState.timer = 0;
+      updateAI(a, .05, game, structuredClone(DEFAULT_PROFILE));
+      assert.equal(a.nanobotArmor, 200, "clones can top up armor during sustained combat");
+    }
+
+    {
+      const { owner, a, game } = cloneFixture(id, { body: "nanotech-chestplate" }, scale);
+      const coreHp = a.coreHp;
+      const ownerHp = owner.hp;
+      const expectedArmor = 250 * scale * nanoMult;
+      assert.equal(pulseNanotechArmor(a, 500).pulled, 500);
+      assert.equal(nanotechArmorHp(a), expectedArmor);
+      applyHpDamage(a, expectedArmor / 5, game, { alreadyScaled: true });
+      assert.ok(Math.abs(a.nanobotArmor - 400) < 1e-10, "damage consumes proportionally more weakened armor bots");
+      assert.equal(a.coreHp, coreHp, "armor absorbs damage before core HP");
+      assert.ok(Math.abs(a.hp - coreHp - expectedArmor * .8) < 1e-10);
+      applyHpDamage(a, nanotechArmorHp(a) + 7 * scale, game, { alreadyScaled: true });
+      assert.ok(a.nanobotArmor < 1e-10);
+      assert.ok(Math.abs(a.coreHp - coreHp + 7 * scale) < 1e-10);
+      if (id === SHADOW_CLONE_ID) {
+        assert.ok(Math.abs(owner.hp - ownerHp + expectedArmor + 7 * scale) < 1e-10,
+          "shadow armor damage transfers only its actual HP loss to owner");
+      } else {
+        assert.equal(owner.hp, ownerHp);
+      }
+    }
+
+    {
+      const { a } = cloneFixture(id, { body: "nanotech-chestplate" }, scale);
+      pulseNanotechArmor(a, 500);
+      const coreHp = a.coreHp;
+      const free = a.nanobotFree;
+      assert.equal(setNanotechChanneling(a, true), true);
+      tickNanotech(a, 1);
+      assert.equal(a.nanobotArmor, 450);
+      assert.equal(a.nanobotFree, free + 50, "recall returns actual bots, not HP-scaled amounts");
+      assert.ok(Math.abs(nanotechArmorHp(a) - 225 * scale * nanoMult) < 1e-10);
+      assert.equal(a.coreHp, coreHp);
+    }
+
+    for (const armor of [{ body: "retractable-armor" }, { shield: "retractable-shell" }]) {
+      const { owner, a, game } = cloneFixture(id, armor, scale);
+      const expectedArmor = owner.retractableMax * retractMult;
+      const coreHp = a.coreHp;
+      a.retractableDeployed = true;
+      syncNanotechDisplayedHp(a);
+      assert.equal(a.retractableMax, expectedArmor);
+      assert.equal(a.hp, coreHp + expectedArmor);
+      applyHpDamage(a, expectedArmor + 3 * scale, game, { alreadyScaled: true });
+      assert.equal(a.retractableHp, 0);
+      assert.ok(Math.abs(a.coreHp - coreHp + 3 * scale) < 1e-10);
+      tickRetractableArmor(a, .5);
+      assert.equal(a.retractableDeployed, false, "empty armor folds normally");
+      assert.equal(a.hp, a.coreHp);
+    }
+  }
 }
 
 {
-  const { a, game } = gearCloneFixture(COMBAT_CLONE_ID, { body: "retractable-armor" });
-  updateAIClone(a, .05, game);
-  assert.equal(a.retractableMorphTo, "on", "Doppel can deploy its retractable armor");
+  const { owner, a, b, game } = cloneFixture(SHADOW_CLONE_ID, { body: "nanotech-chestplate" });
+  applyHpDamage(a, 10, game, { alreadyScaled: true });
+  pulseNanotechArmor(b, 500);
+  tickCombatCloneWorld(game, .75);
+  assert.equal(owner.shadowLink.hpReserve, 12.5, "armor does not count as deployed base-pool HP");
+  assert.equal(b.hp, 62.5);
+  owner.shadowLink.hpReserve = 0;
+  assert.equal(tryDismissShadowClone(owner, game), b);
+  assert.equal(owner.shadowLink.hpReserve, 50, "dismissal cannot bank armor as base HP");
+  const c = tryCombatCloneSpawn(owner, game, Fighter);
+  assert.equal(a.coreHp, 45);
+  assert.equal(c.coreHp, 45);
 }
 
-for (const id of [SHADOW_CLONE_ID, SPLIT_ID]) {
-  const { a, game } = gearCloneFixture(id, {
-    body: "nanotech-chestplate", shield: "retractable-shell", weapon: "nanotech-rifle"
-  });
-  updateAIClone(a, .05, game);
-  tickNanotech(a, .05);
-  assert.equal(a.nanobotArmor, 0, "fixed-HP twins cannot deploy nanotech armor");
-  assert.equal(a.retractableDeployed, false);
-  assert.equal(a.hp, id === SPLIT_ID ? 250 : 50);
-  assert.equal(nanotechFormPct(a), 1, "fixed-HP twins can still use nanotech weapons");
+{
+  const { owner, a, b, game } = cloneFixture(SHADOW_CLONE_ID, { body: "retractable-armor" });
+  applyHpDamage(a, 20, game, { alreadyScaled: true });
+  a.retractableDeployed = b.retractableDeployed = true;
+  syncNanotechDisplayedHp(a);
+  syncNanotechDisplayedHp(b);
+  const armorHp = a.retractableHp;
+  const c = tryCombatCloneSpawn(owner, game, Fighter);
+  for (const shadow of [a, b, c]) {
+    assert.ok(Math.abs(shadow.coreHp - 80 / 3) < 1e-10, "spawn redistributes core HP, never armor");
+    assert.ok(Math.abs(shadow.coreMaxHp - 100 / 3) < 1e-10);
+  }
+  assert.equal(a.retractableHp, armorHp, "spawn preserves surviving armor allocations");
+}
+
+{
+  const { owner, a, game } = cloneFixture(SPLIT_ID, { body: "retractable-armor" });
+  a.retractableDeployed = true;
+  a.retractableHp = 10;
+  syncNanotechDisplayedHp(a);
+  owner.coreHp = 80;
+  syncNanotechDisplayedHp(owner);
+  trySplitSwitch(owner, game);
+  assert.equal(a.coreHp, 80);
+  assert.equal(a.hp, 90, "Split immediately synchronizes the abandoned body's existing armor");
+  assert.equal(a.retractableHp, 10, "switching does not refill clone armor");
 }
 
 for (const optimizeIllusions of [true, false]) {
@@ -945,6 +1054,24 @@ for (const optimizeIllusions of [true, false]) {
   updateAIDecoy(decoy, .05, game);
   assert.equal(decoy.shieldRaised, false, "Illusionist decoys keep their old equipment behavior");
   assert.equal(decoy.nanobotWeapon, 0, "decoys do not gain the new nanotech policy");
+}
+
+{
+  const { owner, enemy, game } = gearCloneFixture(COMBAT_CLONE_ID, {
+    body: "nanotech-chestplate", shield: "retractable-shell", weapon: "nanotech-rifle"
+  });
+  const decoy = createFighterIllusion(owner, Fighter);
+  game.fighters = [owner, decoy, enemy];
+  enemy.x = decoy.x + 70;
+  enemy.y = decoy.y;
+  decoy.aiState.timer = 0;
+  updateAIDecoy(decoy, .05, game);
+  assert.equal(decoy.nanobotArmor, 0, "Illusionist decoys do not learn armor deployment");
+  assert.equal(decoy.retractableMorphing, false);
+  assert.equal(nanotechArmorMaxHp(decoy), nanotechArmorMaxHp(owner),
+    "real-clone nanotech penalties do not alter decoys or owners");
+  assert.equal(decoy.retractableMax, owner.retractableMax,
+    "real-clone retractable penalties do not alter decoys or owners");
 }
 
 console.log("combat-clone.test.js passed: Doppel, Shadow Clone, Split, and real-clone gear AI.");

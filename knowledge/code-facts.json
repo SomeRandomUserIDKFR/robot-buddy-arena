@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-17T02:26:02.062Z",
+  "generatedAt": "2026-10-17T02:36:48.567Z",
   "allowlist": [
     "config.js",
     "equipment.js",
@@ -13,7 +13,7 @@
     "perks.js",
     "power.js"
   ],
-  "contentHash": "88526ff6a184495f",
+  "contentHash": "d28aa1a17850d78e",
   "entries": [
     {
       "id": "code-config-ceiling",
@@ -796,6 +796,36 @@
       "text": "equipment.js: ADAPTIVE_NANOTECH_ID = \"adaptive-nanotech-unit\""
     },
     {
+      "id": "code-equipment-clone_nanotech_armor_mult",
+      "source": "equipment.js",
+      "name": "CLONE_NANOTECH_ARMOR_MULT",
+      "topic": "equipment",
+      "aliases": [
+        "clone_nanotech_armor_mult",
+        "clone",
+        "nanotech",
+        "armor",
+        "mult",
+        "clone nanotech armor mult"
+      ],
+      "text": "equipment.js: CLONE_NANOTECH_ARMOR_MULT = 0.1"
+    },
+    {
+      "id": "code-equipment-clone_retractable_armor_mult",
+      "source": "equipment.js",
+      "name": "CLONE_RETRACTABLE_ARMOR_MULT",
+      "topic": "equipment",
+      "aliases": [
+        "clone_retractable_armor_mult",
+        "clone",
+        "retractable",
+        "armor",
+        "mult",
+        "clone retractable armor mult"
+      ],
+      "text": "equipment.js: CLONE_RETRACTABLE_ARMOR_MULT = 0.85"
+    },
+    {
       "id": "code-equipment-combat_clone_id",
       "source": "equipment.js",
       "name": "COMBAT_CLONE_ID",
@@ -1364,6 +1394,36 @@
         "shadow clone id"
       ],
       "text": "equipment.js: SHADOW_CLONE_ID = \"shadow-clone\""
+    },
+    {
+      "id": "code-equipment-shadow_nanotech_armor_mult",
+      "source": "equipment.js",
+      "name": "SHADOW_NANOTECH_ARMOR_MULT",
+      "topic": "equipment",
+      "aliases": [
+        "shadow_nanotech_armor_mult",
+        "shadow",
+        "nanotech",
+        "armor",
+        "mult",
+        "shadow nanotech armor mult"
+      ],
+      "text": "equipment.js: SHADOW_NANOTECH_ARMOR_MULT = 0.05"
+    },
+    {
+      "id": "code-equipment-shadow_retractable_armor_mult",
+      "source": "equipment.js",
+      "name": "SHADOW_RETRACTABLE_ARMOR_MULT",
+      "topic": "equipment",
+      "aliases": [
+        "shadow_retractable_armor_mult",
+        "shadow",
+        "retractable",
+        "armor",
+        "mult",
+        "shadow retractable armor mult"
+      ],
+      "text": "equipment.js: SHADOW_RETRACTABLE_ARMOR_MULT = 0.1"
     },
     {
       "id": "code-equipment-slot_labels",

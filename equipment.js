@@ -608,6 +608,8 @@ export const GEAR = [
 /** Deployed retractable armor move-speed multiplier. */
 export const RETRACTABLE_ARMOR_SPEED = 0.9;
 export const RETRACTABLE_MORPH_DURATION = 0.32;
+export const CLONE_RETRACTABLE_ARMOR_MULT = 0.85;
+export const SHADOW_RETRACTABLE_ARMOR_MULT = 0.1;
 
 /** Nanotech: tap F loans +100 free→armor; hold F returns armor→free at 50/s. */
 export const NANOTECH_RECALL_RATE = 50;
@@ -621,6 +623,8 @@ export const NANOTECH_SLOW_REGEN = 55;
 export const NANOTECH_REGEN_HIT_DELAY = 2;
 export const NANOTECH_BOTS_PER_HP = 2;
 export const NANOTECH_ARMOR_BOT_CAP = 500;
+export const CLONE_NANOTECH_ARMOR_MULT = 0.1;
+export const SHADOW_NANOTECH_ARMOR_MULT = 0.05;
 /** Snap Mark-85 style assemble when armor first appears. */
 export const NANOTECH_ARMOR_SPAWN_DURATION = 0.22;
 /** Sword melts / reforms; absorb drains weapon→free over this duration. */
@@ -1227,11 +1231,14 @@ export function hasNanotechGear(fighter) {
 }
 
 export function hasNanotechChestplate(fighter) {
-  if (fighter?.combatClone && (
-    fighter.cloneVariant === SHADOW_CLONE_ID || fighter.cloneVariant === SPLIT_ID
-  )) return false;
   return !!fighter?.hasNanotechChestplate
     || fighter?.loadout?.body === "nanotech-chestplate";
+}
+
+function nanotechArmorMultiplier(fighter) {
+  if (!fighter?.combatClone) return 1;
+  return fighter.cloneVariant === SHADOW_CLONE_ID
+    ? SHADOW_NANOTECH_ARMOR_MULT : CLONE_NANOTECH_ARMOR_MULT;
 }
 
 export function nanotechArmorHp(fighter) {
@@ -1240,12 +1247,12 @@ export function nanotechArmorHp(fighter) {
     Math.max(0, fighter?.nanobotArmor || 0)
   );
   const raw = Math.floor(bots / NANOTECH_BOTS_PER_HP);
-  return raw * (fighter?.healthScale || 1);
+  return raw * (fighter?.healthScale || 1) * nanotechArmorMultiplier(fighter);
 }
 
 export function nanotechArmorMaxHp(fighter) {
   const raw = Math.floor(NANOTECH_ARMOR_BOT_CAP / NANOTECH_BOTS_PER_HP);
-  return raw * (fighter?.healthScale || 1);
+  return raw * (fighter?.healthScale || 1) * nanotechArmorMultiplier(fighter);
 }
 
 export function canNanotechAttack(fighter) {
@@ -2379,7 +2386,8 @@ function damageFighterHp(fighter, dealt, game, extras) {
       const scale = Math.max(1e-6, fighter.healthScale || 1);
       fighter.nanobotArmor = Math.max(
         0,
-        fighter.nanobotArmor - absorb * NANOTECH_BOTS_PER_HP / scale
+        fighter.nanobotArmor - absorb * NANOTECH_BOTS_PER_HP
+          / (scale * nanotechArmorMultiplier(fighter))
       );
       left -= absorb;
     }
